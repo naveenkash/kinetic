@@ -23,10 +23,10 @@ _Generated 2026-10-24 from docs/. Regenerate with python3 docs/production/genera
 | Arena: The Yard | 6 | 18,480 |
 | Arena: Hangtown | 6 | 21,427 |
 | Arena: The Anchor | 6 | 19,137 |
-| Systems (UI, audio, VFX, animation, camera, modes, onboarding) | 9 | 26,271 |
-| Technical architecture (UE5) | 12 | 37,708 |
-| Production | 7 | 10,423 |
-| **Total (with folder indexes)** | **164** | **372,415** |
+| Systems (UI, audio, VFX, animation, camera, modes, onboarding) | 10 | 30,455 |
+| Technical architecture (UE5) | 12 | 38,183 |
+| Production | 7 | 10,467 |
+| **Total (with folder indexes)** | **165** | **377,162** |
 
 ## Bible (canonical world, factions, arenas, progression, mechanics)
 
@@ -279,7 +279,7 @@ _6 files, about 19,137 words._
 
 ## Systems (UI, audio, VFX, animation, camera, modes, onboarding)
 
-_9 files, about 26,271 words._
+_10 files, about 30,455 words._
 
 | File | Title | Summary |
 |---|---|---|
@@ -290,12 +290,13 @@ _9 files, about 26,271 words._
 | [game-modes-and-match-flow.md](systems/game-modes-and-match-flow.md) | KINETIC: Game Modes and Match Flow | Common to all: two spawn zones per arena at opposite ends of the high or mid tier, 10 m across, never within 25 m of a Well edge (05 section 9.3). Reserve rigge… |
 | [menus-and-frontend.md](systems/menus-and-frontend.md) | KINETIC: Menus and Frontend | Two voices own the frontend. |
 | [onboarding-script.md](systems/onboarding-script.md) | KINETIC: Onboarding Script (The Apprenticeship) | - Under fifteen minutes total (04). Target 12:30. |
+| [ui-design-system.md](systems/ui-design-system.md) | KINETIC: UI Design System | 1. The line is brighter than the UI. No UI element may out-glow a line. HUD luminance is capped at 70% of a line at 100 N, with 85% for alerts under 0.5 s (ui-h… |
 | [ui-hud.md](systems/ui-hud.md) | KINETIC: In-Match HUD (the LayCast Package) | The HUD is LayCast's broadcast graphics package, seen from inside the harness. Every element must be justified as something the broadcaster would draw for four … |
 | [vfx.md](systems/vfx.md) | KINETIC: VFX (Niagara Systems) | From 03: arenas are lit so that a singing line is always the brightest thing in frame. Nothing may out-glow a line. |
 
 ## Technical architecture (UE5)
 
-_12 files, about 37,708 words._
+_12 files, about 38,183 words._
 
 | File | Title | Summary |
 |---|---|---|
@@ -314,7 +315,7 @@ _12 files, about 37,708 words._
 
 ## Production
 
-_7 files, about 10,423 words._
+_7 files, about 10,467 words._
 
 | File | Title | Summary |
 |---|---|---|

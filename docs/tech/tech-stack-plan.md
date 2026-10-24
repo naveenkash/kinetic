@@ -130,7 +130,7 @@ Scale: 73 objects, 5 harnesses, 10 Faces, 5 NPC types and 4 arenas ([asset-maste
 | Animation | UE Control Rig and Sequencer; inertial or video-based motion capture for the base set | Physics Control drives the cosmetic ragdoll |
 | Audio | Reaper or another DAW, field recordings of steel, cable and winches, MetaSounds | Loudness targets in systems/audio section 14 |
 | Voice | Recording studio and voice director (contract), UE Localization Dashboard plus a translation management service | Every Marshal and Face line is localized in Phase 3 |
-| UI | Figma for layouts, UMG and CommonUI in engine | |
+| UI | Figma for layouts, UMG and CommonUI in engine | One token file drives Unreal, web and Figma ([systems/ui-design-system.md](../systems/ui-design-system.md)) |
 | Design data | Bible markdown parsed into data tables by CI | The bible stays the source of every number |
 
 ## 8. Source control, CI and build distribution

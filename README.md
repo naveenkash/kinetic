@@ -6,7 +6,7 @@ Sixty-one years ago the only space elevator ever built snapped and fell across t
 
 ## What is here
 
-A complete pre-production design package: about 372,000 words across 164 documents, one file per object, character, arena, and system, written so that each can be handed to the person building it. The full list with word counts is in [docs/production/asset-master-list.md](docs/production/asset-master-list.md).
+A complete pre-production design package: about 377,000 words across 165 documents, one file per object, character, arena, and system, written so that each can be handed to the person building it. The full list with word counts is in [docs/production/asset-master-list.md](docs/production/asset-master-list.md).
 
 | Folder | What it holds | Start with |
 |---|---|---|

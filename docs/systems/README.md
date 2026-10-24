@@ -7,6 +7,7 @@ _Index v0.2.2, revised to 05-core-mechanics v0.2 and the v0.2.1 and v0.2.2 rulin
 | File | One line |
 |---|---|
 | [ui-hud.md](ui-hud.md) | The in-match HUD as LayCast's broadcast package: every element, position, state, the line-on-body edge indicator, Scrap Cards, Rig Calls, team tints, accessibility. |
+| [ui-design-system.md](ui-design-system.md) | The shared UI system for HUD, menus and web tools: tokens, team tints and surfaces, typography, layout grid, LayCast and Office skins, glyphs, motion, component catalog with Unreal widget names, input, accessibility, localization, Unreal and web implementation, tests, Figma library. |
 | [menus-and-frontend.md](menus-and-frontend.md) | The Ledger, Harness and Face select, Spool loadout, Allegiance and Contracts, Claims map, Manifest, Office Surplus shop, lobby, post-match Tonnage breakdown, with wireframes and copy. |
 | [audio.md](audio.md) | The line singing system (pitch map in newtons), Dogs, Cutter, Stall, Hooks, Marshal callouts, klaxons, groans, footsteps, beds, music stance, mix priorities, MetaSounds, loudness, broadcast layer. |
 | [vfx.md](vfx.md) | Niagara systems with triggers, parameters, lifetimes, tints, LOD and budgets, under the "lines are the light" rule. |

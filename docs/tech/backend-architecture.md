@@ -165,7 +165,7 @@ All tables live in `game` unless noted. `account_id` is the Supabase Auth user I
 |---|---|
 | `playlists` | `playlist_id`, `mode`, `team_size`, `teams`, `rated`, `bot_backfill_after_s`, `regions` (array), `enabled` |
 | `regions` | `region_id`, `beacon_host`, `beacon_port`, `enabled` |
-| `mm_tickets` (unlogged) | `ticket_id`, `crew_id`, `playlist_id`, `build`, `members` (jsonb: account, rating, harness), `pings_ms` (jsonb), `created_at`, `state` |
+| `mm_tickets` (unlogged) | `ticket_id`, `crew_id`, `playlist_id`, `grade_pool`, `build`, `members` (jsonb: account, rating, harness), `pings_ms` (jsonb), `created_at`, `state` |
 | `matches` | `match_id`, `playlist_id`, `arena`, `variant`, `region`, `build`, `fleet`, `allocation_id`, `address`, `state` (allocating, waiting_for_players, in_progress, reporting, completed, aborted), `created_at`, `started_at`, `ended_at`, `last_heartbeat_at` |
 | `match_players` | `match_id`, `account_id` (null for bots), `team`, `slot`, `harness`, `face`, `loadout` (jsonb, validated), `connected_seconds`, `abandoned`, `result` |
 | `match_reports` | `match_id` PK, `received_at`, `payload` (jsonb), `raw_events_path`, `replay_path`, `status` (queued, processed, quarantined), `processed_at`, `ruleset` |
@@ -205,15 +205,15 @@ All tables live in `game` unless noted. `account_id` is the Supabase Auth user I
 | `contracts` | `contract_id`, `claim_id`, `faction`, `week`, `counter_key`, `target`, `reward` (jsonb) |
 | `contract_progress` | `account_id`, `contract_id`, `progress`, `completed_at` |
 | `manifest_progress` | `account_id`, `claim_id`, `free_tier`, `sponsored_tier` |
-| `claim_standing_events` | `claim_id`, `faction`, `points`, `match_id`, `account_id`, `created_at` (append-only) |
-| `claim_standing` | `claim_id`, `faction`, `points`, `refreshed_at` (materialized by a job) |
+| `claim_standing_events` | `claim_id`, `faction`, `points` (P), `reason` (match, contract, evidence), `match_id`, `account_id`, `week`, `created_at` (append-only) |
+| `claim_standing` | `claim_id`, `faction`, `points_total`, `active_players` (A_f), `standing` (S_f), `rated_wins`, `refreshed_at` (materialized hourly) |
 
 ### 7.6 Moderation, config and audit
 
 | Table | Columns |
 |---|---|
 | `reports` | `report_id`, `reporter_id`, `reported_id`, `match_id`, `reason`, `text`, `replay_path`, `status`, `created_at` |
-| `sanctions` | `account_id`, `type` (chat_mute, voice_mute, matchmaking_ban, account_ban), `reason`, `starts_at`, `ends_at`, `issued_by` |
+| `sanctions` | `account_id`, `type` (chat_mute, voice_mute, queue_lock, rated_lock, matchmaking_ban, account_ban), `reason`, `starts_at`, `ends_at`, `issued_by` |
 | `config` | `key`, `value` (jsonb): `min_build`, `latest_build`, MOTD, feature flags, active variant flags |
 | `admin.audit` | `at`, `staff_id`, `action`, `target`, `before`, `after` (append-only, written by trigger) |
 
@@ -292,17 +292,18 @@ The crew leader calls `api.queue_join(playlist_id, pings_ms)`. The function chec
 
 ### 10.2 The loop
 
-`kinetic-worker` runs the matchmaker. Two instances; the one holding `pg_try_advisory_lock(<matchmaker>)` is the leader, and the other takes over if the leader's connection drops. Every second, per pool `(playlist, build)`:
+`kinetic-worker` runs the matchmaker. Two instances; the one holding `pg_try_advisory_lock(<matchmaker>)` is the leader, and the other takes over if the leader's connection drops. Every second, per pool `(playlist, Grade pool, build)`. Pools, crew formation and Rated rules are canonical in [systems/game-modes-and-match-flow.md](../systems/game-modes-and-match-flow.md) section 6; the loop implements them:
 
 1. Read waiting tickets with `select ... for update skip locked`.
-2. **Eligible regions** per ticket: ping at or under 150 ms. The cap never widens; a crew waits longer instead (networking section 9).
-3. **Build teams of three.** A crew of three is a team; crews of two and solo players combine by closest rating. Premade crews meet premade crews first, assembled teams after a wait (**PROPOSED**: 60 s).
-4. **Pair teams** within a rating gap that widens with wait time (**PROPOSED**: from 3 to 10 points of `mu` over 120 s).
-5. **Pick the region** that minimizes the highest ping among all players, from regions every ticket shares.
-6. **Bot backfill** on casual playlists only, never rated, never counted for Claims: after `bot_backfill_after_s` (**PROPOSED**: 90 s), empty slots fill with bot crew members ([characters/npcs/bot-crew.md](../characters/npcs/bot-crew.md)).
-7. Free Scrap (8 players) uses the same loop with team size one.
+2. **Grade pools** (game-modes 6.1): Apprentice (Grade 1), Hand (Grades 2 to 3), Journeyman (Grades 4 to 6), and Rated (Grade 2 and up, by Office Rating). A casual ticket widens to the adjacent pool after 90 s and to all pools after 180 s. A crew queues in the pool of its highest Grade member (**PROPOSED**).
+3. **Eligible regions** per ticket: ping at or under 150 ms. The cap never widens; a crew waits longer instead (networking section 9).
+4. **Build teams of three** (game-modes 6.2). A 3-stack is a team and meets other stacks first, then mixed crews after 60 s. A duo takes its third from solo queue. Three solos form a crew, and the lobby shows the role suggestion from their Ledgers.
+5. **Pair teams** within a rating gap that widens with wait time (**PROPOSED**: from 3 to 10 points of `mu` over 120 s).
+6. **Pick the region** that minimizes the highest ping among all players, from regions every ticket shares.
+7. **Bots** (game-modes 9): in the Apprentice pool bots may fill empty slots at match start; in other casual pools a bot replaces a leaver after the 10 s withdrawal (section 10.5); Rated never uses bots. A crew of three bots never exists. **PROPOSED**: if population is too low to fill casual matches in a region, `bot_backfill_after_s` lets bots fill one or two slots per crew at match start, never a whole crew.
+8. Free Scrap (8 players) uses the same loop with team size one.
 
-**Rating** is OpenSkill (team-aware, freely licensed), one rating per mode, hidden. Grades are progression, not skill, and never affect matching.
+**Office Rating** (game-modes 6.3) is implemented with OpenSkill (team-aware, freely licensed): one hidden rating per Rated mode (Scrap, Claim), shown on the Ledger only as a band (Provisional, Inspected, Certified, Rated, Sanctioned, Championship). Casual pools use OpenSkill quietly inside a Grade pool. Grades gate experience pools, never power.
 
 ### 10.3 Allocation
 
@@ -333,7 +334,16 @@ allocating --ready--> waiting_for_players --all joined or 60 s--> in_progress --
      +--fail--> requeue       +--nobody joined--> aborted             +--no heartbeat 60 s--> aborted
 ```
 
-Heartbeat every 10 seconds; a Cron job every 15 seconds aborts matches whose heartbeat is older than 60 seconds and deallocates them. Abandons go to `abandons` (**PROPOSED**: escalating queue cooldowns after the second abandon in 24 hours).
+Heartbeat every 10 seconds; a Cron job every 15 seconds aborts matches whose heartbeat is older than 60 seconds and deallocates them. Leaver, idle, forfeit and dodge rules are canonical in game-modes section 8, and the backend enforces them:
+
+| Rule (game-modes 8) | Backend action |
+|---|---|
+| Reconnect window 60 s casual, 90 s Rated | `match-current` issues join tickets inside the window only |
+| Leaver after the window | `abandons` row; in casual the server backfills a bot; in Rated the leaver takes the full loss plus the Ledger entry "Walked off a claim" |
+| Three Rated leaves in one Claim | `sanctions` row, type `rated_lock`: Rated locked for 7 days |
+| Idle 60 s | The server reports the player as a leaver |
+| Forfeit vote, 2 of 3 | Reported by the server; Rated forfeit costs Rating as a loss plus 20% |
+| Declining a formed Rated lobby twice in an hour | 15-minute queue lock (`sanctions`, type `queue_lock`) |
 
 ## 11. Game-server integration
 
@@ -404,7 +414,7 @@ The worker reads `match_reports` from pgmq and processes each match in one datab
 7. **Ratings:** OpenSkill on rated playlists.
 8. **Summary:** write `match_summaries`, set the match `completed`, send `match_processed` on each player's channel.
 
-Bots earn nothing and do not count toward opponents' Claim standing; private matches earn Rope Mark practice only (**PROPOSED**). A failed job stays on the queue and is retried; after five failures it is quarantined.
+Bots earn nothing and never earn Standing for anyone; Tonnage from a bot's Spotter credit goes to the human it set up (game-modes 9). Private matches earn Rope Mark practice only (**PROPOSED**). A failed job stays on the queue and is retried; after five failures it is quarantined.
 
 ## 13. Inventory, loadouts and economy
 
@@ -468,7 +478,26 @@ Real-money prices are always shown next to credit amounts. There are no randomiz
 - `api.declare_allegiance(faction)`: one per Claim; switching keeps earned rewards and resets Contract progress, per bible/04.
 - Contracts: three per faction per week, defined in season data as `{counter_key, target, reward}`.
 
-**Claim standing (PROPOSED, design to set):** each player with an Allegiance adds participation points plus a win bonus to their faction per completed match, weighted by mode; a daily cap per account; nothing from abandons, private matches or bot slots. Standing refreshes hourly (a Cron job rebuilds `claim_standing` from the events), so the race reads as a race.
+**Claim standing** is canonical in [systems/game-modes-and-match-flow.md](../systems/game-modes-and-match-flow.md) section 7. The worker writes one `claim_standing_events` row per player per match with Standing points P:
+
+| Result | P |
+|---|---|
+| Win, casual | 3 |
+| Loss, casual | 1 |
+| Win, Rated | 4.5 |
+| Loss, Rated | 1.5 |
+| Free Scrap top 3 | 2; otherwise 1 |
+| Contract completed | +2 each |
+| Evidence object recovered | +5, once per player per Claim |
+| Forfeit or leave | 0, and the match does not count |
+
+The weekly cap is 60 P per player; matches past it still pay Tonnage, never Standing. Bots never earn Standing for anyone.
+
+A Cron job recomputes faction standing hourly:
+
+S_f = (sum of P over the faction's players this Claim) / max(A_f, 0.6 × mean(A))
+
+where A_f is the number of the faction's players with at least 1 P this Claim and mean(A) is the mean across the five factions. `claim_standing` stores S_f, shown to one decimal on the Claims map. At the end of the Claim the highest S_f holds it; a tie goes to the faction with more Rated wins.
 
 **The season flip** is a state machine run from the admin console:
 
@@ -657,9 +686,9 @@ Server side, in `KineticServer` ([project-structure.md](project-structure.md)): 
 | B3 | Steam session minting | Magic-link token exchanged server-side; fallback is self-signed Supabase-compatible tokens | Phase 1 week 1 prototype |
 | B4 | Redis | None at launch; Upstash when section 4's triggers are measured | Phase 3 load test |
 | B5 | Economy numbers: Tonnage coefficients, Grade thresholds, Weight size, credit prices, Sponsorship terms | Design to set | Phase 2 start |
-| B6 | Claim scoring and daily cap | Section 14 | Phase 2 start |
-| B7 | Premade crews versus assembled teams | Premades first, assembled after 60 s | Phase 1 |
-| B8 | Bot backfill | Casual only, after 90 s, no rewards for bots | Phase 1 |
+| B6 | Claim scoring | Settled: game-modes section 7, implemented in section 14 | |
+| B7 | Crew formation and Grade pools | Settled: game-modes section 6, implemented in section 10.2 | |
+| B8 | Low-population bot fill at match start outside the Apprentice pool | Off; turn on per region only if casual queues cannot fill | Phase 3 |
 | B9 | Voice vendor or self-hosted | Vendor with an Unreal plugin | Phase 3 |
 | B10 | Client anti-cheat | Server authority plus backend statistics; commercial client anti-cheat evaluated in Phase 3 | Phase 3 |
 | B11 | Worker host | A small container host with two instances | Phase 1 |
