@@ -72,7 +72,7 @@ A single Climber (400 N) nets 200 N, 0.05 m/s² and takes a long time; three lin
 
 ## 2. Force volumes
 
-Updraft, Pulse, water rush and gas jet are `AKineticForceVolume`. Each is authored as `a_ref`, the acceleration a 100 kg reference body would feel, and applies a **constant force of `100 kg × a_ref` to each affected body**, so a body of mass `m` accelerates at `a_ref × 100 / m` (05 section 6.6). A 90 kg Climber in a 14 m/s² updraft feels 15.6 m/s²; a 220 kg Breaker 6.4 m/s²; a 45 kg cylinder 31 m/s²; a 2,000 kg container 0.7 m/s². Volumes act on **players and loose objects (break-free 0) only**: racked, stacked, bolted, rated and hanging objects, kinematics and geometry-collection clusters still anchored are skipped until something else frees them. CMC characters receive the force through `MOVE_Dragged` and go Airborne when `a_ref × 100 / m` exceeds their foot-hold. Volumes never Stall directly.
+Updraft, Pulse, water rush and gas jet are `AKineticForceVolume`. Each is authored as `a_ref`, the acceleration a 100 kg reference body would feel, and applies a **constant force of `100 kg × a_ref` to each affected body**, so a body of mass `m` accelerates at `a_ref × 100 / m` (05 section 6.6). A 90 kg Climber in a 14 m/s² updraft feels 15.6 m/s²; a 220 kg Breaker 6.4 m/s²; a 45 kg cylinder 28 m/s² (31 before 05 6.6's cap at 2 × a_ref); a 2,000 kg container 0.7 m/s². Volumes act on **players, loose objects (break-free 0) and objects held by a player's line** (05 6.6: a Hang-held load swings in a gust). Racked, stacked, bolted, rated and cable-hung map objects, kinematics and geometry-collection clusters still anchored are skipped until something else frees them. CMC characters receive the force through `MOVE_Dragged` and go Airborne when `a_ref × 100 / m` exceeds their foot-hold. Volumes never Stall directly.
 
 | Volume | Arena | Shape | Profile | Timing |
 |---|---|---|---|---|
@@ -137,3 +137,63 @@ Event-driven tells (break-free, slip, volatile armed, ring-out) are not on the t
 - Automation test `Tell.LeadTimes`: runs every arena timeline headless and asserts each payload fires no earlier than its lead after its cue.
 - The editor tool `Tell Timeline Inspector` (`project-structure.md`) draws the timeline with cue and payload markers so designers can see a Hauler whose klaxon is 2.5 s.
 - Light sectors: tower collapse in the Anchor toggles a light sector; the inspector shows the lines' emissive in that sector is unchanged, which the arena note asks to confirm first.
+
+## 4. Engine-free implementation
+
+[game/Source/KineticCore](../../game/README.md) implements this document without Unreal. The tests are in `KinematicsTest.cpp`.
+
+**Kinematics:** `Kinematics.h`.
+- Every pose is a function of match time:
+  - `FRailRun` with `FTimetable` covers Haulers. A train is 14 m long: its nose leaves at 13.3 s and its tail clears at 14.5 s. Its pose faces along the path, as a rotation about Up. Between runs it has no pose at all, because it is out of the arena. Departure segments represent Shift Change: the Yard resets the timetables at e 80, cancelling trains not yet departed.
+  - `FCycle` covers the Gantry's keyframed 120 s cycle and its phase at live; keys at one time are a step.
+  - `FSpin` covers the Maintenance Ring, and `FRock` the Breathing hull.
+- `FHaulSled` is the 1.1a ratchet rule, with a pawl tooth every 0.25 m.
+- `FServerClock` is the 1.2 estimate:
+  - small errors are smoothed;
+  - an error over 50 ms, seen in two samples in a row, is slewed out over 0.5 s, so one late packet is ignored;
+  - once synced, the estimate never runs backward.
+- `SweptSever` is the 1.3 test: a kinematic's box is swept in four substeps against a line segment. `FRailRun::SweepPoses` gives poses only while the same train is in the arena at both ends of the step, so a despawn or a spawn is never swept across the trench.
+
+**Force volumes:** `ForceVolumes.h` gives each section 2 profile's a_ref at a point and time:
+- the Updraft, with a gust curve that wraps at its cycle;
+- the Pulse, a 0.4 s shove then a 0.6 s inhale every 75 s from 0:55;
+- the water rush, the gas jet and the fire patch.
+
+Every volume has a height band. The Pulse's is Z -15 to 70; the Updraft's is per arena. `BodyAcceleration` applies 05 6.6's mass scaling and 2 × a_ref cap, to players, loose bodies and line-held bodies only. Rulings this document left open (**PROPOSED**):
+
+| What | Value |
+|---|---|
+| Water rush duration | 4 s |
+| Gas jet cone half-angle | 15° |
+| Fire patch push | 8 m/s² until a body moves outward at 4 m/s |
+| Fire patch height | 2.5 m above the disc |
+
+The Updraft gust curve is per-arena data; its rise from 0 is the gust start that the 1 s tell leads.
+
+**Tells:** `Tells.h`.
+- `MinimumLead` is 05 section 11's table.
+- `TimelineProblems` is the `Tell.LeadTimes` check: a lead under its minimum, or an event that repeats before its own cue.
+- `FTellScheduler` fires each cue once when the estimated server time crosses it.
+  - A leading cue whose payload has already passed is dropped: a client that joins late, or a frame gap over both, hears no klaxon for a train that has gone.
+  - A zero-lead cue fires as its moment is crossed.
+  - Events added mid-match with `AddEvent` (the one-off events of 3.1) join as a late client would.
+- `FTellGate` holds an event tell's consequence (a rated load's groan 1.0 s, a volatile's hiss 0.3 s) for each source, on its latest cue, with `Clear` and `Reset` for round reset.
+- `MidMatchEventTime` places the mid-match event on the round clock, which runs from the start of the Drop (05 9.2, game-modes 2.2).
+
+**Two time bases, and an open inconsistency for design.** Kinematics and the Yard's documents run on match time e, seconds since "live". The round clock counts from the start of the 6 s Drop, so round time = e + 6.
+
+The Yard's events document puts the Shift Change siren at e 75 to 80, and its siren-end values for each mode put the payload 5 s after the clock reads the "remaining" time, counted from live. The canonical rule puts the payload at the remaining time on the round clock (05 9.2; game-modes 3, where Claim's siren is at 4:05 and the event at 4:00). Every Yard value is therefore 11 s late: 5 s for the siren, 6 s for the Drop.
+
+| Mode | Yard document (e) | Canonical rule (e) |
+|---|---|---|
+| Scrap | 80 | 69 |
+| Claim | 245 | 234 |
+| Haul | 125 | 114 |
+| Free Scrap | 185 | 174 |
+
+The same 11 s applies to everything the Yard times from Shift Change:
+- the Hauler timetable reset (e 80, then 83, 90.5 and 98, and back to 45 s at 140);
+- the Claim interlock (e 293 and 297);
+- the Gantry phases at live.
+
+The code and tests use the Yard's values for the Yard timetable and the canonical rule for `MidMatchEventTime`. Before integration, design should either re-derive the arena's e-values or amend the rule.
