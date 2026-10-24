@@ -71,7 +71,7 @@ Latency testing uses UE's Network Emulation profiles in Phase 0 (custom profiles
 7. Plugins enabled: Gameplay Abilities, Physics Control, Geometry Collection and Fields, Dataflow, Niagara, MetaSounds, CommonUI, Enhanced Input, Online Subsystem Steam, HTTP and WebSockets, Chaos Visual Debugger.
 8. Network Emulation profiles saved in editor preferences for 30, 80 and 150 ms.
 9. Test harness: an Automation Spec target for `KineticCore` (headless solver and threshold tests) and a Gauntlet config that launches one server and two clients with emulated latency and collects logs. Every Phase 0 exit test should eventually run from this harness unattended.
-10. CI job that compiles all targets and runs the `KineticCore` tests on every submit.
+10. CI job that compiles all targets and runs the `KineticCore` tests on every submit. Until the Unreal targets exist, [.github/workflows/ci.yml](../../.github/workflows/ci.yml) runs the engine-free core (`make -C game all-checks`) and the backend's checks and database tests on every push.
 11. The bible-table check (`Tools/ci/check_tables.py`, project-structure section 4) wired into CI from the first data table.
 
 ## 4. Engine-side architecture: where each piece lives

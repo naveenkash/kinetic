@@ -64,8 +64,9 @@ async function createMatch(
         insert into game.matches (match_id, playlist_id, arena, region, build, fleet, source_tickets)
         values (${matchId}, ${playlist.playlist_id}, ${arena}, ${proposal.region}, ${proposal.build},
                 ${ctx.fleet.name}, ${sp.json(source as unknown as Json)})`;
-      await sp`insert into game.match_players ${sp(players, "match_id", "slot", "team", "account_id", "is_bot", "harness", "face")
-        }`;
+      await sp`insert into game.match_players ${
+        sp(players, "match_id", "slot", "team", "account_id", "is_bot", "harness", "face")
+      }`;
       await sp`delete from game.mm_tickets where ticket_id in ${sp(proposal.ticket_ids)}`;
       for (const t of source) {
         await broadcast(sp, `crew:${t.crew_id}`, "queue_state", { queued: false, match_id: matchId });

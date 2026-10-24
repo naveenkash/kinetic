@@ -9,8 +9,11 @@ The Unreal project will live here (`Kinetic.uproject`, per [docs/tech/project-st
 | `Content/Core/Tables/*.csv` | The data tables (`DT_HarnessClass`, `DT_CutterVariant`, `DT_ImpactThresholds`, `DT_SurfaceModifiers`, `DT_BreakFree`, `DT_MassTiers`, `DT_Volatiles`, `DT_SpoolGlobals`) in SI units, in the CSV format Unreal imports as data tables |
 | `Tools/ci/check_tables.py` | Fails the build if any table value differs from [bible/05](../docs/bible/05-core-mechanics.md), or is not a finite number; 231 values today |
 | `Source/KineticCore/Public/Kinetic/` | The library: `LineSolver` (Haul, the Kick and Jack push), `HangSolver` (every Hang and Set line solved together, with slip, Reel and the floor), `MassRules` (footing, brace, break-free, rated commit, tiers, force volumes), `Spool` (overspin, Doubler split, snap and cut impulses), `Impact` (stagger, flip, Stall, the Impact Monitor, crush, blasts), `Cutter` (warm-up and the cone and reach cut test), `Tables`, `Units` |
+| `Source/KineticCore/Public/Kinetic/` (match layer) | `MatchEvents` (the event schema, written as JSON Lines: Dog seats, mode engagements, cuts, Stalls, hits, snaps, rated commits, per-round time and mass moved, round ends, connections, server health), `Credit` (elimination, Spotter and assist credit, and the Scrap Card), `ScrapMatch` (the Scrap round clock and calls, best of 5, side swaps, sudden death, forfeit, leaver, idle and backfill rules), `MatchReport` (facts and the report the backend stores), `Determinism` (per-tick recordings and the first divergent tick), `Json`, `Sha256` |
 | `Source/KineticCore/Public/Kinetic/ReferenceSim.h` | A small point-body simulator used to check the solver against the bible's worked examples and to run the panic-window bench. Production physics stays in Chaos |
 | `Source/KineticCore/Tests/` | 90 tests, including bible/05 section 4.3 (the panic window), the 71:29 split, the Kick, Overboard and its counter, the Gallows, Anchor Drop, shared Hang loads, chains, 200 random line networks, swing loads (a Bola included), slip and Reel, every 7.1 impulse example, crush, and bit-identical determinism |
+| `Tools/report/SampleMatch.cpp`, `Tools/ci/check_report.py` | Play a scripted Scrap match and check its report and raw events as the backend will read them (`api.srv_store_report`) |
+| `Tools/determinism/DiffRecordings.cpp` | `build/diff-recordings A B [tolerance_m]`: where two determinism recordings first diverge, for the week 2 and week 5 "record positions, diff" tests |
 | `Tools/bench/PanicBench.cpp` | Prints, for every attacker and victim class, when a Haul from 15 m lifts the victim off their feet and when it has dragged them 15 m |
 
 The code follows Unreal's naming (`F` structs, `E` enums, `b` booleans) inside a `Kinetic` namespace and uses no engine types, so it moves into the `KineticCore` module unchanged; `FVec3` maps onto `FVector`. Everything is SI; `Units.h` converts to centimeters at the engine boundary.
@@ -25,7 +28,7 @@ cd game
 make all-checks
 ```
 
-`make test`, `make test-asan`, `make bench` and `make check` run the parts separately.
+`make test`, `make test-asan`, `make bench`, `make check` and `make report` run the parts separately. CI runs `make all-checks` on every push ([.github/workflows/ci.yml](../.github/workflows/ci.yml)), along with the backend's format, lint, type, unit and database tests.
 
 ## Findings while implementing
 

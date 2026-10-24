@@ -52,6 +52,20 @@ A round ends early the moment one crew has no riggers standing. Average target: 
 
 All four are marked **PROPOSED** in their own documents. Common rules this spec adds (**PROPOSED**): the event begins the instant the Marshal's count is equal; no reserves are granted in sudden death in any mode; set lines placed before time-out persist; Tonnage earned in sudden death counts.
 
+### 2.2 Rulings the implementation needed (PROPOSED)
+
+The engine-free match flow ([game/Source/KineticCore/Public/Kinetic/ScrapMatch.h](../../game/Source/KineticCore/Public/Kinetic/ScrapMatch.h)) had to settle these; design should confirm or change them.
+
+- A round's seconds run from the start of the Drop.
+- Two crews down in the same instant, or sudden death running out with nobody fallen, replays the round. It does not count toward the score, and sides still swap.
+- In sudden death the round ends the moment one crew has fewer riggers standing, so a withdrawal counts like a fall.
+- A withdrawn rigger is not standing, and a crew with nobody standing loses the round at once, even at the start of the Drop.
+- In casual, the backfill bot takes over the rigger where it stands, and a leaver who returns within the window takes it straight back. In Rated, a withdrawn leaver who returns rejoins at the next reset; dropping again before then cancels the rejoin. Past the window the seat stays with the bot (casual) or empty (Rated) for the match. Whatever a backfill bot does earns nothing for the leaver.
+- Idle time counts only while the rigger can move; 60 s idle is a disconnect, and moving again within the reconnect window is the return.
+- A forfeit needs 2 yes votes, or every connected human if fewer than 2 remain; votes clear at each reset and on a disconnect. A forfeit during a round logs that round as forfeited without scoring it.
+- Once a crew has its third round the match is decided; nothing during the final replay (a vote, a leaver) changes it.
+- Both crews losing their last humans in the same instant is a no-contest: no winner, no forfeit.
+
 ## 3. Claim
 
 **Setup.** One 8:00 round. A 4 m radius salvage marker (Weave billet on a pallet, Heavy tier, movable by lines, 05 section 9.4) at an authored position: Ballast's Bays, the Yard's Floor, Hangtown's market ring, the Anchor's Crown. Three reserves per crew per match, 8 s reserve timer.

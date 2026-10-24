@@ -71,6 +71,7 @@ public:
 	double Time() const { return Now; }
 	double StepSeconds() const { return Dt; }
 	const FSimBody& Body(int Index) const { return Bodies.at(Index); }
+	int BodyCount() const { return static_cast<int>(Bodies.size()); }
 	const FSimLine& Line(int Index) const { return Lines.at(Index); }
 
 private:

@@ -11,7 +11,7 @@ _What is tested, when, how, and what number means pass. Tuning targets come from
 
 ## Instrumentation (built in Phase 0, never removed)
 
-Every match logs:
+The schema is `MatchEvents.h` in [game/](../../game/README.md) (event_schema 1, JSON Lines). Every match logs:
 
 - Every Dog seat: shooter, target type, plate if a player, class of both.
 - Every mode engagement: mode, tension, duration, mass on each end, outcome (released, cut, snapped, completed).

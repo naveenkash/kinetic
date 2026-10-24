@@ -1,7 +1,7 @@
 -- Server endpoints and report validation (backend-architecture sections 11 and 12).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(13);
+select plan(15);
 
 insert into auth.users (id, email, aud, role, raw_app_meta_data) values
   ('b1111111-1111-4111-8111-111111111111', 'dev-one@users.kinetic.invalid', 'authenticated', 'authenticated', '{"kinetic_provider":"dev","kinetic_provider_user_id":"one"}'),
@@ -11,7 +11,8 @@ select api.srv_ensure_account('b2222222-2222-4222-8222-222222222222', 'dev', 'tw
 
 insert into game.matches (match_id, playlist_id, arena, region, build, fleet, allocation_id, address)
 values ('c0000000-0000-4000-8000-000000000001', 'scrap_3v3_casual', 'YRD', 'local', '0.1.0', 'local', 'alloc-1', '127.0.0.1:1'),
-       ('c0000000-0000-4000-8000-000000000002', 'scrap_3v3_casual', 'YRD', 'local', '0.1.0', 'local', 'alloc-2', '127.0.0.1:2');
+       ('c0000000-0000-4000-8000-000000000002', 'scrap_3v3_casual', 'YRD', 'local', '0.1.0', 'local', 'alloc-2', '127.0.0.1:2'),
+       ('c0000000-0000-4000-8000-000000000003', 'scrap_3v3_casual', 'YRD', 'local', '0.1.0', 'local', 'alloc-3', '127.0.0.1:3');
 insert into game.match_players (match_id, slot, team, account_id, is_bot, harness)
 select m, s.slot, s.team, s.account_id, s.account_id is null, 'Rigger'
 from unnest(array['c0000000-0000-4000-8000-000000000001'::uuid, 'c0000000-0000-4000-8000-000000000002'::uuid]) m,
@@ -65,6 +66,35 @@ select is(api.srv_store_report('c0000000-0000-4000-8000-000000000002', 'alloc-2'
   ->> 'reason', 'roster_mismatch', 'a roster mismatch is quarantined');
 select is((select status from game.match_reports where match_id = 'c0000000-0000-4000-8000-000000000002'), 'quarantined',
   'and stored as quarantined');
+
+-- A human whose account was deleted before the manifest was fetched is reported with a null
+-- account_id, and matched against the roster's null-account human slot on that team.
+insert into game.match_players (match_id, slot, team, account_id, is_bot, harness) values
+  ('c0000000-0000-4000-8000-000000000003', 1, 1, 'b1111111-1111-4111-8111-111111111111', false, 'Rigger'),
+  ('c0000000-0000-4000-8000-000000000003', 2, 1, null, false, 'Rigger'),
+  ('c0000000-0000-4000-8000-000000000003', 3, 2, 'b2222222-2222-4222-8222-222222222222', false, 'Rigger'),
+  ('c0000000-0000-4000-8000-000000000003', 4, 2, null, true, 'Rigger');
+select api.srv_heartbeat('c0000000-0000-4000-8000-000000000003', 'alloc-3', 'in_progress', '{}');
+select is(api.srv_store_report('c0000000-0000-4000-8000-000000000003', 'alloc-3', jsonb_build_object(
+  'match_id', 'c0000000-0000-4000-8000-000000000003', 'winner_team', 2,
+  'players', jsonb_build_array(
+    jsonb_build_object('account_id', 'b1111111-1111-4111-8111-111111111111', 'team', 1, 'is_bot', false, 'connected_seconds', 1),
+    jsonb_build_object('account_id', null, 'team', 1, 'is_bot', false, 'connected_seconds', 1),
+    jsonb_build_object('account_id', 'b2222222-2222-4222-8222-222222222222', 'team', 2, 'is_bot', false, 'connected_seconds', 1),
+    jsonb_build_object('account_id', null, 'team', 2, 'is_bot', true, 'connected_seconds', 1)))) ->> 'status',
+  'stored', 'a human with a deleted account is reported with a null account_id');
+insert into game.matches (match_id, playlist_id, arena, region, build, fleet, allocation_id, address)
+values ('c0000000-0000-4000-8000-000000000004', 'scrap_3v3_casual', 'YRD', 'local', '0.1.0', 'local', 'alloc-4', '127.0.0.1:4');
+insert into game.match_players (match_id, slot, team, account_id, is_bot, harness) values
+  ('c0000000-0000-4000-8000-000000000004', 1, 1, 'b1111111-1111-4111-8111-111111111111', false, 'Rigger'),
+  ('c0000000-0000-4000-8000-000000000004', 2, 2, 'b2222222-2222-4222-8222-222222222222', false, 'Rigger');
+select api.srv_heartbeat('c0000000-0000-4000-8000-000000000004', 'alloc-4', 'in_progress', '{}');
+select is(api.srv_store_report('c0000000-0000-4000-8000-000000000004', 'alloc-4', jsonb_build_object(
+  'match_id', 'c0000000-0000-4000-8000-000000000004',
+  'players', jsonb_build_array(
+    jsonb_build_object('account_id', 'b1111111-1111-4111-8111-111111111111', 'team', 1, 'is_bot', false, 'connected_seconds', 1),
+    jsonb_build_object('account_id', null, 'team', 2, 'is_bot', false, 'connected_seconds', 1)))) ->> 'reason',
+  'roster_mismatch', 'a null account_id must match a null-account slot on its team');
 
 select * from finish();
 rollback;

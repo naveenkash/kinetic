@@ -398,6 +398,14 @@ The server reports **facts**; the backend turns facts into rewards, so the econo
 
 Facts come from the same `KineticCore` event stream as playtest instrumentation ([playtest-plan.md](../production/playtest-plan.md)). Spotter credit is computed on the server from line ownership at the time of each Stall. `counters` keys are the Contract objectives from bible/04, so a new Contract built on existing counters needs no patch.
 
+The engine-free implementation (`MatchEvents`, `Credit` and `MatchReport` in [game/](../../game/README.md)) writes event_schema 1. The raw events are JSON Lines, one object per event with its `type` and `v`, and `raw_events_sha256` is the SHA-256 of those exact bytes. Credit rules and counter meanings are **PROPOSED**, documented in `Credit.h` and `MatchReport.h`:
+- **Killer:** the enemy whose Haul or Jack acted last on the victim, or on the object that hit them, within 5 s; failing that, whose Hang or Set line did.
+- **Spotter:** another enemy whose Hang or Set line counted. A bot's Spotter credit goes to the human killer.
+- **Assists:** every other enemy line that counted.
+- **Counters:** `lines_hung_used_by_others` counts Spotter credits; `rounds_without_floor` counts rounds played without touching the floor; `snaps_survived` counts overspin snaps not followed by the owner's Stall within 5 s. Team numbers are 1 and 2.
+- **Result fields:** the report adds `forfeit_team` (null, 1 or 2), `forfeit_penalty_free` (a Rated short crew forfeiting after 60 s, game-modes 8) and `no_contest` (both crews lost their last humans together; `winner_team` is null), so the worker can apply the forfeit rules.
+- **Deleted accounts:** a human whose account was deleted before the manifest was fetched has `account_id: null` in the manifest, so the server reports it as null. `srv_store_report` accepts that and matches it per team against the roster's null-account human slots (migration `20261025000100_report_deleted_accounts.sql`).
+
 ### 12.2 Validation in `server-report`
 
 Reject or quarantine when the credential is not for this match; the roster differs from `match_players`; `connected_seconds` exceeds match length; a fact exceeds a physical ceiling (**PROPOSED** per-match caps derived from bible/05); or the match is already reported (`match_reports` primary key). Quarantined reports go to the admin console, not the Ledger.
