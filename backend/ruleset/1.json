@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "status": "PROPOSED: placeholder economy numbers for tuning (menus-and-frontend 13, backend-architecture 12.3)",
+  "tonnage": {
+    "per_tonne_metre": 0.5,
+    "per_scrap": 120,
+    "per_spotter_credit": 180,
+    "per_assist": 60,
+    "per_ringout_metre": 10
+  },
+  "grade_thresholds_t": [
+    0,
+    2500,
+    15000,
+    57000,
+    150000,
+    400000
+  ],
+  "weight_start_t": 45000,
+  "tonnage_credit_per_t": 0.1,
+  "rope_mark_tiers": {
+    "tape": 1,
+    "band": 10,
+    "mark": 50
+  },
+  "rigs": [
+    "Gallows",
+    "Guillotine",
+    "Clothesline",
+    "Slingshot",
+    "Pendulum",
+    "Kiss",
+    "Scatter",
+    "Caboose",
+    "Avalanche",
+    "Overboard",
+    "Anchor Drop"
+  ],
+  "fact_caps": {
+    "mass_distance_kg_m": 50000000,
+    "eliminations": 40,
+    "assists": 80,
+    "spotter_credits": 40,
+    "ringouts": 40,
+    "ringout_height_m": 400,
+    "rope_marks": 40,
+    "seconds": 3600
+  },
+  "counter_caps": {
+    "lines_hung_used_by_others": 200,
+    "rated_tons_moved": 5000,
+    "rounds_without_floor": 9,
+    "scraps_with_lighter_object": 40,
+    "snaps_survived": 100,
+    "default": 1000
+  },
+  "entries": [
+    {
+      "entry_id": "first-scrap",
+      "when": {
+        "career": "scraps",
+        "at_least": 1
+      }
+    },
+    {
+      "entry_id": "first-spotter-credit",
+      "when": {
+        "career": "spotter_credits",
+        "at_least": 1
+      }
+    },
+    {
+      "entry_id": "first-ringout",
+      "when": {
+        "career": "ringouts",
+        "at_least": 1
+      }
+    },
+    {
+      "entry_id": "rated-load-moved",
+      "when": {
+        "career": "rated_tons_moved",
+        "at_least": 1
+      }
+    },
+    {
+      "entry_id": "hundred-scraps",
+      "when": {
+        "career": "scraps",
+        "at_least": 100
+      }
+    },
+    {
+      "entry_id": "cutter-ceremony",
+      "when": {
+        "grade_at_least": 2
+      }
+    },
+    {
+      "entry_id": "clear",
+      "when": {
+        "cleared": true
+      }
+    }
+  ],
+  "band_entry_prefix": "rope-band-"
+}

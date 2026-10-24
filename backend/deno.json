@@ -3,8 +3,11 @@
     "keys": "deno run --allow-read --allow-write tools/gen-keys.ts",
     "functions": "supabase functions serve --env-file supabase/functions/.env",
     "worker": "deno run -A worker/main.ts",
+    "content": "deno run -A tools/load-content.ts",
+    "admin": "deno run -A tools/admin.ts",
     "test:unit": "deno test -A tests/unit/",
     "test:db": "supabase test db",
+    "test:worker-db": "deno test -A tests/db/",
     "test:integration": "deno test -A tests/integration/",
     "check": "deno check worker/main.ts tools/*.ts supabase/functions/*/index.ts tests/**/*.ts",
     "types": "supabase gen types typescript --local --schema api > supabase/functions/_shared/database.types.ts && deno fmt supabase/functions/_shared/database.types.ts"

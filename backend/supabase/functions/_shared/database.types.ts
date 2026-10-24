@@ -12,6 +12,116 @@ export type Database = {
       [_ in never]: never;
     };
     Views: {
+      catalog: {
+        Row: {
+          grade_gated: number | null;
+          item_id: string | null;
+          metadata: Json | null;
+          slot: string | null;
+          source_rule: string | null;
+        };
+        Insert: {
+          grade_gated?: number | null;
+          item_id?: string | null;
+          metadata?: Json | null;
+          slot?: string | null;
+          source_rule?: string | null;
+        };
+        Update: {
+          grade_gated?: number | null;
+          item_id?: string | null;
+          metadata?: Json | null;
+          slot?: string | null;
+          source_rule?: string | null;
+        };
+        Relationships: [];
+      };
+      claim_standing: {
+        Row: {
+          active_players: number | null;
+          claim_id: string | null;
+          faction: string | null;
+          refreshed_at: string | null;
+          standing: number | null;
+        };
+        Insert: {
+          active_players?: number | null;
+          claim_id?: string | null;
+          faction?: string | null;
+          refreshed_at?: string | null;
+          standing?: never;
+        };
+        Update: {
+          active_players?: number | null;
+          claim_id?: string | null;
+          faction?: string | null;
+          refreshed_at?: string | null;
+          standing?: never;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "claim_standing_claim_id_fkey";
+            columns: ["claim_id"];
+            isOneToOne: false;
+            referencedRelation: "claims";
+            referencedColumns: ["claim_id"];
+          },
+        ];
+      };
+      claims: {
+        Row: {
+          arena: string | null;
+          claim_id: string | null;
+          ends_at: string | null;
+          name: string | null;
+          outcome: Json | null;
+          starts_at: string | null;
+          state: string | null;
+        };
+        Insert: {
+          arena?: string | null;
+          claim_id?: string | null;
+          ends_at?: string | null;
+          name?: string | null;
+          outcome?: never;
+          starts_at?: string | null;
+          state?: string | null;
+        };
+        Update: {
+          arena?: string | null;
+          claim_id?: string | null;
+          ends_at?: string | null;
+          name?: string | null;
+          outcome?: never;
+          starts_at?: string | null;
+          state?: string | null;
+        };
+        Relationships: [];
+      };
+      current_ruleset: {
+        Row: {
+          grade_thresholds_t: Json | null;
+          rope_mark_tiers: Json | null;
+          tonnage: Json | null;
+          version: number | null;
+          weight_start_t: number | null;
+        };
+        Insert: {
+          grade_thresholds_t?: never;
+          rope_mark_tiers?: never;
+          tonnage?: never;
+          version?: number | null;
+          weight_start_t?: never;
+        };
+        Update: {
+          grade_thresholds_t?: never;
+          rope_mark_tiers?: never;
+          tonnage?: never;
+          version?: number | null;
+          weight_start_t?: never;
+        };
+        Relationships: [];
+      };
       my_account: {
         Row: {
           account_id: string | null;
@@ -21,6 +131,100 @@ export type Database = {
           status: string | null;
         };
         Relationships: [];
+      };
+      my_allegiance: {
+        Row: {
+          claim_id: string | null;
+          declared_at: string | null;
+          faction: string | null;
+        };
+        Insert: {
+          claim_id?: string | null;
+          declared_at?: string | null;
+          faction?: string | null;
+        };
+        Update: {
+          claim_id?: string | null;
+          declared_at?: string | null;
+          faction?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "allegiances_claim_id_fkey";
+            columns: ["claim_id"];
+            isOneToOne: false;
+            referencedRelation: "claims";
+            referencedColumns: ["claim_id"];
+          },
+        ];
+      };
+      my_career_stats: {
+        Row: {
+          airborne_seconds: number | null;
+          assists: number | null;
+          floor_seconds: number | null;
+          harness: string | null;
+          hoisted_seconds: number | null;
+          mass_distance_kg_m: number | null;
+          matches: number | null;
+          rated_tons_moved: number | null;
+          ringouts: number | null;
+          scraps: number | null;
+          spotter_credits: number | null;
+          wins: number | null;
+        };
+        Insert: {
+          airborne_seconds?: number | null;
+          assists?: number | null;
+          floor_seconds?: number | null;
+          harness?: string | null;
+          hoisted_seconds?: number | null;
+          mass_distance_kg_m?: number | null;
+          matches?: number | null;
+          rated_tons_moved?: number | null;
+          ringouts?: number | null;
+          scraps?: number | null;
+          spotter_credits?: number | null;
+          wins?: number | null;
+        };
+        Update: {
+          airborne_seconds?: number | null;
+          assists?: number | null;
+          floor_seconds?: number | null;
+          harness?: string | null;
+          hoisted_seconds?: number | null;
+          mass_distance_kg_m?: number | null;
+          matches?: number | null;
+          rated_tons_moved?: number | null;
+          ringouts?: number | null;
+          scraps?: number | null;
+          spotter_credits?: number | null;
+          wins?: number | null;
+        };
+        Relationships: [];
+      };
+      my_contracts: {
+        Row: {
+          claim_id: string | null;
+          completed_at: string | null;
+          contract_id: string | null;
+          counter_key: string | null;
+          faction: string | null;
+          progress: number | null;
+          reward: Json | null;
+          target: number | null;
+          title: string | null;
+          week: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "contracts_claim_id_fkey";
+            columns: ["claim_id"];
+            isOneToOne: false;
+            referencedRelation: "claims";
+            referencedColumns: ["claim_id"];
+          },
+        ];
       };
       my_crew: {
         Row: {
@@ -51,6 +255,21 @@ export type Database = {
             referencedColumns: ["account_id"];
           },
         ];
+      };
+      my_entitlements: {
+        Row: {
+          entitlement: string | null;
+          granted_at: string | null;
+        };
+        Insert: {
+          entitlement?: string | null;
+          granted_at?: string | null;
+        };
+        Update: {
+          entitlement?: string | null;
+          granted_at?: string | null;
+        };
+        Relationships: [];
       };
       my_invites: {
         Row: {
@@ -85,6 +304,352 @@ export type Database = {
           },
         ];
       };
+      my_items: {
+        Row: {
+          acquired_at: string | null;
+          item_id: string | null;
+          slot: string | null;
+          source: string | null;
+        };
+        Relationships: [];
+      };
+      my_ledger: {
+        Row: {
+          account_id: string | null;
+          cleared_at: string | null;
+          cutter_issued_at: string | null;
+          cutter_serial: string | null;
+          grade: number | null;
+          tonnage_total: number | null;
+          updated_at: string | null;
+          weight_balance: number | null;
+        };
+        Insert: {
+          account_id?: string | null;
+          cleared_at?: string | null;
+          cutter_issued_at?: string | null;
+          cutter_serial?: string | null;
+          grade?: number | null;
+          tonnage_total?: number | null;
+          updated_at?: string | null;
+          weight_balance?: number | null;
+        };
+        Update: {
+          account_id?: string | null;
+          cleared_at?: string | null;
+          cutter_issued_at?: string | null;
+          cutter_serial?: string | null;
+          grade?: number | null;
+          tonnage_total?: number | null;
+          updated_at?: string | null;
+          weight_balance?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ledgers_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: true;
+            referencedRelation: "my_account";
+            referencedColumns: ["account_id"];
+          },
+        ];
+      };
+      my_ledger_entries: {
+        Row: {
+          entry_id: string | null;
+          match_id: string | null;
+          unlocked_at: string | null;
+        };
+        Insert: {
+          entry_id?: string | null;
+          match_id?: string | null;
+          unlocked_at?: string | null;
+        };
+        Update: {
+          entry_id?: string | null;
+          match_id?: string | null;
+          unlocked_at?: string | null;
+        };
+        Relationships: [];
+      };
+      my_loadouts: {
+        Row: {
+          cosmetics: Json | null;
+          cutter: string | null;
+          dog: string | null;
+          harness: string | null;
+          line: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          cosmetics?: Json | null;
+          cutter?: string | null;
+          dog?: string | null;
+          harness?: string | null;
+          line?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          cosmetics?: Json | null;
+          cutter?: string | null;
+          dog?: string | null;
+          harness?: string | null;
+          line?: string | null;
+          updated_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "loadouts_cutter_fkey";
+            columns: ["cutter"];
+            isOneToOne: false;
+            referencedRelation: "catalog";
+            referencedColumns: ["item_id"];
+          },
+          {
+            foreignKeyName: "loadouts_cutter_fkey";
+            columns: ["cutter"];
+            isOneToOne: false;
+            referencedRelation: "my_items";
+            referencedColumns: ["item_id"];
+          },
+          {
+            foreignKeyName: "loadouts_dog_fkey";
+            columns: ["dog"];
+            isOneToOne: false;
+            referencedRelation: "catalog";
+            referencedColumns: ["item_id"];
+          },
+          {
+            foreignKeyName: "loadouts_dog_fkey";
+            columns: ["dog"];
+            isOneToOne: false;
+            referencedRelation: "my_items";
+            referencedColumns: ["item_id"];
+          },
+          {
+            foreignKeyName: "loadouts_line_fkey";
+            columns: ["line"];
+            isOneToOne: false;
+            referencedRelation: "catalog";
+            referencedColumns: ["item_id"];
+          },
+          {
+            foreignKeyName: "loadouts_line_fkey";
+            columns: ["line"];
+            isOneToOne: false;
+            referencedRelation: "my_items";
+            referencedColumns: ["item_id"];
+          },
+        ];
+      };
+      my_manifest: {
+        Row: {
+          claim_id: string | null;
+          earned: boolean | null;
+          reward: Json | null;
+          tier: number | null;
+          tonnage_earned: number | null;
+          tonnage_t: number | null;
+          track: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "manifest_crates_claim_id_fkey";
+            columns: ["claim_id"];
+            isOneToOne: false;
+            referencedRelation: "claims";
+            referencedColumns: ["claim_id"];
+          },
+        ];
+      };
+      my_match_summaries: {
+        Row: {
+          breakdown: Json | null;
+          contracts: Json | null;
+          created_at: string | null;
+          credit: number | null;
+          grade_after: number | null;
+          grade_before: number | null;
+          manifest: Json | null;
+          match_id: string | null;
+          rating: Json | null;
+          rope_marks: Json | null;
+          ruleset: number | null;
+          standing: Json | null;
+          tonnage: number | null;
+          unlocks: Json | null;
+          weight_after: number | null;
+          weight_before: number | null;
+          win: boolean | null;
+        };
+        Insert: {
+          breakdown?: Json | null;
+          contracts?: Json | null;
+          created_at?: string | null;
+          credit?: number | null;
+          grade_after?: number | null;
+          grade_before?: number | null;
+          manifest?: Json | null;
+          match_id?: string | null;
+          rating?: Json | null;
+          rope_marks?: Json | null;
+          ruleset?: number | null;
+          standing?: Json | null;
+          tonnage?: number | null;
+          unlocks?: Json | null;
+          weight_after?: number | null;
+          weight_before?: number | null;
+          win?: boolean | null;
+        };
+        Update: {
+          breakdown?: Json | null;
+          contracts?: Json | null;
+          created_at?: string | null;
+          credit?: number | null;
+          grade_after?: number | null;
+          grade_before?: number | null;
+          manifest?: Json | null;
+          match_id?: string | null;
+          rating?: Json | null;
+          rope_marks?: Json | null;
+          ruleset?: number | null;
+          standing?: Json | null;
+          tonnage?: number | null;
+          unlocks?: Json | null;
+          weight_after?: number | null;
+          weight_before?: number | null;
+          win?: boolean | null;
+        };
+        Relationships: [];
+      };
+      my_ratings: {
+        Row: {
+          band: string | null;
+          games: number | null;
+          mode: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          band?: string | null;
+          games?: number | null;
+          mode?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          band?: string | null;
+          games?: number | null;
+          mode?: string | null;
+          updated_at?: string | null;
+        };
+        Relationships: [];
+      };
+      my_rope_marks: {
+        Row: {
+          count: number | null;
+          rig: string | null;
+          tier: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          count?: number | null;
+          rig?: string | null;
+          tier?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          count?: number | null;
+          rig?: string | null;
+          tier?: string | null;
+          updated_at?: string | null;
+        };
+        Relationships: [];
+      };
+      my_standing: {
+        Row: {
+          claim_id: string | null;
+          points: number | null;
+          reason: string | null;
+          week: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "claim_standing_events_claim_id_fkey";
+            columns: ["claim_id"];
+            isOneToOne: false;
+            referencedRelation: "claims";
+            referencedColumns: ["claim_id"];
+          },
+        ];
+      };
+      my_wallet_txns: {
+        Row: {
+          created_at: string | null;
+          currency: string | null;
+          delta: number | null;
+          reason: string | null;
+          ref: string | null;
+          txn_id: string | null;
+        };
+        Insert: {
+          created_at?: string | null;
+          currency?: string | null;
+          delta?: number | null;
+          reason?: string | null;
+          ref?: string | null;
+          txn_id?: string | null;
+        };
+        Update: {
+          created_at?: string | null;
+          currency?: string | null;
+          delta?: number | null;
+          reason?: string | null;
+          ref?: string | null;
+          txn_id?: string | null;
+        };
+        Relationships: [];
+      };
+      my_wallets: {
+        Row: {
+          balance: number | null;
+          currency: string | null;
+        };
+        Insert: {
+          balance?: number | null;
+          currency?: string | null;
+        };
+        Update: {
+          balance?: number | null;
+          currency?: string | null;
+        };
+        Relationships: [];
+      };
+      shop: {
+        Row: {
+          claim_id: string | null;
+          currency: string | null;
+          ends_at: string | null;
+          item_id: string | null;
+          price: number | null;
+          slot: string | null;
+          starts_at: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "shop_rotation_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "catalog";
+            referencedColumns: ["item_id"];
+          },
+          {
+            foreignKeyName: "shop_rotation_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "my_items";
+            referencedColumns: ["item_id"];
+          },
+        ];
+      };
     };
     Functions: {
       crew_accept: { Args: { p_crew: string }; Returns: Json };
@@ -99,6 +664,7 @@ export type Database = {
         Args: { p_face?: string; p_harness: string; p_ready?: boolean };
         Returns: Json;
       };
+      declare_allegiance: { Args: { p_faction: string }; Returns: Json };
       friends_resolve: {
         Args: { p_steam_ids: string[] };
         Returns: {
@@ -115,7 +681,31 @@ export type Database = {
         Args: { p_build: string; p_pings: Json; p_playlist: string };
         Returns: Json;
       };
+      set_loadout: {
+        Args: {
+          p_cosmetics?: Json;
+          p_cutter: string;
+          p_dog: string;
+          p_harness: string;
+          p_line: string;
+        };
+        Returns: Json;
+      };
+      shop_purchase: {
+        Args: { p_expected_price: number; p_idem: string; p_item: string };
+        Returns: Json;
+      };
       srv_build_ok: { Args: { p_build: string }; Returns: boolean };
+      srv_claim_resolve: { Args: { p_claim: string }; Returns: Json };
+      srv_claim_review: {
+        Args: {
+          p_claim: string;
+          p_holder?: string;
+          p_staff: string;
+          p_variant?: string;
+        };
+        Returns: Json;
+      };
       srv_current_match: { Args: { p_account: string }; Returns: Json };
       srv_ensure_account: {
         Args: {
@@ -153,10 +743,15 @@ export type Database = {
         };
         Returns: undefined;
       };
+      srv_player_loadout: {
+        Args: { p_account: string; p_allocation: string; p_match: string };
+        Returns: Json;
+      };
       srv_rate_limit: {
         Args: { p_key: string; p_max: number; p_window_s: number };
         Returns: boolean;
       };
+      srv_requeue_report: { Args: { p_match: string }; Returns: Json };
       srv_store_report: {
         Args: { p_allocation: string; p_match: string; p_payload: Json };
         Returns: Json;

@@ -1,6 +1,6 @@
 // End-to-end Phase 1 loop against the local stack:
 // login -> crews -> queue -> worker forms a match -> local fleet boots the fake server ->
-// match_found over Realtime -> players join with tickets -> report stored.
+// match_found over Realtime -> players join with tickets -> report stored and rewarded.
 //
 // Needs: `supabase start`, `deno task functions` running, keys from `deno task keys`.
 import { assert, assertEquals } from "jsr:@std/assert@1.0.13";
@@ -221,12 +221,16 @@ async function assertTamperedTicketRefused(t: Ticketed) {
 
 async function assertMatchRecorded(ctx: WorkerContext, matchId: string) {
   const { sql } = ctx;
+  // The tick's rewards pass processes the report once it is stored.
   const report = await waitFor("match report", async () => {
     await tick(ctx);
     const [row] = await sql`select status, quarantine_reason from game.match_reports where match_id = ${matchId}`;
-    return row;
+    return row?.status === "stored" ? null : row;
   });
-  assertEquals(report.status, "stored", `report quarantined: ${report.quarantine_reason}`);
+  assertEquals(report.status, "processed", `report quarantined: ${report.quarantine_reason}`);
+  const [summaries] = await sql`
+    select count(*)::int as n from game.match_summaries where match_id = ${matchId}`;
+  assertEquals(summaries.n, 6);
   const [done] = await sql`select state from game.matches where match_id = ${matchId}`;
   assertEquals(done.state, "completed");
   const [joined] = await sql`

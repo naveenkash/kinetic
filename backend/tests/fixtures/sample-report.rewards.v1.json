@@ -1,0 +1,353 @@
+[
+  {
+    "account_id": "7d1b2c3a-0000-4000-8000-000000000000",
+    "harness": "Rigger",
+    "win": false,
+    "tonnage": 503,
+    "credit": 50,
+    "breakdown": [
+      {
+        "key": "mass_moved",
+        "count": 6,
+        "rate": 0.5,
+        "tonnage": 3
+      },
+      {
+        "key": "scraps",
+        "count": 1,
+        "rate": 120,
+        "tonnage": 120
+      },
+      {
+        "key": "spotter_credits",
+        "count": 0,
+        "rate": 180,
+        "tonnage": 0
+      },
+      {
+        "key": "ringouts",
+        "count": 38,
+        "rate": 10,
+        "tonnage": 380
+      },
+      {
+        "key": "assists",
+        "count": 0,
+        "rate": 60,
+        "tonnage": 0
+      }
+    ],
+    "ledger": {
+      "tonnage_total": 503,
+      "grade": 1,
+      "weight_balance": 44497,
+      "cleared": false,
+      "has_cutter_serial": false
+    },
+    "grade_before": 1,
+    "weight_before": 45000,
+    "newly_cleared": false,
+    "cutter_ceremony": false,
+    "rope_marks": [
+      {
+        "rig": "Overboard",
+        "count": 1,
+        "tier_before": "none",
+        "tier": "tape"
+      }
+    ],
+    "career_delta": {
+      "matches": 1,
+      "wins": 0,
+      "scraps": 1,
+      "assists": 0,
+      "spotter_credits": 0,
+      "ringouts": 1,
+      "mass_distance_kg_m": 6000,
+      "rated_tons_moved": 0,
+      "floor_seconds": 80,
+      "airborne_seconds": 36,
+      "hoisted_seconds": 0
+    },
+    "unlocks": [
+      "first-scrap",
+      "first-ringout"
+    ]
+  },
+  {
+    "account_id": "7d1b2c3a-0000-4000-8000-000000000001",
+    "harness": "Climber",
+    "win": false,
+    "tonnage": 126,
+    "credit": 12,
+    "breakdown": [
+      {
+        "key": "mass_moved",
+        "count": 12,
+        "rate": 0.5,
+        "tonnage": 6
+      },
+      {
+        "key": "scraps",
+        "count": 1,
+        "rate": 120,
+        "tonnage": 120
+      },
+      {
+        "key": "spotter_credits",
+        "count": 0,
+        "rate": 180,
+        "tonnage": 0
+      },
+      {
+        "key": "ringouts",
+        "count": 0,
+        "rate": 10,
+        "tonnage": 0
+      },
+      {
+        "key": "assists",
+        "count": 0,
+        "rate": 60,
+        "tonnage": 0
+      }
+    ],
+    "ledger": {
+      "tonnage_total": 126,
+      "grade": 1,
+      "weight_balance": 44874,
+      "cleared": false,
+      "has_cutter_serial": false
+    },
+    "grade_before": 1,
+    "weight_before": 45000,
+    "newly_cleared": false,
+    "cutter_ceremony": false,
+    "rope_marks": [],
+    "career_delta": {
+      "matches": 1,
+      "wins": 0,
+      "scraps": 1,
+      "assists": 0,
+      "spotter_credits": 0,
+      "ringouts": 0,
+      "mass_distance_kg_m": 12000,
+      "rated_tons_moved": 0,
+      "floor_seconds": 80,
+      "airborne_seconds": 36,
+      "hoisted_seconds": 0
+    },
+    "unlocks": [
+      "first-scrap"
+    ]
+  },
+  {
+    "account_id": "7d1b2c3a-0000-4000-8000-000000000002",
+    "harness": "Breaker",
+    "win": false,
+    "tonnage": 129,
+    "credit": 12,
+    "breakdown": [
+      {
+        "key": "mass_moved",
+        "count": 18,
+        "rate": 0.5,
+        "tonnage": 9
+      },
+      {
+        "key": "scraps",
+        "count": 1,
+        "rate": 120,
+        "tonnage": 120
+      },
+      {
+        "key": "spotter_credits",
+        "count": 0,
+        "rate": 180,
+        "tonnage": 0
+      },
+      {
+        "key": "ringouts",
+        "count": 0,
+        "rate": 10,
+        "tonnage": 0
+      },
+      {
+        "key": "assists",
+        "count": 0,
+        "rate": 60,
+        "tonnage": 0
+      }
+    ],
+    "ledger": {
+      "tonnage_total": 129,
+      "grade": 1,
+      "weight_balance": 44871,
+      "cleared": false,
+      "has_cutter_serial": false
+    },
+    "grade_before": 1,
+    "weight_before": 45000,
+    "newly_cleared": false,
+    "cutter_ceremony": false,
+    "rope_marks": [],
+    "career_delta": {
+      "matches": 1,
+      "wins": 0,
+      "scraps": 1,
+      "assists": 0,
+      "spotter_credits": 0,
+      "ringouts": 0,
+      "mass_distance_kg_m": 18000,
+      "rated_tons_moved": 0,
+      "floor_seconds": 80,
+      "airborne_seconds": 36,
+      "hoisted_seconds": 0
+    },
+    "unlocks": [
+      "first-scrap"
+    ]
+  },
+  {
+    "account_id": "7d1b2c3a-0000-4000-8000-000000000003",
+    "harness": "Rigger",
+    "win": true,
+    "tonnage": 1512,
+    "credit": 151,
+    "breakdown": [
+      {
+        "key": "mass_moved",
+        "count": 24,
+        "rate": 0.5,
+        "tonnage": 12
+      },
+      {
+        "key": "scraps",
+        "count": 3,
+        "rate": 120,
+        "tonnage": 360
+      },
+      {
+        "key": "spotter_credits",
+        "count": 0,
+        "rate": 180,
+        "tonnage": 0
+      },
+      {
+        "key": "ringouts",
+        "count": 114,
+        "rate": 10,
+        "tonnage": 1140
+      },
+      {
+        "key": "assists",
+        "count": 0,
+        "rate": 60,
+        "tonnage": 0
+      }
+    ],
+    "ledger": {
+      "tonnage_total": 1512,
+      "grade": 1,
+      "weight_balance": 43488,
+      "cleared": false,
+      "has_cutter_serial": false
+    },
+    "grade_before": 1,
+    "weight_before": 45000,
+    "newly_cleared": false,
+    "cutter_ceremony": false,
+    "rope_marks": [
+      {
+        "rig": "Overboard",
+        "count": 3,
+        "tier_before": "none",
+        "tier": "tape"
+      }
+    ],
+    "career_delta": {
+      "matches": 1,
+      "wins": 1,
+      "scraps": 3,
+      "assists": 0,
+      "spotter_credits": 0,
+      "ringouts": 3,
+      "mass_distance_kg_m": 24000,
+      "rated_tons_moved": 0,
+      "floor_seconds": 80,
+      "airborne_seconds": 36,
+      "hoisted_seconds": 0
+    },
+    "unlocks": [
+      "first-scrap",
+      "first-ringout"
+    ]
+  },
+  {
+    "account_id": "7d1b2c3a-0000-4000-8000-000000000004",
+    "harness": "Climber",
+    "win": true,
+    "tonnage": 375,
+    "credit": 37,
+    "breakdown": [
+      {
+        "key": "mass_moved",
+        "count": 30,
+        "rate": 0.5,
+        "tonnage": 15
+      },
+      {
+        "key": "scraps",
+        "count": 3,
+        "rate": 120,
+        "tonnage": 360
+      },
+      {
+        "key": "spotter_credits",
+        "count": 0,
+        "rate": 180,
+        "tonnage": 0
+      },
+      {
+        "key": "ringouts",
+        "count": 0,
+        "rate": 10,
+        "tonnage": 0
+      },
+      {
+        "key": "assists",
+        "count": 0,
+        "rate": 60,
+        "tonnage": 0
+      }
+    ],
+    "ledger": {
+      "tonnage_total": 375,
+      "grade": 1,
+      "weight_balance": 44625,
+      "cleared": false,
+      "has_cutter_serial": false
+    },
+    "grade_before": 1,
+    "weight_before": 45000,
+    "newly_cleared": false,
+    "cutter_ceremony": false,
+    "rope_marks": [],
+    "career_delta": {
+      "matches": 1,
+      "wins": 1,
+      "scraps": 3,
+      "assists": 0,
+      "spotter_credits": 0,
+      "ringouts": 0,
+      "mass_distance_kg_m": 30000,
+      "rated_tons_moved": 0,
+      "floor_seconds": 80,
+      "airborne_seconds": 36,
+      "hoisted_seconds": 0
+    },
+    "unlocks": [
+      "first-scrap"
+    ]
+  }
+]

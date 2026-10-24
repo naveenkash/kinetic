@@ -430,6 +430,9 @@ verify_jwt = false
 [functions.server-player-event]
 verify_jwt = false
 
+[functions.server-loadout]
+verify_jwt = false
+
 [functions.server-report]
 verify_jwt = false
 

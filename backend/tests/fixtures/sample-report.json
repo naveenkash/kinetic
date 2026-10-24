@@ -1,0 +1,224 @@
+{
+  "match_id": "5b0f6a3e-9c1d-4e2f-8a7b-1c2d3e4f5a6b",
+  "build": "0.1.0",
+  "ruleset": 1,
+  "event_schema": 1,
+  "mode": "scrap",
+  "arena": "YRD",
+  "variant": "base",
+  "winner_team": 2,
+  "forfeit_team": null,
+  "forfeit_penalty_free": false,
+  "no_contest": false,
+  "rounds": [
+    {
+      "winner_team": 2,
+      "seconds": 32,
+      "stalls": 3,
+      "end": "crew_down"
+    },
+    {
+      "winner_team": 1,
+      "seconds": 32,
+      "stalls": 3,
+      "end": "crew_down"
+    },
+    {
+      "winner_team": 2,
+      "seconds": 32,
+      "stalls": 3,
+      "end": "crew_down"
+    },
+    {
+      "winner_team": 2,
+      "seconds": 32,
+      "stalls": 3,
+      "end": "crew_down"
+    }
+  ],
+  "players": [
+    {
+      "account_id": "7d1b2c3a-0000-4000-8000-000000000000",
+      "team": 1,
+      "harness": "Rigger",
+      "face": "teodora-quispe",
+      "connected_seconds": 164,
+      "abandoned": false,
+      "is_bot": false,
+      "facts": {
+        "mass_distance_kg_m": 6000,
+        "eliminations": 1,
+        "assists": 0,
+        "spotter_credits": 0,
+        "ringout_heights_m": [
+          38
+        ],
+        "rope_marks": [
+          {
+            "rig": "Overboard"
+          }
+        ],
+        "counters": {
+          "lines_hung_used_by_others": 0,
+          "rated_tons_moved": 0,
+          "rounds_without_floor": 0,
+          "scraps_with_lighter_object": 0,
+          "snaps_survived": 0
+        },
+        "floor_seconds": 80,
+        "airborne_seconds": 36,
+        "hoisted_seconds": 0
+      }
+    },
+    {
+      "account_id": "7d1b2c3a-0000-4000-8000-000000000001",
+      "team": 1,
+      "harness": "Climber",
+      "face": null,
+      "connected_seconds": 164,
+      "abandoned": false,
+      "is_bot": false,
+      "facts": {
+        "mass_distance_kg_m": 12000,
+        "eliminations": 1,
+        "assists": 0,
+        "spotter_credits": 0,
+        "ringout_heights_m": [],
+        "rope_marks": [],
+        "counters": {
+          "lines_hung_used_by_others": 0,
+          "rated_tons_moved": 0,
+          "rounds_without_floor": 0,
+          "scraps_with_lighter_object": 0,
+          "snaps_survived": 0
+        },
+        "floor_seconds": 80,
+        "airborne_seconds": 36,
+        "hoisted_seconds": 0
+      }
+    },
+    {
+      "account_id": "7d1b2c3a-0000-4000-8000-000000000002",
+      "team": 1,
+      "harness": "Breaker",
+      "face": null,
+      "connected_seconds": 164,
+      "abandoned": false,
+      "is_bot": false,
+      "facts": {
+        "mass_distance_kg_m": 18000,
+        "eliminations": 1,
+        "assists": 0,
+        "spotter_credits": 0,
+        "ringout_heights_m": [],
+        "rope_marks": [],
+        "counters": {
+          "lines_hung_used_by_others": 0,
+          "rated_tons_moved": 0,
+          "rounds_without_floor": 0,
+          "scraps_with_lighter_object": 0,
+          "snaps_survived": 0
+        },
+        "floor_seconds": 80,
+        "airborne_seconds": 36,
+        "hoisted_seconds": 0
+      }
+    },
+    {
+      "account_id": "7d1b2c3a-0000-4000-8000-000000000003",
+      "team": 2,
+      "harness": "Rigger",
+      "face": null,
+      "connected_seconds": 164,
+      "abandoned": false,
+      "is_bot": false,
+      "facts": {
+        "mass_distance_kg_m": 24000,
+        "eliminations": 3,
+        "assists": 0,
+        "spotter_credits": 0,
+        "ringout_heights_m": [
+          38,
+          38,
+          38
+        ],
+        "rope_marks": [
+          {
+            "rig": "Overboard"
+          },
+          {
+            "rig": "Overboard"
+          },
+          {
+            "rig": "Overboard"
+          }
+        ],
+        "counters": {
+          "lines_hung_used_by_others": 0,
+          "rated_tons_moved": 0,
+          "rounds_without_floor": 0,
+          "scraps_with_lighter_object": 0,
+          "snaps_survived": 0
+        },
+        "floor_seconds": 80,
+        "airborne_seconds": 36,
+        "hoisted_seconds": 0
+      }
+    },
+    {
+      "account_id": "7d1b2c3a-0000-4000-8000-000000000004",
+      "team": 2,
+      "harness": "Climber",
+      "face": null,
+      "connected_seconds": 164,
+      "abandoned": false,
+      "is_bot": false,
+      "facts": {
+        "mass_distance_kg_m": 30000,
+        "eliminations": 3,
+        "assists": 0,
+        "spotter_credits": 0,
+        "ringout_heights_m": [],
+        "rope_marks": [],
+        "counters": {
+          "lines_hung_used_by_others": 0,
+          "rated_tons_moved": 0,
+          "rounds_without_floor": 0,
+          "scraps_with_lighter_object": 0,
+          "snaps_survived": 0
+        },
+        "floor_seconds": 80,
+        "airborne_seconds": 36,
+        "hoisted_seconds": 0
+      }
+    },
+    {
+      "account_id": null,
+      "team": 2,
+      "harness": "Breaker",
+      "face": null,
+      "connected_seconds": 164,
+      "abandoned": false,
+      "is_bot": true,
+      "facts": {
+        "mass_distance_kg_m": 0,
+        "eliminations": 0,
+        "assists": 0,
+        "spotter_credits": 0,
+        "ringout_heights_m": [],
+        "rope_marks": [],
+        "counters": {
+          "lines_hung_used_by_others": 0,
+          "rated_tons_moved": 0,
+          "rounds_without_floor": 0,
+          "scraps_with_lighter_object": 0,
+          "snaps_survived": 0
+        },
+        "floor_seconds": 0,
+        "airborne_seconds": 0,
+        "hoisted_seconds": 0
+      }
+    }
+  ],
+  "raw_events_sha256": "ac0e4b1a5a9bb4a68886ed545344d7cbeec77386baa9d4f26313145c34ed468b"
+}

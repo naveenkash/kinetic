@@ -51,6 +51,10 @@ jobs:
         run: supabase start
       - name: Database tests
         run: supabase test db
+      - name: Load the rulesets and catalog
+        run: deno task content
+      - name: Worker database tests
+        run: deno task test:worker-db
       - name: Stop the local stack
         if: always()
         run: supabase stop --no-backup

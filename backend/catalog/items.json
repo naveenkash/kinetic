@@ -1,0 +1,58 @@
+{
+  "status": "PROPOSED: placeholder catalog until the content build exports it (backend-architecture 13.1). Item ids are stable forever.",
+  "items": [
+    { "item_id": "line.standard", "slot": "line", "source_rule": "grade", "grade_gated": 1 },
+    { "item_id": "line.longline", "slot": "line", "source_rule": "grade", "grade_gated": 3 },
+    { "item_id": "line.hawser", "slot": "line", "source_rule": "grade", "grade_gated": 3 },
+    { "item_id": "line.quickline", "slot": "line", "source_rule": "grade", "grade_gated": 4 },
+    {
+      "item_id": "line.patient",
+      "slot": "line",
+      "source_rule": "contract",
+      "grade_gated": 1,
+      "metadata": { "faction": "guild" }
+    },
+    {
+      "item_id": "line.hair_trigger",
+      "slot": "line",
+      "source_rule": "contract",
+      "grade_gated": 1,
+      "metadata": { "faction": "fray" }
+    },
+    { "item_id": "dog.standard", "slot": "dog", "source_rule": "grade", "grade_gated": 1 },
+    { "item_id": "dog.barb", "slot": "dog", "source_rule": "grade", "grade_gated": 2 },
+    { "item_id": "dog.mag", "slot": "dog", "source_rule": "grade", "grade_gated": 3 },
+    { "item_id": "dog.spike", "slot": "dog", "source_rule": "grade", "grade_gated": 3 },
+    { "item_id": "cutter.standard", "slot": "cutter", "source_rule": "grade", "grade_gated": 1 },
+    { "item_id": "cutter.hot", "slot": "cutter", "source_rule": "grade", "grade_gated": 4 },
+    { "item_id": "cutter.long", "slot": "cutter", "source_rule": "grade", "grade_gated": 4 },
+
+    { "item_id": "livery.office_bone", "slot": "livery", "source_rule": "admin" },
+    { "item_id": "livery.kessl_ochre", "slot": "livery", "source_rule": "manifest" },
+    { "item_id": "livery.collar_rust", "slot": "livery", "source_rule": "shop" },
+    {
+      "item_id": "tape.guild_ochre_black",
+      "slot": "tape",
+      "source_rule": "contract",
+      "metadata": { "faction": "guild" }
+    },
+    { "item_id": "tape.hangtown_stencil", "slot": "tape", "source_rule": "manifest" },
+    { "item_id": "tape.chevron", "slot": "tape", "source_rule": "shop" },
+    { "item_id": "dogs.old_pattern", "slot": "dogs", "source_rule": "shop" },
+    { "item_id": "cutter_skin.brass_handle", "slot": "cutter_skin", "source_rule": "shop" },
+    { "item_id": "rig_call.all_stop", "slot": "rig_call", "source_rule": "grade", "grade_gated": 1 },
+    { "item_id": "rig_call.rude_2", "slot": "rig_call", "source_rule": "manifest" },
+    { "item_id": "drop.hook_lowered", "slot": "drop", "source_rule": "grade", "grade_gated": 1 },
+    { "item_id": "drop.off_the_lift", "slot": "drop", "source_rule": "manifest" },
+    { "item_id": "scrap_card.office", "slot": "scrap_card", "source_rule": "grade", "grade_gated": 1 },
+    { "item_id": "scrap_card.hanger", "slot": "scrap_card", "source_rule": "manifest" },
+    { "item_id": "voice.quispe_2", "slot": "voice", "source_rule": "contract", "metadata": { "faction": "guild" } },
+    { "item_id": "reserve_livery.vilca", "slot": "reserve_livery", "source_rule": "manifest" }
+  ],
+  "shop_rotation": [
+    { "item_id": "livery.collar_rust", "currency": "tonnage_credit", "price": 600 },
+    { "item_id": "tape.chevron", "currency": "tonnage_credit", "price": 300 },
+    { "item_id": "dogs.old_pattern", "currency": "sponsor_credit", "price": 400 },
+    { "item_id": "cutter_skin.brass_handle", "currency": "tonnage_credit", "price": 450 }
+  ]
+}

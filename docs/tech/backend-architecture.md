@@ -176,12 +176,13 @@ All tables live in `game` unless noted. `account_id` is the Supabase Auth user I
 
 | Table | Columns |
 |---|---|
-| `ledgers` | `account_id` PK, `tonnage_total`, `grade`, `weight_balance`, `cleared_at`, `cutter_serial`, `updated_at` |
+| `ledgers` | `account_id` PK, `tonnage_total`, `grade`, `weight_balance` (null until the first rewarded match), `cleared_at`, `cutter_serial`, `cutter_issued_at`, `updated_at` |
 | `ledger_entries` | `account_id`, `entry_id`, `unlocked_at`, `match_id` |
 | `rope_marks` | `account_id`, `rig`, `count`, `tier` (none, tape, band, mark) |
-| `tallies` | `account_id`, `tally_id`, `earned_at` |
-| `career_stats` | `account_id`, `harness`, `matches`, `wins`, `scraps`, `ringouts`, `tons_moved`, `floor_seconds`, `airborne_seconds` |
-| `match_summaries` | `match_id`, `account_id`, `tonnage`, `breakdown` (jsonb), `grade_before`, `grade_after`, `unlocks` (jsonb), `contracts` (jsonb) |
+| `tallies` | `account_id`, `tally_id`, `earned_at` (not built yet) |
+| `career_stats` | `account_id`, `harness`, `matches`, `wins`, `scraps`, `assists`, `spotter_credits`, `ringouts`, `mass_distance_kg_m`, `rated_tons_moved`, `floor_seconds`, `airborne_seconds`, `hoisted_seconds` |
+| `match_summaries` | `match_id`, `account_id`, `ruleset`, `win`, `tonnage`, `credit`, `breakdown` (jsonb), `grade_before`, `grade_after`, `weight_before`, `weight_after`, `rope_marks` (jsonb), `unlocks` (jsonb), `contracts` (jsonb) |
+| `rulesets` | `version` PK, `rules` (jsonb): copies of `backend/ruleset/` for clients |
 
 ### 7.4 Inventory and economy
 
@@ -364,6 +365,7 @@ Keys carry a key ID and rotate quarterly; servers receive the current and previo
 |---|---|---|
 | `server-manifest` | Once at boot | Returns roster, validated loadouts, arena, variant flags, playlist rules, ruleset and event-schema versions |
 | `server-heartbeat` | Every 10 s | Updates `last_heartbeat_at`, state, connected players |
+| `server-loadout` | At each reset (lobby, between rounds) | Re-checks and returns one player's loadout, recorded on the roster |
 | `server-player-event` | On join, leave, abandon | Updates `match_players`; feeds reconnect and abandon rules |
 | `server-upload-url` | At match end | Returns signed Storage upload URLs for the replay and raw events |
 | `server-report` | At match end | Validates and stores the report and completes the match. Phase 2 adds the queue (pgmq) that the worker reads to pay rewards |
@@ -425,6 +427,47 @@ The worker reads `match_reports` from pgmq and processes each match in one datab
 
 Bots earn nothing and never earn Standing for anyone; Tonnage from a bot's Spotter credit goes to the human it set up (game-modes 9). Private matches earn Rope Mark practice only (**PROPOSED**). A failed job stays on the queue and is retried; after five failures it is quarantined.
 
+Implemented so far: steps 1 to 3 and 8, plus Tonnage credit (section 13.3). The code is [backend/worker/rewards.ts](../../backend/worker/rewards.ts) and `rewards_pass.ts`.
+
+How the pass runs:
+- The worker polls `match_reports` in `stored` status rather than a pgmq queue. Each report is one transaction under `for update skip locked`.
+- Failures back off, starting at 30 s and doubling to at most an hour.
+- Only an error the report itself causes, a data or constraint error, counts as an attempt. Five attempts quarantine it as `processing_failed`.
+- An outage or a bug stops the pass without counting. Backoff grows with every failure, counted or not.
+- Twenty failures of any kind quarantine a report anyway, so a report that keeps hitting the same bug never waits forever.
+- Three counted failures in a row pause the pass until the next tick. This slows a systemic failure down but does not stop it: a bad deploy that makes every report raise a data error still quarantines the backlog in minutes. Alert on reports with a `last_error`.
+- The ruleset must equal the copy clients read (`game.rulesets`, loaded by `deno task content`), or the pass does nothing.
+- The ruleset is resolved once per pass from the required `ruleset` config key. The manifest gives the same version to the game server.
+- A player's harness comes from the roster, not the report.
+- Account ids are made canonical (lowercase).
+- `api.srv_requeue_report` puts a quarantined report back.
+
+The economy lives in [backend/ruleset/1.json](../../backend/ruleset/1.json). Every number is **PROPOSED**:
+- **Tonnage rates:** 0.5 t per t·m moved, 120 per scrap, 180 per Spotter credit, 60 per assist and 10 per metre of ring-out.
+- **Grade thresholds:** 0, 2,500, 15,000, 57,000, 150,000 and 400,000 t.
+- **The Weight:** starts at 45,000 t, so the Ledger example in menus-and-frontend 3 still owes some at 41,000 t career. Each match's Tonnage pays it down.
+- **Tonnage credit:** 0.1 per tonne of Tonnage.
+- **Rope Marks:** tiers at 1, 10 and 50. Reaching Band writes a `rope-band-<rig>` Ledger entry.
+- **Ceilings:** per-match ceilings on every fact and every Contract counter. Facts over them quarantine the report.
+- **Ledger entries:** unlocked by career totals, Grade and Clear.
+
+The Cutter ceremony issues a `CT-` serial when a player first reaches Hand.
+
+Step 7, ratings, is in [backend/worker/rating.ts](../../backend/worker/rating.ts) and `ratings_step.ts`. Each mode has its own OpenSkill Weng-Lin Bradley-Terry rating, starting at μ 25 and σ 25/3. Only Rated playlists change it:
+- Every human with an account is rated, leavers included. A leaver is rated as a loss whatever their crew's result.
+- A forfeiting crew's loss is scaled by 1.2. A penalty-free forfeit (`forfeit_penalty_free`: a Rated short crew after 60 s, game-modes 8) leaves the forfeiting crew's Ratings unchanged (**PROPOSED** reading of "without penalty"), and the other crew is rated as winners.
+- Only Scrap and Claim playlists may be Rated; the database refuses any other.
+- A no-contest changes nothing.
+- Bots neither are rated nor count toward their crew.
+
+The number stays hidden: column grants keep μ and σ unreadable to players, and `api.my_ratings` shows only the band. The band is Provisional for the first 10 games; after that it comes from μ − 3σ with floors at 5, 15, 25 and 35 for Certified, Rated, Sanctioned and Championship (**PROPOSED**). The match summary records the band before and after. The matchmaker does not use the rating yet.
+
+Rules the docs leave open (**PROPOSED**):
+- A player who abandoned the match earns nothing from it.
+- A no-contest pays Tonnage, but nobody wins it.
+- A Grade never drops.
+- The Weight is null until the player's first rewarded match: the full lease, which clients read from `api.current_ruleset`.
+
 ## 13. Inventory, loadouts and economy
 
 ### 13.1 Catalog
@@ -434,6 +477,18 @@ The item catalog (cosmetics, sidegrades, Manifest crates, shop rotations per Cla
 ### 13.2 Loadouts
 
 `api.set_loadout(harness, slots)` checks ownership and Grade gates and writes `loadouts`. The match manifest re-validates at allocation time, so a loadout changed mid-queue cannot smuggle an item in.
+
+Implemented in migration `20261026000200_inventory.sql`:
+- **Ownership:** a `grade` item is owned once the Grade is reached; every other item needs an `inventory` row. A retired item is never usable.
+- **Loadout validation:** each match player's loadout is filled when the match forms, from what they own at that moment. Anything else falls back to the baseline (`line.standard`, `dog.standard`, `cutter.standard`).
+- **Loadout changes at a reset:** at each reset (the lobby and between rounds, menus 6) the server calls `server-loadout` for each player. It gets the loadout re-checked against what the player owns then, and the roster records it. In Rated the server stops asking after the first Live.
+- **Sidegrades in inventory:** a sidegrade reaches an inventory only as a Contract reward.
+- **Sidegrades are never for sale:** the database refuses a sidegrade as a shop or Manifest item, a listing of anything but a shop cosmetic, and a catalog change that would de-list a live item.
+- **The catalog:** a placeholder in `backend/catalog/items.json`, loaded by `deno task content`. Its Grade gates are **PROPOSED**:
+  - Barb at Grade 2;
+  - Longline, Hawser, Mag and Spike at Grade 3;
+  - Quickline, Hot and Long at Grade 4;
+  - Patient and Hair-trigger as Guild and Fray Contract rewards.
 
 ### 13.3 Spending earned or sponsor credit
 
@@ -471,7 +526,7 @@ begin
 end $$;
 ```
 
-The `balance >= v_price` guard in the `update` and the unique `(account_id, idempotency_key)` keep concurrent purchases safe.
+The `balance >= v_price` guard in the `update` and the unique `(account_id, idempotency_key)` keep concurrent purchases safe. The implemented `api.shop_purchase` also locks the player's Ledger row first, so a retried call sees the first call's transaction. It refuses an item that is not listed (`not_listed`) separately from a stale price (`price_changed`).
 
 ### 13.4 Real money through Steam
 
@@ -520,6 +575,46 @@ scheduled --> active --> frozen --> tallied --> reviewed --> resolved --> archiv
 4. **Resolved:** the per-arena outcome from bible/04 (Hangtown's district, Ballast's cut or stabilization, the Yard's Haulers, the Anchor's colors) is written to `config` as variant flags; the next Claim starts.
 
 Every variant already ships in the client and server build. The patch carrying both outcomes must be live on every platform before the freeze, weeks earlier on consoles because of certification. Rehearse the flip on staging every season.
+
+Implemented in migration `20261026000300_claims.sql` and [backend/worker/claims.ts](../../backend/worker/claims.ts), `claims_progress.ts` and `claims_pass.ts`.
+
+How the season runs:
+- The worker's claims pass activates a scheduled Claim at `starts_at`, with at most one active, and freezes it at `ends_at`. Claims never overlap: an exclusion constraint covers their date ranges.
+- A report counts for the Claim running when the server stored it, and for the faction the player held then (from `allegiance_history`). A match stored before a switch pays the old faction's Standing but no Contract progress.
+- A frozen Claim is tallied once every report stored during it has been processed, or 24 hours after it ended, whichever comes first.
+- The tally writes the final standings, the holder and the arena's next variant to `outcome`, which players read once the Claim is resolved. The reviewer's notes go to `review`, which players never read. These name accounts at the cap every week, count the reports quarantined during the Claim, and list any reports still unprocessed.
+- A person then calls `api.srv_claim_review`. For a tie the tally could not break, the reviewer names the holder and a variant the arena can take, and the override is recorded. `api.srv_claim_resolve` writes `variant:<arena>` into `config`.
+- Faction standing refreshes at most hourly while the Claim is active.
+
+Standing, Contracts and Allegiance:
+- Standing points are written in the rewards transaction, one event per player per match, capped at 60 P a week. A Rated win past the cap is still recorded, at 0 P, for the tie-break.
+- A Contract that reaches its target grants its `reward` (items into the inventory, Ledger entries) and +2 P. The database checks every reward as it is written: arrays of real, unretired Contract items and entry ids. A bad reward is refused there, rather than failing a match.
+- `claim_standing_events` is append-only, enforced by a trigger. Only the foreign keys' cleanup may null an account or a match.
+- `api.declare_allegiance` switches faction mid-Claim, keeping completed Contracts and resetting the rest.
+- Players see their own faction's Contracts up to the current week.
+
+Rulings the docs leave open (**PROPOSED**):
+- **Free Scrap:** the reported winner is placed first, and the rest by eliminations, with ties sharing a place. The report has no times-scrapped fact for game-modes 5's tie-break. A player with no scraps is never top 3 unless they won.
+- **Voided matches:** a forfeit or a no-contest voids the match for everyone in it, at 0 P with no Contract progress.
+- **The weekly cap:** covers all kinds of P.
+- **Weeks:** a Claim's weeks run from its `starts_at`.
+- **Arena codes:** YRD, HGT, BLS and ANC.
+- **Next season's variants:**
+  - Hangtown: `district_removed` on an HTR win.
+  - Ballast: `crown_and_spine` on an HTR win, `stabilized` on a Guild win.
+  - The Yard: `haulers_doubled` on an HTR win.
+  - The Anchor: `colors_<faction>`.
+- **Ties:** a tie on standing and Rated wins has no holder, and the reviewer decides.
+
+Not built yet: evidence objects (+5 P). Claims, Contracts and crates are created with the admin console (section 17).
+
+**The Manifest** (12.3 step 5) is in migration `20261026000500_manifest.sql` and [backend/worker/manifest_step.ts](../../backend/worker/manifest_step.ts):
+- Each Claim has crates in two columns, Free and Sponsored. Each crate opens at a total of Tonnage earned during the Claim.
+- Every match's Tonnage counts toward it, whatever the player's Allegiance.
+- The Sponsored column pays only to holders of the `sponsorship:<claim_id>` entitlement. Granting it pays the Sponsored crates already passed at once.
+- Every paid crate is recorded (`manifest_paid`), so a crate added mid-Claim below a player's total is paid at their next match. One SQL function, `private.pay_manifest`, does every payout.
+- Crates hold Manifest cosmetics and Ledger entries only, checked as they are written, and their tiers must open in order.
+- How Sponsorship and the Weight interact is still decision B5. Sponsorship changes neither the Weight nor anything else; buying it arrives with Steam purchases in Phase 3.
 
 ## 15. Rate limiting
 
@@ -592,6 +687,19 @@ A fixed window per key. Unlogged, so counters are cheap and are lost on a databa
 - `api.report_player(match_id, reported_id, reason, text)` attaches the server replay path automatically.
 - Name filter on `api.change_display_name`.
 - **Admin console:** a web app (the web is the right place for it) using Supabase Auth with email and TOTP multi-factor authentication. Staff get `app_role` through the access-token hook; every admin function checks it and writes `admin.audit` through a trigger. Screens: player lookup, Ledger and inventory, grants and refunds, sanctions, report queue with replay links, quarantined reports, Claims dashboard and flip controls, playlists and regions, matchmaking health.
+
+Admin console v1 is [backend/tools/admin.ts](../../backend/tools/admin.ts), a command-line tool over the service connection. A web console with staff sign-in can call the same SQL later. Each command runs as one transaction, with the staff member named in `kinetic.staff`. The commands:
+- create Claims, Contracts and Manifest crates;
+- review and resolve Claims;
+- requeue reports;
+- grant items and entitlements;
+- sanction;
+- read the audit.
+
+Triggers write `admin.audit`, which is append-only and unreadable to players:
+- **Season tables** (Claims, Contracts, crates) are audited on every change. When no staff member is named, the change is recorded as `system`, which covers the worker's lifecycle steps.
+- **Sanctions, entitlements, inventory, config and report status** are audited when a staff member makes the change.
+- The staff name must be listed in `admin.staff`, which only the database owner can write. The name is not authenticated: anyone holding the service connection can claim it, and a direct SQL session that names no one is not audited on the per-match tables. Until the web console brings sign-in with MFA (section 20), only the console and the worker hold that connection.
 
 ## 18. Config, versions and playlists
 

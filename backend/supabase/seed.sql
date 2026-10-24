@@ -16,5 +16,6 @@ insert into game.playlists
   (playlist_id, mode, team_size, teams, rated, arenas, regions, bot_fill_pools, bot_fill_after_s)
 values
   ('scrap_3v3_casual', 'scrap', 3, 2, false, '{YRD}', '{local,na-east,eu-west}', '{apprentice}', 60),
+  ('scrap_3v3_rated', 'scrap', 3, 2, true, '{YRD}', '{local,na-east,eu-west}', '{}', 60),
   ('free_scrap_8', 'free_scrap', 1, 8, false, '{YRD}', '{local,na-east,eu-west}', '{}', 60)
 on conflict (playlist_id) do nothing;

@@ -45,6 +45,7 @@ interface ManifestPlayer {
   team: number;
   account_id: string | null;
   is_bot: boolean;
+  harness: string;
 }
 const manifest = await call("server-manifest") as { players: ManifestPlayer[]; teams: number };
 const humans = manifest.players.filter((p) => !p.is_bot);
@@ -97,6 +98,11 @@ while (state === "waiting_for_players") {
     state = "in_progress";
     startedAt = Date.now();
     await heartbeat();
+    // The first reset: every human's loadout for the round, re-checked by the backend.
+    for (const p of humans) {
+      const res = await call("server-loadout", { account_id: p.account_id }) as { loadout?: { line?: string } };
+      if (!res.loadout?.line) log(`loadout for ${p.account_id} missing`);
+    }
     log("all players joined; live");
   } else if (Date.now() > deadline) {
     log("not everyone joined in time; exiting");
@@ -125,6 +131,7 @@ const report = {
   players: manifest.players.map((p) => ({
     account_id: p.account_id,
     team: p.team,
+    harness: p.harness,
     is_bot: p.is_bot,
     connected_seconds: p.is_bot ? elapsed : (Date.now() - (joined.get(p.account_id!) ?? Date.now())) / 1000,
     abandoned: false,

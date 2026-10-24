@@ -1,9 +1,12 @@
-// One worker tick: matchmaking, allocation, match_found pushes, timeouts, deallocation and
-// cleanup. backend-architecture sections 10.2 to 10.5. Runs only on the leader instance.
+// One worker tick: matchmaking, allocation, match_found pushes, timeouts, match rewards,
+// deallocation and cleanup. backend-architecture sections 10.2 to 10.5 and 12.3. Runs only on
+// the leader instance.
 import type postgres from "npm:postgres@3.4.5";
 import { formMatches, type Member, type Playlist, type Proposal, type Ticket } from "./matchmaker.ts";
 import type { Allocation, Fleet } from "./fleet/types.ts";
 import { type Keyring, signJoinTicket, signServerCredential } from "../supabase/functions/_shared/tokens.ts";
+import { claimsPass } from "./claims_pass.ts";
+import { rewardsPass } from "./rewards_pass.ts";
 
 export const LEADER_LOCK_KEY = 4257100001;
 export const MAX_ALLOCATION_ATTEMPTS = 3;
@@ -350,6 +353,8 @@ export async function tick(ctx: WorkerContext): Promise<void> {
     ["allocation", allocationPass],
     ["notify", notifyPass],
     ["timeouts", timeoutPass],
+    ["rewards", rewardsPass],
+    ["claims", claimsPass],
     ["deallocate", deallocatePass],
     ["cleanup", cleanupPass],
   ];
