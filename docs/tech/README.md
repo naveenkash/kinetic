@@ -19,6 +19,7 @@ _v0.1, 2026-10-24. Target engine: Unreal Engine 5.8.x. The gameplay bible in `do
 | [../../backend/README.md](../../backend/README.md) | The backend code (Phases 1 to 3): Supabase migrations and Edge Functions, the worker (matchmaking, rewards, Claims, purchases, accounts), the fake game server, the admin console, the load simulator, and how to run and test it on a Mac |
 | [runbooks.md](runbooks.md) | Backend operations: stuck and quarantined reports, worker leadership, the Claim flip, purchases and refunds, moderation, deletion and export, key rotation, the load test |
 | [backend-architecture-diagram.md](backend-architecture-diagram.md) | One-page backend view: Mermaid system and match-flow diagrams, description and safety rules in ASD-STE100 Simplified Technical English |
+| [standalone-server-option.md](standalone-server-option.md) | **PROPOSED**: one engine-free game server built on KineticCore for every client, the trade-offs against the Unreal dedicated server, and the risks to test first |
 | [tech-stack-plan.md](tech-stack-plan.md) | The whole stack around the engine: workstations, week 0 setup, backend and live services, telemetry, content tools, CI and release, platforms, legal, hosting cost, build order, new decisions |
 
 ## Key engine findings (verified 2026-10-24)
@@ -74,6 +75,7 @@ Resolved by the 2026-10-24 bible v0.2 and v0.2.1 changelogs and no longer open: 
 | 18 | Switch 2 as a stretch platform using Lumen Lite | Not committed | Alpha |
 | 19 | Console scalability floor: Series S at 1080p60 with Lumen Lite or software global tracing | As stated | Alpha |
 | 20 | Victim-camera replay from local memory-streamer recording plus replicated victim camera rotation | As stated | Beta |
+| 21 | One engine-free game server for every client (Unreal and browser) instead of an Unreal dedicated server; see [standalone-server-option.md](standalone-server-option.md) | Unreal dedicated server | Before Unreal client netcode |
 
 ## Research citations
 

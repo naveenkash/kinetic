@@ -1,0 +1,4 @@
+node_modules/
+dist/
+public/kinetic.js
+public/kinetic.wasm

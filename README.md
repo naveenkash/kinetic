@@ -17,6 +17,7 @@ A complete pre-production design package: about 380,000 words across 165 documen
 | [docs/systems/](docs/systems/) | HUD and front end, audio, VFX, animation, camera and controls, game modes, onboarding script. | [systems/README.md](docs/systems/README.md) |
 | [docs/tech/](docs/tech/) | UE5 architecture with verified citations: Spool and Line implementation, player physics, Chaos destruction, kinematics, networking, budgets, project structure, the backend, and the full tech stack plan. | [tech/README.md](docs/tech/README.md) |
 | [game/](game/) | The game project. Today: the engine-free core of `KineticCore` (line solver, mass and impact rules, Cutter, data tables, the bible-table CI check, panic-window bench) and the match layer (event schema, credit, the Scrap match flow, the match report, the determinism recorder), C++20, tested on a Mac without Unreal and in CI. | [game/README.md](game/README.md) |
+| [web/](web/) | A browser prototype, playable now: KineticCore compiled to WebAssembly, a grey-box Yard in three.js, you and two bots against a bot crew. | [web/README.md](web/README.md) |
 | [backend/](backend/) | Phase 1 backend code on Supabase: schema, Edge Functions, matchmaker worker, fake game server, tests. Runs on a Mac with Docker. | [backend/README.md](backend/README.md) |
 | [docs/production/](docs/production/) | Roadmap, team, art pipeline, risks, playtest plan, master asset list. | [roadmap-and-milestones.md](docs/production/roadmap-and-milestones.md) |
 

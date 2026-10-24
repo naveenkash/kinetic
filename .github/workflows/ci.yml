@@ -1,5 +1,6 @@
-# Runs on every push and pull request: the engine-free KineticCore checks, and the backend's
-# format, lint, type, unit and database tests. The full-loop integration test needs the edge
+# Runs on every push and pull request: the engine-free KineticCore checks; the browser
+# client's simulation tests, type check, WebAssembly build, smoke test and production build;
+# and the backend's format, lint, type, unit and database tests. The full-loop integration test needs the edge
 # functions and generated keys running, so it stays a local test (backend/README.md).
 name: CI
 
@@ -23,6 +24,29 @@ jobs:
       - uses: actions/checkout@v4
       - name: Bible tables, tests, sanitizers, bench and the sample match report
         run: make -C game all-checks
+
+  web:
+    name: Browser client
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Simulation tests
+        run: make -C web test
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Client type check
+        working-directory: web/client
+        run: |
+          npm ci
+          npm run typecheck
+      - name: Install Emscripten
+        run: brew install emscripten
+      - name: WebAssembly build and smoke test
+        run: |
+          make -C web wasm
+          cd web/client && node smoke.mjs && npm run build
 
   backend:
     name: Backend

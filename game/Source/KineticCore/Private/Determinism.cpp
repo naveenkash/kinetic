@@ -244,7 +244,7 @@ std::optional<FDeterminismRecording> FDeterminismRecording::Parse(const std::str
 		{
 			return std::nullopt;  // Serialize writes each tick once, in order
 		}
-		std::vector<FBodySample> Bodies(Count);
+		std::vector<FBodySample> Bodies(static_cast<size_t>(Count));  // At most MaxBodiesPerTick, so it fits 32 bits
 		for (FBodySample& Body : Bodies)
 		{
 			int64_t Id = 0;
