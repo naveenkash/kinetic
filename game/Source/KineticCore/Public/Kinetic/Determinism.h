@@ -62,7 +62,7 @@ struct FDivergence
 	// recording has, or a body only one has, means the runs cannot be compared.
 	bool bComparable = true;
 	std::string Problem;           // Why not, if not comparable
-	bool bDiverged = false;        // Some position differs by more than the tolerance, or is NaN
+	bool bDiverged = false;        // A position differs by more than the tolerance, or blew up (NaN) in one only
 	int64_t FirstTick = -1;
 	int FirstBodyId = -1;
 	double FirstPositionDelta = 0.0;

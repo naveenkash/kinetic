@@ -154,6 +154,12 @@ KTEST(JsonStaysValidAtTheEdges)
 	FJsonWriter Strings;
 	Strings.BeginArray().String(std::string("a\0b", 3)).String("\xff\xc3").String("\xed\xa0\x80").String("\xe2\x80\xa8");
 	Strings.String("caf\xc3\xa9 \xf0\x9f\x9a\x80").EndArray();
+	// Overlong three- and four-byte forms; a sequence cut off by the end of the view, though the
+	// bytes after it would complete it.
+	FJsonWriter Edges;
+	Edges.BeginArray().String("\xe0\x80\x80").String("\xf0\x80\x80\x80").String(std::string_view("\xe2\x82\xac", 2)).EndArray();
+	const std::string F = "\xef\xbf\xbd";
+	KCHECK(Edges.Text() == "[\"" + F + F + F + "\",\"" + F + F + F + F + "\",\"" + F + F + "\"]");
 	// Overlong, a bad continuation byte, cut off at the end, past U+10FFFF: one U+FFFD per bad byte.
 	FJsonWriter Broken;
 	Broken.BeginArray().String("\xc0\xaf").String("\xc3\x28").String("\xe2\x82").String("\xf4\x90\x80\x80").EndArray();
@@ -585,6 +591,50 @@ KTEST(BothCrewsGoneTogetherIsANoContest)
 		KCHECK(Match.Phase() == EScrapPhase::MatchOver && Match.WinnerTeam() == NoPlayer);
 		KCHECK(Match.Result().bNoContest && !Match.WasForfeit());
 	}
+	// An outage drops clients a tick or two apart: still a no-contest.
+	for (const bool bRated : {false, true})
+	{
+		FScrapRules Rules;
+		Rules.bRated = bRated;
+		FEventLog Log;
+		FScrapMatch Match(Crews(), Rules, Log);
+		Match.Start();
+		ToLive(Match);
+		for (int Slot = 0; Slot < 3; ++Slot)
+		{
+			Match.OnDisconnect(Slot);
+		}
+		Match.Update(Tick);
+		for (int Slot = 3; Slot < 6; ++Slot)
+		{
+			Match.OnDisconnect(Slot);
+		}
+		Run(Match, 10.1);
+		KCHECK(Match.Phase() == EScrapPhase::MatchOver && Match.Result().bNoContest && !Match.WasForfeit());
+	}
+}
+
+// Rated: a crew whose last human returns while withdrawn and drops again is still lost.
+KTEST(ACrewLostAfterAReturnStillForfeits)
+{
+	FScrapRules Rated;
+	Rated.bRated = true;
+	FEventLog Log;
+	FScrapMatch Match(Crews(), Rated, Log);
+	Match.Start();
+	ToLive(Match);
+	Match.OnDisconnect(0);
+	Run(Match, 10.1);       // Withdrawn
+	Match.OnReconnect(0);   // Back, waiting for the next reset
+	Match.OnDisconnect(1);
+	Match.OnDisconnect(2);
+	Run(Match, 10.1);       // Both withdrawn; slot 0 is still a connected human
+	KCHECK(Match.Phase() != EScrapPhase::MatchOver);
+	Match.OnDisconnect(0);  // The last human gone again
+	Run(Match, 9.9);
+	KCHECK(Match.Phase() != EScrapPhase::MatchOver);
+	Run(Match, 0.2);
+	KCHECK(Match.Phase() == EScrapPhase::MatchOver && Match.Result().ForfeitTeam == 0 && Match.WinnerTeam() == 1);
 }
 
 // A backfill bot holding a leaver's seat earns nothing for the leaver; its Spotter credit goes
@@ -651,6 +701,16 @@ KTEST(AnIdleLeaverCanComeBack)
 	Run(Match, 80.0);
 	KCHECK(!Match.Connection(0).bAbandoned);
 	KCHECK(Match.Connection(1).ConnectedSeconds - Match.Connection(0).ConnectedSeconds < 13.0);
+
+	// An idle leaver whose connection then really drops cannot be brought back by input.
+	FScrapMatch Dropped(Crews(), {}, Log);
+	Dropped.Start();
+	ToLive(Dropped);
+	Run(Dropped, 60.5, 0);
+	Dropped.OnDisconnect(0);
+	Run(Dropped, 12.0, 0);
+	Dropped.OnInput(0);
+	KCHECK(Dropped.IsBotControlled(0));
 }
 
 // Rated: a leaver who returns and drops again before the reset does not get the rigger back.

@@ -17,7 +17,8 @@
 //   within the reconnect window is the return.
 // - A forfeit needs 2 yes votes, or every connected human if fewer than 2 remain; votes clear
 //   at each reset. Once a crew has its third round the match is decided: nothing in the replay
-//   can change it. Both crews losing their last humans together is a no-contest.
+//   can change it. Both crews losing their last humans together (within the 10 s a rigger
+//   stands idle) is a no-contest.
 #pragma once
 
 #include "Kinetic/MatchEvents.h"
@@ -156,6 +157,7 @@ private:
 	void BeginDrop();
 	void UpdateClock(double Before);
 	void UpdateConnections();
+	void CheckCrewsLost();
 	void CheckRoundEnd();
 	void EndRound(int WinningTeam, ERoundEnd Reason);
 	void EndMatch(int WinningTeam, int ForfeitingTeam, bool bPenaltyFree);

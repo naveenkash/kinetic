@@ -76,6 +76,8 @@ KTEST(RecordingsRoundTripExactly)
 	                              Head + "tick 0 1\n0" + Body + " 1\n",
 	                              Head + "tick 0 2\n0" + Body + "\n0" + Body + "\n",  // A body twice
 	                              Head + "tick 0 1\n0" + Body + "\ntick 0 1\n0" + Body + "\n",  // A tick twice
+	                              Head + "tick 1 1\n0" + Body + "\ntick 0 1\n0" + Body + "\n",  // Out of order
+	                              Head + "tick 0 1\n2147483648" + Body + "\n",    // Past INT_MAX
 	                              Head + "tick 0 100001\n"})
 	{
 		KCHECK(!FDeterminismRecording::Parse(Bad).has_value());
@@ -188,6 +190,16 @@ KTEST(RecordingsMustMatchToCompare)
 	KCHECK(!MissingFromB.bComparable && MissingFromB.Problem == "body 7 is missing at tick 0");
 	const FDivergence OnlyB = Compare(Shorter, A, 0.0);
 	KCHECK(!OnlyB.bComparable && OnlyB.Problem == "tick 60 is only in B");
+	FDeterminismRecording Gap(Seed);  // A tick missing in the middle
+	for (const FTickSample& Sample : A.Ticks())
+	{
+		if (Sample.Tick != 7)
+		{
+			Gap.Record(Sample.Tick, Sample.Bodies);
+		}
+	}
+	const FDivergence Middle = Compare(Gap, A, 0.0);
+	KCHECK(!Middle.bComparable && Middle.Problem == "tick 7 is only in B");
 
 	KCHECK(!Compare(A, A, -0.1).bComparable);
 	KCHECK(!Compare(A, A, std::nan("")).bComparable);
@@ -206,9 +218,12 @@ KTEST(NaNIsADivergence)
 		KCHECK(D.bComparable && D.bDiverged && D.FirstTick == 0 && std::isnan(D.MaxPositionDelta));
 		KCHECK(D.MaxTick == 0 && D.MaxBodyId == 0);
 	}
-	// The same NaN in both, bit for bit, is no difference.
-	const FDivergence Same = Compare(B, B, 0.0);
-	KCHECK(!Same.bDiverged && Same.MaxPositionDelta == 0.0);
+	// The same NaN in both, bit for bit, is no difference, at any tolerance.
+	for (const double Tolerance : {0.0, 0.1})
+	{
+		const FDivergence Same = Compare(B, B, Tolerance);
+		KCHECK(!Same.bDiverged && Same.MaxPositionDelta == 0.0);
+	}
 }
 
 // Tolerance 0 is bit-exact on velocity as well as position; above 0, a delta exactly at the

@@ -127,6 +127,14 @@ class CheckReportTest(unittest.TestCase):
         data["raw_events_sha256"] = hashlib.sha256(deep.encode()).hexdigest()
         self.assertTrue(any("not JSON" in p for p in self.problems(data, deep)))
 
+    def test_nesting_the_backend_accepts_passes(self):
+        data = report()
+        deep = []
+        for _ in range(900):
+            deep = [deep]
+        data["deep"] = deep
+        self.assertEqual(self.problems(data), [])
+
     def test_the_events_must_match_their_digest_and_schema(self):
         self.assertTrue(any("sha256" in p for p in self.problems(report(), EVENTS + EVENTS)))
         bad = '{"type":"teleport","v":1}\n'

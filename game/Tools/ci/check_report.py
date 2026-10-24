@@ -75,8 +75,8 @@ def js_number(value: float) -> str:
     return ("-" if value < 0 else "") + body
 
 
-def js_length(value) -> int:
-    """len(JSON.stringify(value)) in Deno: UTF-16 code units, numbers in JavaScript form."""
+def scalar_length(value) -> int:
+    """len(JSON.stringify(value)) for a value that is not a list or an object."""
     if value is None:
         return 4
     if isinstance(value, bool):
@@ -90,30 +90,47 @@ def js_length(value) -> int:
         text = json.dumps(value, ensure_ascii=False)
         lone = sum(1 for c in value if 0xD800 <= ord(c) <= 0xDFFF)
         return len(text.encode("utf-16-le", "surrogatepass")) // 2 + 5 * lone  # JS writes \udXXX
-    if isinstance(value, list):
-        return 2 + sum(js_length(item) for item in value) + max(len(value) - 1, 0)
-    if isinstance(value, dict):
-        parts = sum(js_length(key) + 1 + js_length(item) for key, item in value.items())
-        return 2 + parts + max(len(value) - 1, 0)
     return 0
+
+
+def js_length(value) -> int:
+    """len(JSON.stringify(value)) in Deno: UTF-16 code units, numbers in JavaScript form.
+    Walks without recursion, so any depth json.loads accepts can be measured."""
+    total = 0
+    stack = [value]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, list):
+            total += 2 + max(len(item) - 1, 0)
+            stack.extend(item)
+        elif isinstance(item, dict):
+            total += 2 + max(len(item) - 1, 0) + len(item)  # Braces, commas, colons
+            for key, child in item.items():
+                total += scalar_length(key)
+                stack.append(child)
+        else:
+            total += scalar_length(item)
+    return total
 
 
 def refuse_constant(name: str):
     raise ValueError(f"{name} is not JSON")
 
 
-def bad_strings(value, path: str = "$"):
-    """Strings Postgres jsonb cannot store: NUL and unpaired surrogates."""
-    if isinstance(value, str):
-        if "\x00" in value or any(0xD800 <= ord(c) <= 0xDFFF for c in value):
-            yield path
-    elif isinstance(value, dict):
-        for key, item in value.items():
-            yield from bad_strings(key, path + ".<key>")
-            yield from bad_strings(item, f"{path}.{key}")
-    elif isinstance(value, list):
-        for index, item in enumerate(value):
-            yield from bad_strings(item, f"{path}[{index}]")
+def bad_strings(value):
+    """Paths of strings Postgres jsonb cannot store: NUL and unpaired surrogates."""
+    stack = [(value, "$")]
+    while stack:
+        item, path = stack.pop()
+        if isinstance(item, str):
+            if "\x00" in item or any(0xD800 <= ord(c) <= 0xDFFF for c in item):
+                yield path
+        elif isinstance(item, dict):
+            for key, child in item.items():
+                stack.append((key, path + ".<key>"))
+                stack.append((child, f"{path}.{key}"))
+        elif isinstance(item, list):
+            stack.extend((child, f"{path}[{index}]") for index, child in enumerate(item))
 
 
 def check_player(index: int, player, problems: list[str]) -> None:

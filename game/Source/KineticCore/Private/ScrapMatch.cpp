@@ -323,7 +323,6 @@ void FScrapMatch::EndMatch(int WinningTeam, int ForfeitingTeam, bool bPenaltyFre
 
 void FScrapMatch::UpdateConnections()
 {
-	bool bCrewLost[2] = {false, false};
 	for (FSeat& Seat : Seats)
 	{
 		if (CurrentPhase == EScrapPhase::MatchOver)
@@ -352,8 +351,7 @@ void FScrapMatch::UpdateConnections()
 			Seat.bStandIdleHandled = true;
 			if (ConnectedHumans(Team) == 0)
 			{
-				bCrewLost[Team] = true;  // A crew of bots cannot exist (game-modes 9)
-				continue;
+				continue;  // The crew is lost (below): no bot for a crew with no humans
 			}
 			if (!Rules.bRated)
 			{
@@ -391,16 +389,43 @@ void FScrapMatch::UpdateConnections()
 			LogConnection(Slot, EConnection::IdleWarning);
 		}
 	}
-	if (bDecided || (!bCrewLost[0] && !bCrewLost[1]))
+	CheckCrewsLost();
+}
+
+// A crew of bots cannot exist (game-modes 9): a crew whose humans are all gone, the last of
+// them for the 10 s a rigger stands idle, is lost. If the other crew has no human connected
+// either at that moment (an outage drops clients a tick or two apart), it is a no-contest.
+void FScrapMatch::CheckCrewsLost()
+{
+	if (bDecided || CurrentPhase == EScrapPhase::MatchOver)
 	{
 		return;  // A decided match stands whatever happens in its replay
 	}
-	if (bCrewLost[0] && bCrewLost[1])
+	bool bLost[2] = {false, false};
+	for (int Team = 0; Team < 2; ++Team)
+	{
+		double LastGone = -1e300;
+		bool bAnyHuman = false;
+		for (const FSeat& Seat : Seats)
+		{
+			if (Seat.Player.Team == Team && !Seat.Player.bIsBot)
+			{
+				bAnyHuman = true;
+				LastGone = std::max(LastGone, Seat.DisconnectedAt);
+			}
+		}
+		bLost[Team] = bAnyHuman && ConnectedHumans(Team) == 0 && Now - LastGone >= Rules.StandIdleSeconds - TimeEpsilon;
+	}
+	if (!bLost[0] && !bLost[1])
+	{
+		return;
+	}
+	const int Lost = bLost[0] ? 0 : 1;
+	if (bLost[1 - Lost] || ConnectedHumans(1 - Lost) == 0)
 	{
 		EndMatch(NoPlayer, NoPlayer, false);  // Both crews lost their last humans together
 		return;
 	}
-	const int Lost = bCrewLost[0] ? 0 : 1;
 	EndMatch(1 - Lost, Lost, false);
 }
 

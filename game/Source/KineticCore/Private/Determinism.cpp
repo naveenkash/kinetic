@@ -240,9 +240,9 @@ std::optional<FDeterminismRecording> FDeterminismRecording::Parse(const std::str
 		{
 			return std::nullopt;
 		}
-		if (Out.Has(Tick))
+		if (!Out.Samples.empty() && Tick <= Out.Samples.back().Tick)
 		{
-			return std::nullopt;  // A file holds each tick once
+			return std::nullopt;  // Serialize writes each tick once, in order
 		}
 		std::vector<FBodySample> Bodies(Count);
 		for (FBodySample& Body : Bodies)
@@ -322,7 +322,7 @@ FDivergence Compare(const FDeterminismRecording& A, const FDeterminismRecording&
 			const double Delta = (BodyA->Position - BodyB->Position).Length();
 			const bool bSamePosition = SameBits(BodyA->Position, BodyB->Position);
 			const bool bDiffers = ToleranceM == 0.0 ? !bSamePosition || !SameBits(BodyA->Velocity, BodyB->Velocity)
-			                                        : !(Delta <= ToleranceM);
+			                                        : !bSamePosition && !(Delta <= ToleranceM);
 			// NaN sticks: a blown-up body is the worst case, unless both recordings hold the same bits.
 			const bool bWorse = std::isnan(Delta) ? !bSamePosition && !std::isnan(Out.MaxPositionDelta)
 			                                      : Delta > Out.MaxPositionDelta;
