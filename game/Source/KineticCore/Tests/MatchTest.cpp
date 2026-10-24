@@ -949,3 +949,23 @@ KTEST(EndlessReplaysEndTheMatch)
 	Run(Match, 5.0);
 	KCHECK(Match.Phase() == EScrapPhase::MatchOver && Match.Result().bNoContest);
 }
+
+// Only replays in a row count: a scored round in between starts the count again.
+KTEST(ReplaysMustComeInARow)
+{
+	FEventLog Log;
+	FScrapMatch Match(Crews(), {}, Log);
+	Match.Start();
+	const auto Replay = [&] {
+		ToNextRound(Match);
+		Run(Match, 145.0);
+		Run(Match, 90.0 + Tick);
+	};
+	Replay();
+	ToNextRound(Match);
+	Down(Match, 1);  // A scored round
+	Replay();
+	Replay();
+	Run(Match, 5.0);
+	KCHECK(Match.Phase() != EScrapPhase::MatchOver && Match.Wins(0) == 1);
+}
