@@ -354,3 +354,39 @@ class FKineticLineSolver : public Chaos::TSimCallbackObject<FLineSolverInput, FL
 | Normal cut recoil | 150 N·s per 1,000 N to both ends; never staggers |
 | Demolition charge | Dog seats without a blast; a 6 m/s object or player impact triggers it |
 | Cut at 150 ms RTT | Snap plays at the cut point on all clients within one net update |
+
+## 9. Findings from the engine-free implementation (2026-10-24)
+
+The solver in section 3.2 is implemented in [game/Source/KineticCore](../../game/README.md) and tested against bible/05's worked examples, then reviewed twice by an independent physics pass. The tests forced these changes to the design. The code has them, and the sections above should be read with them.
+
+1. **Kick target at the end of the step.** `v_target = V * clamp(t / 0.3, 0, 1)` uses the time at the start of the step. On a fixed 60 Hz step the last Kick step then reaches only 94 percent of V, and the Kick window closes before V. The target is `V * clamp((t + dt) / 0.3, 0, 1)`, so V is reached exactly at 0.3 s.
+2. **Active lines use the free inverse mass; thresholds are decided on the same step.** The design resolves each endpoint's inverse mass from last step's force, which is a chicken-and-egg loop: a placed object, a braced player or a skidding player has `w = 0`, so the Jack applies 0 N, so the force never reaches the threshold. A Jack could never start a racked cylinder, vent the manifold from a wall, or break a brace with the Kick, and Overboard applied no force. Now:
+   - Haul and Jack forces are computed against each endpoint's free inverse mass. Only static, kinematic, fixed scenery and rated loads have 0.
+   - Footing, brace and break-free are then decided from that force, before integration.
+   - A Jack with both ends static still applies T (nothing moves, and a volatile reads the force).
+   - The Kick still needs `wA + wB > 0`.
+3. **Hang lines are one constraint solve, not per-line projections.** Section 3.2's per-line `C = L - R` projection, with the load read from the stretch, failed in five ways:
+   - Two lines on one load did not share it (6.2a).
+   - A swing read about half its load.
+   - Jolt slip depended on the tick rate.
+   - A slipping line could push.
+   - A Hang line never acted on a grounded or braced player, so the Gallows, Anchor Drop and the Overboard counter did nothing.
+
+   `HangSolver` replaces it:
+   - It solves all Hang and Set lines and the floor together as one bounded direct solve. Lines at their Hang load and slack ropes are the bounds. An iterative (Gauss-Seidel) solve did not converge for chains of light and heavy bodies: seven 5 kg links under 1,000 kg stretched 30 m in 4 s.
+   - Each line's impulse is capped at its Hang load per step (rope: tension only; rod: both ways).
+   - The load a line reads is its solved impulse, which is m·g hanging and m·v²/L swinging. Loads add across lines.
+   - The solve runs on velocities before positions are integrated. Each line's target is exact for its turn over the step, and a step in which a line turns more than 0.05 rad is split into substeps, so a swing keeps its speed on any line length (a 1 m Bola rod at 15 m/s included). Drift is removed by position passes, at most 5 cm per line per step, never by a teleport. Lines between the same two bodies share the load in proportion to their Hang loads. A line neither of whose ends can move (a kinematic dragging a braced player or a placed object) meets its full Hang load and slips, so the brace breaks next step (5.4) and a placed object, which Hang never starts (6.2), lets the line pay out until it runs out. Connected groups of bodies are solved separately, and where a line is parallel to the floor under a body (a line straight above a standing player) the floor carries the weight first.
+   - A grounded player is a free body for the Hang solve, and the floor holds them up. A line that lifts more than their weight lifts them off their feet. A braced player is static unless the Hang force breaks the brace.
+   - The Hang force feeds the endpoint's footing on the next step, the same way an active line's force does.
+4. **Slip is a clutch whose friction is the Hang load** (PROPOSED). An overloaded line holds at its Hang load and pays the load out as fast as the load goes, never by pushing. A fixed rate of 0.5 m per 0.1 s cannot be honored either way: from rest it needs the line to push, and capping a falling load at 5 m/s needs an infinitely strong line (a 4 kN Climber line read 51 kN catching a container). So the bible's slip rate is not applied, and a load just over the Hang load creeps (500 kg on a 4 kN line falls at 1.8 m/s²). See production/open-items.md 7a.
+   - A Reel moves the rest length at the Reel rate when either end can move, and slows at 1 m/s² over the last stretch before a bound, so a load up to the Hang load / (g + 1) stops there without slipping (PROPOSED). Reeling in against an overload gains nothing, and a reel-out never shortens the line.
+   - The rest length stays between 0.5 m and the class line length. A line that slips past either lets go (PROPOSED: holding there made it infinitely strong, so a Climber line engaged near full length held 3,000 kg).
+   - Hang captures L0 no shorter than the Dogs-meet length.
+5. **The Kick counts toward break-free at T** (PROPOSED). bible/05 6.2 counts the Kick toward break-free, but 6.2 and 6.7 also say which classes can start a bolted object, a stacked container or a Lift counterweight, judged at T; at its full force a Climber's Kick started all three. Players' brace still sees the full Kick. Because the thresholds see T, whether a placed object holds is decided before the Kick is split, so a self-dog Kick off an object that holds gives the player the whole of V, as off a wall (3.2). The Scrapper's small-prop bonus is speed (6.1), so it is left out of the break-free force too: a Scrapper's 400 N does not start a stack.
+6. **Haul ends when the Dogs meet**: the line goes Slack. Before, point bodies overshot and were pulled back.
+7. **Set from any mode other than Hang captures L0.** Before, Set on a fresh line snapped to a stale rest length.
+8. **Inclusive thresholds need a tolerance.** A pull built as `Axis × 1,000 N` measures 999.9999999 N on about a third of axes, so the Breaker's 1,000 N missed a rated load. Break-free and the rated commit compare with a relative tolerance of 1e-9.
+9. **A kinematic attachment released from its path stays released** (6.7). It was falling back to static whenever the pull dropped.
+
+Also found: bible/05 disagrees with itself on the slip rate. Section 3.2 says 0.5 m per 0.1 s (5 m/s); the tells table in section 11 says 0.3 s per 0.5 m (1.7 m/s). The tables keep section 3.2 until design settles it (production/open-items.md 7a).

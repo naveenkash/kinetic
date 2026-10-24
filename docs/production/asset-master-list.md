@@ -24,9 +24,9 @@ _Generated 2026-10-24 from docs/. Regenerate with python3 docs/production/genera
 | Arena: Hangtown | 6 | 21,427 |
 | Arena: The Anchor | 6 | 19,137 |
 | Systems (UI, audio, VFX, animation, camera, modes, onboarding) | 10 | 30,455 |
-| Technical architecture (UE5) | 12 | 38,659 |
-| Production | 7 | 10,467 |
-| **Total (with folder indexes)** | **165** | **377,669** |
+| Technical architecture (UE5) | 12 | 40,053 |
+| Production | 7 | 10,677 |
+| **Total (with folder indexes)** | **165** | **379,304** |
 
 ## Bible (canonical world, factions, arenas, progression, mechanics)
 
@@ -296,7 +296,7 @@ _10 files, about 30,455 words._
 
 ## Technical architecture (UE5)
 
-_12 files, about 38,659 words._
+_12 files, about 40,053 words._
 
 | File | Title | Summary |
 |---|---|---|
@@ -315,7 +315,7 @@ _12 files, about 38,659 words._
 
 ## Production
 
-_7 files, about 10,467 words._
+_7 files, about 10,677 words._
 
 | File | Title | Summary |
 |---|---|---|

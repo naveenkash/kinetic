@@ -1,0 +1,5 @@
+Name,TriggerSpeed,TriggerJackN,BlastRadius,BlastImpulseNs,BlastStallRadius,BlastFlipRadius
+Propane,8,0,4,1500,2,4
+FuelDrum,10,0,3,1200,0,0
+DemoCharge,6,0,5,2500,0,0
+GasManifold,0,600,0,0,0,0

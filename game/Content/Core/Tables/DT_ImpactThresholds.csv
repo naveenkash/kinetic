@@ -1,0 +1,8 @@
+Name,Stagger,Flip,Stall,Seconds,Measure
+PlayerVsStatic,5,8,12,,MetersPerSecond
+PlayerVsKinematic,4,6,9,,MetersPerSecond
+ObjectVsPlayer,300,600,1200,,NewtonSeconds
+PlayerVsPlayerFloor,5,8,14,,MetersPerSecond
+HangLineHit,3,6,,,MetersPerSecond
+Crush,,,8000,0.5,Newtons
+LedgeGrabMax,,,8,,MetersPerSecond

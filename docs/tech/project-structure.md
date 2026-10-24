@@ -122,7 +122,7 @@ Values are entered in SI (m, s, kg, N, N·s). `KineticCore` converts to engine u
 | `AirborneFireSpeedKeep` | float | 1.0 | 0.85 | 0.85 | 0.85 | 0.85 |
 | `LadderSpeed` | float | 2.0 | 2.0 | 2.0 | 2.0 | 1.6 |
 
-Shared constants live in `DA_SpoolGlobals`: `HaulRamp 0.4`, `KickTime 0.3`, `KickForceCapMul 1.5`, `bKickInterlockOnPlates true`, `ReelRate 1.0 m/s`, `ReelHoldThreshold 0.2 s`, `KinematicSeverSubsteps 4`, `HardVelocityCap 50`, `HaulCloseCap 25`, `JackSeparateCap 30`, `SnapImpulseBase 1500 N·s at 1200 N`, `CutRecoil 150 N·s per 1000 N`, `SmallPropBonusMassCap 100 kg`, `ManifoldJackTrigger 600 N`, `DogsMeet 0.5`, `DogRadius 0.08`, `SlackTimeout 4`, `SlipPerStep 0.5 m per 0.1 s`, `OverspinOctave 1.0`, `OverspinSnap 1.8`, `OverspinLaunch 10`, `OverspinStagger 0.8`, `OverspinCooldown 3`, `DoublerSplit 0.6`, `DoublerRestore 0.3`, `SetLineFade 0.5`, `SetLineProximity 5`.
+Shared constants live in `DA_SpoolGlobals`: `HaulRamp 0.4`, `KickTime 0.3`, `InterlockRamp 0.3`, `KickForceCapMul 1.5`, `bKickInterlockOnPlates true`, `ReelRate 1.0 m/s`, `ReelHoldThreshold 0.2 s`, `KinematicSeverSubsteps 4`, `HardVelocityCap 50`, `HaulCloseCap 25`, `JackSeparateCap 30`, `SnapImpulseBase 1500 N·s at 1200 N`, `CutRecoil 150 N·s per 1000 N`, `SmallPropBonusMassCap 100 kg`, `ManifoldJackTrigger 600 N`, `DogsMeet 0.5`, `DogRadius 0.08`, `SlackTimeout 4`, `SlipPerStep 0.5 m per 0.1 s`, `OverspinRamp 1.0`, `OverspinOctave 1.0`, `OverspinSnap 1.8`, `OverspinLaunch 10`, `OverspinStagger 0.8`, `OverspinCooldown 3`, `DoublerSplit 0.6`, `DoublerRestore 0.3`, `SetLineFade 0.5`, `SetLineProximity 5`.
 
 ### 4.2 `DT_CutterVariant` (05 section 4.1)
 

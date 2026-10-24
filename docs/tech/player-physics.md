@@ -94,22 +94,23 @@ All thresholds in 05 section 7.1 are evaluated on the server in the physics thre
 - **Player hits player** follows 7.2: each party is evaluated with impulse `m_other * v_rel` against the object table. The 14 m/s symmetric floor also applies.
 - Surface modifiers (7.3) multiply the stagger, flip and Stall thresholds by the physical material of the other body: hard 1.0, wood 1.2, scrap/laundry/nets 2.0, water over 1 m 3.0, Stall Gel 4.0. Materials are tagged in `DT_PhysMaterial`.
 - A player's body is also an impacting object against destructible fracture thresholds (6.5): the Impact Monitor forwards the player-side impulse (class mass × relative speed) to the Destruction Director. A flipped 130 kg Rigger at 5 m/s delivers 650 N·s and breaks a market stall.
-- Classification uses the max of the two measures for the frame. A 2,000 kg container at 0.6 m/s gives 1,200 N·s and Stalls even though `v_rel` is small, which is the bible's intent.
+- Each body is judged on its own measure: static and kinematic on `v_rel` only (a Breaker's solver impulse against a wall is 220 kg × v and must not decide it, 7.2), objects on impulse, players on `m_other * v_rel`. The most severe outcome across bodies wins. A 2,000 kg container at 0.6 m/s gives 1,200 N·s and Stalls even though `v_rel` is small, which is the bible's intent.
+- An object's impulse is classified less the share of its weight the player carries, `m_other * g * dt * max(0, -n·up)` per step, where `n` is the direction the contact pushes the player (PROPOSED). An object arriving sideways bears its weight on the floor, so nothing is subtracted. Without this, a 2,000 kg container sitting still on a player reads 327 N·s every 60 Hz step and staggers them four times a second, more often at lower tick rates. A sustained heavy load is the crush test's job (4.3).
 
 ### 4.2 Multi-contact frames
 
 Chaos can report several manifold points against the same body and contacts against several bodies in one step. Rules:
 
 - Sum impulses per other body within a step. Never sum across bodies.
-- Debounce: a body that already produced a Stagger or Flip against the player is ignored for 0.25 s unless its new impulse is at least 2x the previous one.
-- Resting contacts: ignore contacts whose `v_rel < 1 m/s` and impulse under 50 N·s. These are support forces, not hits.
+- Debounce: a body that already produced a Stagger or Flip against the player is ignored for 0.25 s unless the measure that judged it (speed, impulse or `m_other * v_rel`) is at least 2x the previous one. A Stall is never debounced (PROPOSED).
+- Resting contacts: ignore contacts whose `v_rel < 1 m/s` and impulse under 50 N·s. These are support forces, not hits. With the current tables this holds by construction: every threshold times every surface modifier is above both limits, and a test enforces it.
 - The first two physics steps after a body handoff ignore contacts under the Flip threshold, to swallow the teleport settle.
 
 ### 4.3 The crush test
 
 "Pinned between two bodies with closing force over 8 kN for 0.5 s" (7.1). Crush is unreachable by lines (v0.2.1): at 1,200 N peak a line cannot supply 8 kN, so the detector ignores any contact force attributable to the line solver and considers only kinematics and stacked or falling weight:
 
-- Each step, collect the contact normal forces on the flight body (impulse / dt). If two contacts have opposing normals (`dot < -0.7`) and both exceed 8 kN, start or continue a crush timer. Otherwise decay the timer at 2x rate.
+- Each step, collect the contact normal forces on the flight body (impulse / dt) and sum them per other body (Chaos reports several manifold points per body pair). If two bodies press from opposing directions (`dot < -0.7`) and both reach 8 kN (inclusive), start or continue a crush timer. Otherwise decay the timer at 2x rate.
 - Crush timer at 0.5 s is a Stall.
 - At least one of the two opposing contacts must be a kinematic actor or a rigid body with mass 300 kg or more (Heavy, Rated, or a falling Medium stack). Contacts against a line-constrained body with no kinematic or Heavy on either side never count. This keeps the Kick and Haul out of the crush path by construction.
 - A grounded CMC player can also be crushed. The capsule is kinematic so it reports no contact forces. The server runs an overlap each game tick for the CMC capsule against simulated and kinematic bodies; if a body overlaps the capsule from a direction opposed to a blocking surface and the body's push force (mass times its deceleration against the capsule) exceeds 8 kN, the capsule hands off to the flight body so the physics measure takes over. Tune in week 4.

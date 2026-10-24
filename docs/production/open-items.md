@@ -13,6 +13,8 @@ _Everything the writers flagged that the bible did not settle, consolidated from
 | 5 | **Hero versus class.** Still the largest open design question; everything is written class-first. | bible/04 open question 1 | Class-based, Faces as identity |
 | 6 | **Lethality tone.** The Stall fiction supports either a survivable or a grim reading. | bible/04 open question 3 | Written to hold either |
 | 7 | **Cutter on map cables beyond Hangtown.** | bible/04 open question 4 | Hangtown only, any Cutter |
+| 7a | **Hang slip rate and behavior.** bible/05 section 3.2 says 0.5 m per 0.1 s (5 m/s); the tells table in section 11 says 0.3 s per 0.5 m (1.7 m/s). Also, neither rate can be applied as written: paying out at a fixed rate from rest needs the line to push the load, and capping a falling load at that rate needs an infinitely strong line. The solver treats slip as a clutch whose friction is the Hang load, so a load just over the limit creeps and a heavy one falls fast. Design should say whether that reads right, or what the rate should mean. Found while implementing the line solver. | bible/05 sections 3.2 and 11; tech/spool-and-line section 9 | Clutch at the Hang load; the 5 m/s (section 3.2) stays in the data tables, unused by the solver |
+| 7b | **The Kick and break-free.** bible/05 6.2 counts the Kick toward break-free, but 6.2 and 6.7 also say which classes can start a bolted object, a stacked container or a Lift counterweight. At full Kick force a Climber starts all three. | bible/05 sections 6.2 and 6.7 | The Kick counts at T for object thresholds; the brace sees the full Kick |
 
 ## Needs an engine answer before art is committed
 
