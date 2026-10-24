@@ -16,7 +16,7 @@ Player counts: 6 for Scrap, Claim and Haul (3v3); 8 for Free Scrap. 3v3v3 (9 pla
 | Physics (server and clients) | 60 Hz fixed, async | `Tick Physics Async`, `Async Fixed Time Step Size = 0.0166667` |
 | Client input send | 60 Hz | CMC moves and networked physics inputs piggyback the same packet |
 | Net update, owner's actors and lines on their body | 60 Hz | `NetUpdateFrequency=60` |
-| Net update, other players and tier-1 bodies | 30 Hz | `NetUpdateFrequency=30` |
+| Net update, other players and tier-1 bodies | 30 Hz; other players 60 Hz while airborne on their flight body (section 3's worst case) | `NetUpdateFrequency=30`, raised to 60 on the flight body |
 | Net update, tier-2 bodies | 10 Hz | |
 | Net update, tier-3 bodies and sleeping | 3 Hz, dormant when asleep | `DORM_DormantAll` on sleep |
 
@@ -148,3 +148,29 @@ KINETIC runs its own backend for identity, crews, matchmaking, allocation and re
 | Physics misprediction farming | Per-player correction statistics; flag systematic favourable corrections |
 | Server-side bots or DoS | Fleet provider DDoS protection; backend-signed join tickets checked against the roster; connection rate limits |
 | Memory tampering | Server authority limits what tampering can change; commercial client anti-cheat evaluated in Phase 3 (backend-architecture section 16) |
+
+## 12. Engine-free implementation
+
+`game/Source/KineticCore` holds the parts of this document that need no engine, tested by `game/Source/KineticCore/Tests/NetTest.cpp`. The Unreal side writes these bytes through its own archive and drives the scheduler and validator from its net driver.
+
+| File | What it implements |
+|---|---|
+| `NetCodec.h` | Section 3's encodings. **Positions:** 16 bits an axis inside the arena box (±327 m across, −100 to 300 m up), about 1 cm. Positions outside the box clamp to its faces. **Velocities:** 16 bits an axis over ±50 m/s (the hard cap) and ±50 rad/s. Codes run 0 to 65,534, so a body at rest decodes as exactly zero and sleeping bodies do not drift. **Rotation:** a smallest-three quaternion in 47 bits (6 bytes). **Body payload, 32 bytes:** position 6, rotation 6, linear 6, angular 6, server frame 4, flags 1, spare 3. **Line update, 5 bytes:** id 12 bits, force 8 (0 to 6 kN), mode 3, five state bits, Reel rest length 12 (to 51.2 m). A line id past 4,095 does not encode, so the server recycles ids |
+| `NetPriority.h` | Section 5's priorities and section 2's rates per actor and viewer, section 3's tiers, and the worst-case arithmetic (101,964 B/s). **The scheduler**, each tick, sends in this order while MaxClientRate / 60, less the UDP/IP header, lasts: (1) due lines and players, whatever the budget; (2) tier-1 bodies; (3) anything a second or more overdue; (4) the rest, tier 2 and the nearest clusters before tier 3 and the other clusters, then by priority and how overdue. Whatever does not fit stays due. Under saturation tier 3 is shed first, then tier 2. While the budget covers tier 1, every awake actor still goes out about once a second |
+| `Rewind.h` | **History:** sections 7.1 and 7.2, a 20-frame history of line segments, Catch Plates and each player's eye. A request is judged at its client frame, never later than now and at most 9 frames back. **Camera:** the server keeps each player's camera from their input stream. It turns at most 3,000°/s between the frames it is judged at, with no more than 3 frames of turn for a gap, and never runs backward, so no stamp can switch the clamp off. **Warm-up** runs from the judged draw frame, and a new draw restarts it. **Swing:** tested for reach and cone with the player's eye, camera and the lines all as they were at the judged frame, so a client that has turned since cannot aim after the fact. A camera sample that is not a direction is ignored. Every swing, hit or miss, spends the swing and recovery (0.45 s, 27 frames) before the next. That is longer than the rewind, so a client cannot try each frame of the window in turn. **Dog hits:** a Dog's sweep is tested against the other players' plates at its frame and seats in the first player reached, in their plate nearest the impact. The sweep comes from the server's own simulation of the Dog, never from the client. **Stalls:** a line-caused Stall is pending for G, rounded up to whole frames in the victim's favour, and a valid cut judged at or before the Stall frame cancels it. Going over an edge is final. Also section 6's latency policy and section 11's correction statistics |
+
+The tests run section 7.3's matrix on the reference simulator: 30, 80 and 150 ms RTT, up to 20 ms of jitter, 20 trials each. A Breaker's Haul from 15 m drags a Rigger toward an edge. The Rigger has their back to the line. They draw 0.6 s after the seat, turn at 900°/s from 0.9 s, and swing at 1.1 s, sending their camera every frame. Every trial survives, and every cut is judged at the frame it was swung. With no reaction, every bucket goes over the edge.
+
+The grace window test puts a line-caused Stall in the frame after the swing, so it is pending when the cut arrives. At every bucket the cut cancels it. A swing stamped after the Stall does not cancel it. With no cut, the Stall is confirmed exactly G later: 4, 6 and 8 frames.
+
+Choices this document did not make, marked PROPOSED in the code:
+
+- **Tier-2 radius:** 40 m from any player. Section 3 names the tier but not its edge.
+- **Angular velocity range:** ±50 rad/s.
+- **Lines with no claim on the viewer:** a line with no Dog in the viewer's plate, not owned by the viewer, has priority 5, the same as a body on a live line, and goes at 30 Hz. The viewer's own lines and any line with a Dog in their plate go at 60 Hz, which section 2 asks for and section 3's table does not count. They are two or three lines, 300 to 450 B/s more.
+- **Airborne players:** other players are sent at 60 Hz while airborne, so that sections 2 and 3 agree (see the table in section 2).
+- **Starvation floor:** an actor a second overdue jumps every tier but tier 1.
+- **Camera gap:** a gap between camera samples earns at most 3 frames (150°) of turn.
+- **Ties at the Stall frame:** a cut judged at the Stall's own frame wins, because a frame's inputs are applied before its physics step, which is where the Stall is found. This also makes the 150 ms cap and a 9-frame G line up. If a cut had to be strictly earlier, the last frame of a capped G could never cancel.
+- **Plate size:** for the Dog re-sweep, a plate is a 0.35 m sphere and a Dog 0.08 m (05 3.1).
+- **Correction statistics:** a player is flagged after at least 200 corrections, if 70% or more of them had the client predicting better for itself than the server granted.
