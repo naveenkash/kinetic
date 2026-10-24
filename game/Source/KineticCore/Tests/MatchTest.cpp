@@ -906,3 +906,46 @@ KTEST(FactsAtTheirEdges)
 	KCHECK(Contains(Seats.JsonLines(), R"("plate":"back","shooter_class":"Rigger","target_class":"Climber"})"));
 	KCHECK(Contains(Seats.JsonLines(), R"("plate":"none","shooter_class":"Rigger","target_class":null})"));
 }
+
+// Leaving a few seconds apart, with one coming back: the others still get a bot (casual) or are
+// withdrawn (Rated), and a crew in its last 10 s with no human connected gets no bot.
+KTEST(StaggeredLeaversAreStillHandled)
+{
+	for (const bool bRated : {false, true})
+	{
+		FScrapRules Rules;
+		Rules.bRated = bRated;
+		FEventLog Log;
+		FScrapMatch Match(Crews(), Rules, Log);
+		Match.Start();
+		ToLive(Match);
+		Match.OnDisconnect(0);
+		Match.OnDisconnect(1);
+		Run(Match, 5.0);
+		Match.OnDisconnect(2);
+		Run(Match, 5.1);  // Slots 0 and 1 reach 10 s with nobody connected: no bot, no withdrawal yet
+		KCHECK(!Match.IsBotControlled(0) && Match.IsStanding(0));
+		Run(Match, 1.9);
+		Match.OnReconnect(2);
+		Run(Match, 0.1);
+		KCHECK(Match.Phase() != EScrapPhase::MatchOver);
+		KCHECK(bRated ? !Match.IsStanding(0) && !Match.IsStanding(1) : Match.IsBotControlled(0) && Match.IsBotControlled(1));
+	}
+}
+
+// Three replays in a row end the match as a no-contest.
+KTEST(EndlessReplaysEndTheMatch)
+{
+	FEventLog Log;
+	FScrapMatch Match(Crews(), {}, Log);
+	Match.Start();
+	for (int Round = 0; Round < 3; ++Round)
+	{
+		ToNextRound(Match);
+		Run(Match, 145.0);        // Time-out, equal crews
+		Run(Match, 90.0 + Tick);  // Sudden death: nobody falls
+		KCHECK(LastRound(Log).Reason == ERoundEnd::Replayed);
+	}
+	Run(Match, 5.0);
+	KCHECK(Match.Phase() == EScrapPhase::MatchOver && Match.Result().bNoContest);
+}

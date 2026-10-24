@@ -192,6 +192,11 @@ void FScrapMatch::Update(double Dt)
 				EndMatch(Outcome.WinnerTeam, NoPlayer, false);
 				return;
 			}
+			if (ConsecutiveReplays >= Rules.MaxConsecutiveReplays)
+			{
+				EndMatch(NoPlayer, NoPlayer, false);  // Nobody falls, round after round: no-contest
+				return;
+			}
 			++RoundIndex;
 			BeginReset();
 		}
@@ -289,6 +294,7 @@ void FScrapMatch::EndRound(int WinningTeam, ERoundEnd Reason)
 {
 	CurrentPhase = EScrapPhase::RoundEnd;
 	PhaseEndsAt = Now + Rules.ReplaySeconds;
+	ConsecutiveReplays = Reason == ERoundEnd::Replayed ? ConsecutiveReplays + 1 : 0;
 	if (WinningTeam != NoPlayer && Reason != ERoundEnd::Forfeit)
 	{
 		++Score[WinningTeam];
@@ -348,11 +354,11 @@ void FScrapMatch::UpdateConnections()
 			{
 				continue;
 			}
-			Seat.bStandIdleHandled = true;
 			if (ConnectedHumans(Team) == 0)
 			{
-				continue;  // The crew is lost (below): no bot for a crew with no humans
+				continue;  // No bot for a crew with no humans: lost below, or retried if one returns
 			}
+			Seat.bStandIdleHandled = true;
 			if (!Rules.bRated)
 			{
 				Seat.bBotControlled = true;

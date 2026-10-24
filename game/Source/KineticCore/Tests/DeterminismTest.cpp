@@ -78,7 +78,8 @@ KTEST(RecordingsRoundTripExactly)
 	                              Head + "tick 0 1\n0" + Body + "\ntick 0 1\n0" + Body + "\n",  // A tick twice
 	                              Head + "tick 1 1\n0" + Body + "\ntick 0 1\n0" + Body + "\n",  // Out of order
 	                              Head + "tick 0 1\n2147483648" + Body + "\n",    // Past INT_MAX
-	                              Head + "tick 0 100001\n"})
+	                              Head + "tick 0 100001\n",
+	                              Head + "tick 0 18446744073709551615\n"})  // Must refuse, never allocate
 	{
 		KCHECK(!FDeterminismRecording::Parse(Bad).has_value());
 	}

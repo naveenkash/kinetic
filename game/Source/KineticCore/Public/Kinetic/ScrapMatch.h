@@ -18,7 +18,8 @@
 // - A forfeit needs 2 yes votes, or every connected human if fewer than 2 remain; votes clear
 //   at each reset. Once a crew has its third round the match is decided: nothing in the replay
 //   can change it. Both crews losing their last humans together (within the 10 s a rigger
-//   stands idle) is a no-contest.
+//   stands idle) is a no-contest, and so are three replayed rounds in a row (a match where
+//   nobody falls would otherwise never end).
 #pragma once
 
 #include "Kinetic/MatchEvents.h"
@@ -46,6 +47,7 @@ struct FScrapRules
 	double IdleWarningSeconds = 20.0;
 	double IdleLeaverSeconds = 60.0;
 	int ForfeitVotes = 2;
+	int MaxConsecutiveReplays = 3;        // Then the match is a no-contest (PROPOSED)
 	bool bRated = false;
 };
 
@@ -178,6 +180,7 @@ private:
 	int RoundStalls = 0;
 	int Score[2] = {0, 0};
 	bool bDecided = false;  // A crew has its third round; the replay is still running
+	int ConsecutiveReplays = 0;
 	FScrapResult Outcome;
 };
 } // namespace Kinetic

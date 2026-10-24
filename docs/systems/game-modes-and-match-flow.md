@@ -64,7 +64,7 @@ The engine-free match flow ([game/Source/KineticCore/Public/Kinetic/ScrapMatch.h
 - Idle time counts only while the rigger can move; 60 s idle is a disconnect, and moving again within the reconnect window is the return.
 - A forfeit needs 2 yes votes, or every connected human if fewer than 2 remain; votes clear at each reset and on a disconnect. A forfeit during a round logs that round as forfeited without scoring it.
 - Once a crew has its third round the match is decided; nothing during the final replay (a vote, a leaver) changes it.
-- Both crews losing their last humans in the same instant is a no-contest: no winner, no forfeit.
+- Both crews losing their last humans within the same 10 s is a no-contest: no winner, no forfeit. So are three replayed rounds in a row, so a match where nobody falls still ends.
 
 ## 3. Claim
 
