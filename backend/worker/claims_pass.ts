@@ -17,7 +17,7 @@ export const TALLY_GRACE_S = 24 * 3600;
 
 type Sql = postgres.Sql | postgres.TransactionSql;
 
-async function factionTotals(sql: Sql, claimId: string): Promise<FactionTotals[]> {
+export async function factionTotals(sql: Sql, claimId: string): Promise<FactionTotals[]> {
   const rows = await sql<{ faction: Faction; points: string; active_players: number; rated_wins: number }[]>`
     with per_player as (
       select faction, account_id, sum(points) as points, count(*) filter (where rated_win) as rated_wins
@@ -44,7 +44,7 @@ export async function refreshStanding(sql: Sql, claimId: string) {
   return result;
 }
 
-async function anomalies(sql: Sql, claimId: string) {
+export async function anomalies(sql: Sql, claimId: string) {
   const leftover = await sql<{ match_id: string }[]>`
     select r.match_id from game.match_reports r, game.claims c
      where c.claim_id = ${claimId} and r.status = 'stored' and r.received_at >= c.starts_at

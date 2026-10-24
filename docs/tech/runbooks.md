@@ -76,7 +76,54 @@ Never requeue a report quarantined for `fact_ceiling` or `malformed …` without
 
    For a tie with no holder, add `--holder <faction> --variant <variant>`.
 4. **Resolve:** `claim:resolve --id claim-15` writes `variant:<arena>` into `game.config`. The patch carrying both outcomes must already be live on every platform ([backend-architecture.md](backend-architecture.md) section 14).
-5. Rehearse the whole flip on staging every season.
+5. **Rehearse the whole flip on staging every season**, a week before the real one:
+   1. Restore staging from a recent production copy, so the rehearsal flips this season's real data. In the shell you rehearse from, list staging's Supabase project ref:
+
+      ```bash
+      export KINETIC_STAGING_DB_REFS=<staging project ref>
+      ```
+
+      The rehearsal reads the project from `DATABASE_URL` (`db.<ref>.supabase.co`, or the pooler's `postgres.<ref>` user) and refuses any project not listed, so a URL to production is refused even through the shared pooler host. `--target local` refuses any database not on this machine. Never list production's ref. The staging worker can keep running: the rehearsal's steps are guarded by each Claim's state, so they and the worker never take the same step twice.
+   2. Run the rehearsal:
+
+      ```bash
+      deno task flip-rehearsal --target staging --staff <you> --claim claim-15
+      ```
+
+      It also refuses `KINETIC_ENV=production`, and any `DATABASE_URL` whose host is `KINETIC_PROD_DB_HOST`. It pulls the Claim's end forward to now, then reports each step: checklist, preview, frozen, tallied, the tally against the preview (a change is noted, not failed, since reports processed in between can move it), reviewed, resolved (the variant flag in config), and the next Claim.
+   3. A tie with no holder stops at "reviewed". Rehearse the reviewer's call by running it again with `--holder <faction> --variant <variant>`: it resumes from tallied, and the checklist then only needs a next Claim scheduled, not the 24-hour gap (the first run moved the end). `--force-tally true` tallies without waiting for unprocessed reports, which are then listed as anomalies. `--ignore-checks true` runs past a failed checklist, for a re-run once you know why it failed.
+   4. Fix whatever failed, then restore staging again before the next rehearsal.
+6. **Before the real freeze**, on production, read-only:
+   - `claim:checklist --id claim-15`. Blocking checks:
+     - the next Claim is scheduled within 24 hours, with week-1 Contracts for every faction and crates on both tracks;
+     - the live build ships every variant the arena can take (`variants:shipped --variants a,b`, set at release);
+     - the worker is refreshing standing.
+
+     Unprocessed and quarantined reports are warnings for the reviewer.
+   - `claim:preview --id claim-15`: the standings, holder and variant the tally would give now.
+
+## 4a. Live ops from the console
+
+Every command runs under your staff name, and your changes to config, playlists, regions and identities are written to `admin.audit`. A player's own console link is recorded there too, as `player:`. Identity rows in the audit name the platform and account only, never the platform id: the audit outlives deleted accounts.
+
+- **What is wrong right now:** `health`. It shows:
+  - queue depth and the oldest wait per pool;
+  - matches by state, those with no heartbeat for 60 s, and those allocating for over 2 minutes;
+  - live matches per build;
+  - the report backlog;
+  - account jobs;
+  - overdue purchase checks and open support flags;
+  - the active Claim's standing age.
+- **A player:** `player --name <display name>` or `player --account <uuid>` shows their identities, Ledger, wallets, active sanctions, last five matches, and open reports against them.
+- **Message of the day:** `motd:set --text "..."`. An empty text clears it.
+- **Feature flags:** `flag:set --flag <name> --value <json>`. Clients read `flags` from `api.get_config`.
+- **A playlist or region:** `playlist:set --id <id> --enabled false` takes a playlist out of rotation; `--regions a,b` and `--bot_fill_after_s n` change the rest. `region:set --id <id> --enabled false` takes a region out.
+- **Other config:** `config:get [--key]` and `config:set --key --value <json>`. Builds, flags, the message of the day and variants have their own commands, which check them.
+- **A patch** (backend-architecture 18):
+  1. Push the server image.
+  2. Raise `build:latest --build x.y.z`.
+  3. Once old matches drain, `build:min --build x.y.z`. It refuses while matches on older builds are still running. `--force true` overrides that for an emergency, and those matches' players can no longer sign in to rejoin.
+- **Console identities:** `identity:unlink --account <uuid> --provider psn` removes a linked console platform, never an account's last identity. The identity an account was made for (Steam, say) cannot be unlinked: its next sign-in would attach it again. A player links PlayStation, Xbox or Nintendo through `auth-console` with `link: true`, their session, and fresh proof of an identity the account already has (backend-architecture 8.4).
 
 ## 5. Purchases, refunds and chargebacks
 

@@ -418,6 +418,10 @@ enabled = true
 [functions.auth-steam]
 verify_jwt = false
 
+# Signs in without a session; link mode checks the bearer itself.
+[functions.auth-console]
+verify_jwt = false
+
 [functions.match-current]
 verify_jwt = true
 

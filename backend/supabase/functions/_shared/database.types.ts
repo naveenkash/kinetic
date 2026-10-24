@@ -846,6 +846,14 @@ export type Database = {
         };
         Returns: Json;
       };
+      srv_link_identity: {
+        Args: {
+          p_account: string;
+          p_provider: string;
+          p_provider_user_id: string;
+        };
+        Returns: Json;
+      };
       srv_manifest: {
         Args: { p_allocation: string; p_match: string };
         Returns: Json;
@@ -905,6 +913,10 @@ export type Database = {
       srv_steam_id: { Args: { p_account: string }; Returns: string };
       srv_store_report: {
         Args: { p_allocation: string; p_match: string; p_payload: Json };
+        Returns: Json;
+      };
+      srv_unlink_identity: {
+        Args: { p_account: string; p_provider: string };
         Returns: Json;
       };
     };

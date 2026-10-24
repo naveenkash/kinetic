@@ -245,7 +245,16 @@ If it proves unreliable, the fallback is to sign Supabase-compatible access toke
 ### 8.4 Other providers
 
 - `dev` login (username only) exists in local and dev and is disabled in staging and prod by config.
-- Console identities later go through the same `auth-steam`-style bridge, one Edge Function per platform.
+- **Console identities** (Phase 4) go through `auth-console`, which proves a PlayStation, Xbox or Nintendo token against that platform's signing keys, issuer and audience (`_shared/console.ts`), then signs in through the same pipeline as Steam (`_shared/login.ts`).
+  - A platform with its settings unset (`<PSN|XBOX|NINTENDO>_JWKS_URL`, `_ISSUER`, `_AUDIENCE`, and optionally `_SUBJECT_CLAIM` and `_NAME_CLAIM`) answers `provider_disabled`.
+  - With `link: true`, the identity is linked to the player's account instead (`api.srv_link_identity`), so one Ledger follows them across platforms. A linked identity signs in to that account from then on, so linking needs three things:
+    - the session (bearer);
+    - fresh proof of an identity the account already has: a Steam ticket, or a token from a platform already linked;
+    - an account that is not banned.
+
+    It is one identity per platform per account, never one that belongs to another account. Each link is audited by platform and account, never by platform id, because the audit outlives deleted accounts.
+  - A numeric platform id past 2^53 is refused rather than rounded. Console ids are hashed into the synthetic Auth address, so any id signs in and ids differing by case stay distinct.
+  - **CHECK before launch:** each platform's token type and claims (partner documentation, under NDA). Xbox's relying-party XSTS tokens are encrypted, and decrypting them is not built.
 - Discord, Google or Apple sign-in, which Supabase supports natively, can be linked for the web Ledger and admin console without touching the game client.
 
 ## 9. Crews, presence, friends and Realtime
@@ -718,7 +727,7 @@ Triggers write `admin.audit`, which is append-only and unreadable to players:
 
 ## 18. Config, versions and playlists
 
-`api.config` (readable without login) returns `min_build`, `latest_build`, open playlists per region, region beacons, the current Claim summary and variant flags, feature flags and the message of the day. Bible numbers never live here; they ship in the build so every client and server agree (project-structure section 4).
+`api.get_config` (readable without login) returns `min_build`, `latest_build`, open playlists per region, region beacons, the current Claim summary (`claim`), variant flags (`variants`, arena code to variant), feature flags (`flags`) and the message of the day (`motd`). Bible numbers never live here; they ship in the build so every client and server agree (project-structure section 4).
 
 **Patch rollout:** push the new server image to the fleet; the matchmaker pools by build, so old and new clients each match on their own servers; raise `min_build` once old matches drain.
 
@@ -827,7 +836,7 @@ Server side, in `KineticServer` ([project-structure.md](project-structure.md)): 
 | Phase 1 (Steam Playtest) | Supabase projects; schemas and RLS; `auth-steam` with the session-minting prototype first; config and `min_build`; crews and Realtime channels; rate limiter; matchmaker without ratings; fleet adapter; join tickets; `server-*` functions; reports stored without rewards; telemetry; ban list | 4 to 6 weeks |
 | Phase 2 | Ledger, Tonnage, Grades, Rope Marks, inventory, loadouts, Contracts, Claims standing, OpenSkill, shop with Tonnage credit, admin console v1, Pro production project | 9 to 11 weeks |
 | Phase 3 | Steam purchases and refunds, voice, moderation tools, export and deletion, load test, point-in-time recovery, runbooks | 5 to 7 weeks |
-| Phase 4 | Season-flip tooling and rehearsal, console identity bridges, live-ops tools | Ongoing |
+| Phase 4 | Season-flip tooling and rehearsal, console identity bridges, live-ops tools. **Built:**<br>- the console's `claim:preview`, `claim:checklist` and `variants:shipped`, and `deno task flip-rehearsal` (runbooks 4);<br>- live ops: `health`, `player`, the message of the day, flags, config, playlists, regions, builds and `identity:unlink` (runbooks 4a);<br>- `auth-console` with account linking (section 8.4);<br>- `api.get_config` now also returns flags, variants and the current Claim. | Ongoing |
 
 ## 27. Decisions to make
 

@@ -5,6 +5,7 @@
     "worker": "deno run -A worker/main.ts",
     "content": "deno run -A tools/load-content.ts",
     "admin": "deno run -A tools/admin.ts",
+    "flip-rehearsal": "deno run -A tools/flip-rehearsal.ts",
     "load-sim": "deno run -A tools/load-sim.ts",
     "test:unit": "deno test -A tests/unit/",
     "test:db": "supabase test db",
