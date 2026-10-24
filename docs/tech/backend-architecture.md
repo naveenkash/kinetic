@@ -1,6 +1,6 @@
 # KINETIC: Backend Architecture
 
-_Status: proposal v0.2, 2026-10-24. v0.2 rebuilds the backend on Supabase (Postgres, Auth, Realtime, Storage, Edge Functions, Cron, Queues) and drops Redis at launch. This is everything that runs outside a match: accounts, Steam login, crews, presence, matchmaking, server allocation, the Ledger, the economy, Contracts, Claims, moderation, rate limiting, config, telemetry and live-ops tooling. In-match networking is in [networking.md](networking.md) and is unchanged. Progression rules come from [bible/04-progression.md](../bible/04-progression.md); the screens that read this data are in [systems/menus-and-frontend.md](../systems/menus-and-frontend.md). Numbers design has not set yet are marked **PROPOSED**. Vendor limits and prices read on the date above are marked **CHECK**; Supabase's own pricing page is the authority._
+_Status: proposal v0.2, 2026-10-24. Phase 1 (section 26) is implemented in [backend/](../../backend/README.md) and passes its unit, database and full-loop tests on the local stack. v0.2 rebuilds the backend on Supabase (Postgres, Auth, Realtime, Storage, Edge Functions, Cron, Queues) and drops Redis at launch. This is everything that runs outside a match: accounts, Steam login, crews, presence, matchmaking, server allocation, the Ledger, the economy, Contracts, Claims, moderation, rate limiting, config, telemetry and live-ops tooling. In-match networking is in [networking.md](networking.md) and is unchanged. Progression rules come from [bible/04-progression.md](../bible/04-progression.md); the screens that read this data are in [systems/menus-and-frontend.md](../systems/menus-and-frontend.md). Numbers design has not set yet are marked **PROPOSED**. Vendor limits and prices read on the date above are marked **CHECK**; Supabase's own pricing page is the authority._
 
 ## 1. Principles
 
@@ -225,14 +225,14 @@ Supabase Auth owns sessions. Supabase has no Steam provider, so an Edge Function
 
 1. The client requests a Steam web API ticket for the identity string `kinetic-backend` and calls `POST /functions/v1/auth-steam` with the ticket and its build ID.
 2. `auth-steam` rate-limits by IP, then validates the ticket with the Steam Web API user-authentication endpoint using the publisher key held in function secrets. That returns the SteamID and ban flags (**CHECK** endpoint and fields in Steamworks docs).
-3. It looks up `identities` for `(steam, steamid)`. If none, it creates a Supabase Auth user through the admin API with a synthetic, never-mailed address (`<steamid>@steam.invalid`), then the `accounts`, `ledgers`, `wallets` and `identities` rows in one transaction.
+3. It looks up `identities` for `(steam, steamid)`. If none, it creates a Supabase Auth user through the admin API with a synthetic, never-mailed address (`steam-<steamid>@users.kinetic.invalid`) and `app_metadata` naming the provider and provider user id, then the game rows. Public signup is off on every project, and `srv_ensure_account` adopts an Auth user only if its `app_metadata` (writable only through the admin API) names exactly this identity, so nobody can pre-register a player's address and take over the account. If `createUser` fails because a simultaneous first login won the race, the function finds that user with a read-only lookup and continues; with no user at all it returns 503 and creates nothing.
 4. It checks `config.min_build` and account sanctions.
 5. It mints a Supabase session for that user server-side (section 8.2) and returns the access and refresh tokens.
 6. From then on the client refreshes through Supabase Auth's own refresh endpoint. The session works for the Data API, Edge Functions and Realtime alike.
 
 ### 8.2 Minting the session
 
-The pattern: the admin API generates a one-time magic-link token for the user, and the function immediately exchanges it for a session with `verifyOtp`, without sending any email. One user reports the same token being returned on repeated calls for the same user (a reported Supabase Auth issue), so this is the **first thing to prototype** in Phase 1 week 1, including two logins within a minute and logins from two machines.
+The pattern: the admin API generates a one-time magic-link token for the user, and the function immediately exchanges it for a session with `verifyOtp`, without sending any email. One user reports the same token being returned on repeated calls for the same user (a reported Supabase Auth issue), so this was the first thing prototyped. On the local stack (Supabase CLI 2.109) back-to-back logins for the same user work and the integration test covers it; repeat the check on the hosted project, including logins from two machines.
 
 If it proves unreliable, the fallback is to sign Supabase-compatible access tokens in `auth-steam` with the project's JWT signing key and manage KINETIC's own refresh tokens. That costs Supabase Auth's refresh and revocation handling, so it is the second choice.
 
@@ -254,7 +254,8 @@ If it proves unreliable, the fallback is to sign Supabase-compatible access toke
 | Topic | Type | Members | Carries |
 |---|---|---|---|
 | `user:<account_id>` | Private, Broadcast | That player | `crew_invite`, `match_found` (address plus join ticket), `match_processed`, `queue_reset`, notices |
-| `crew:<crew_id>` | Private, Broadcast and Presence | Crew members | Crew state changes, ready flags, crew text chat, who is online in the crew |
+| `crew:<crew_id>` | Private, receive only | Crew members | `crew_state` (members, picks, ready flags, the current `chat_topic`) and `queue_state`, sent by the server. Never the join code, which members read from `api.my_crew` |
+| `crew-chat:<crew_id>:<chat_key>` | Private, Broadcast and Presence | Crew members | Crew text chat and who is online. The chat key rotates whenever a member leaves |
 
 Realtime Authorization restricts who can join each topic:
 
@@ -271,7 +272,7 @@ create policy realtime_user_and_crew on realtime.messages
   );
 ```
 
-A matching `insert` policy allows crew members to send crew chat on their own crew topic only. Server-side messages (`match_found`, `match_processed`) are sent from database functions and the worker with `realtime.send(...)`, so a client can never forge them.
+Realtime checks access once per channel join, without the event name, so a topic is either writable by clients or not. The only client-writable topic is the crew-chat topic; server messages (`crew_state`, `queue_state`, `match_found`, `match_processed`) go on receive-only topics, sent from database functions and the worker with `realtime.send(...)`, so a client can never forge them. Because access is cached per join, removal is enforced by rotation: when a member leaves or is kicked the join code and chat key change, and a kicked player cannot rejoin by code for 10 minutes (**PROPOSED**; an invite from the crew overrides it).
 
 ### 9.2 Crews
 
@@ -334,7 +335,7 @@ allocating --ready--> waiting_for_players --all joined or 60 s--> in_progress --
      +--fail--> requeue       +--nobody joined--> aborted             +--no heartbeat 60 s--> aborted
 ```
 
-Heartbeat every 10 seconds; a Cron job every 15 seconds aborts matches whose heartbeat is older than 60 seconds and deallocates them. Leaver, idle, forfeit and dodge rules are canonical in game-modes section 8, and the backend enforces them:
+The heartbeat contract for any game server: heartbeat at boot and every 10 seconds until the report is sent. The backend marks a server ready on the first heartbeat after the worker has recorded its address (or when the worker records the address of a server that already heartbeated for the current attempt); each allocation attempt gets a new allocation id, so a server from an earlier attempt is refused. The worker's timeout pass, every tick, aborts matches whose heartbeat is older than 60 seconds and deallocates them. It also aborts a server that never reports ready within 90 seconds (those players go back to the queue in their original position) and a match nobody joins within 60 seconds of ready. Leaver, idle, forfeit and dodge rules are canonical in game-modes section 8, and the backend enforces them:
 
 | Rule (game-modes 8) | Backend action |
 |---|---|
@@ -365,7 +366,7 @@ Keys carry a key ID and rotate quarterly; servers receive the current and previo
 | `server-heartbeat` | Every 10 s | Updates `last_heartbeat_at`, state, connected players |
 | `server-player-event` | On join, leave, abandon | Updates `match_players`; feeds reconnect and abandon rules |
 | `server-upload-url` | At match end | Returns signed Storage upload URLs for the replay and raw events |
-| `server-report` | At match end | Validates and stores the report, enqueues it on `match_reports` (pgmq), sets the match to `reporting` |
+| `server-report` | At match end | Validates and stores the report and completes the match. Phase 2 adds the queue (pgmq) that the worker reads to pay rewards |
 
 The server writes its report to local disk before sending and retries with backoff for up to 24 hours.
 
@@ -522,7 +523,7 @@ Every variant already ships in the client and server build. The patch carrying b
 | Steam login | KINETIC limiter by IP and by SteamID in `auth-steam` | Ticket floods |
 | `api` functions | `private.hit_rate_limit` at the top of every write function | Everything a client can change |
 | Edge Functions | Same limiter through an RPC | Purchases, reconnect tickets, voice tokens |
-| Game-server endpoints | Per-match credential; heartbeat interval enforced | A leaked credential cannot flood other matches |
+| Game-server endpoints | Per-match credential; 60 calls per minute per endpoint per match | A leaked credential cannot flood the backend or touch other matches |
 | Fleet | Provider DDoS protection on game servers | UDP floods |
 
 ### 15.2 The limiter
@@ -556,7 +557,7 @@ A fixed window per key. Unlogged, so counters are cheap and are lost on a databa
 
 | Action | Key | Limit |
 |---|---|---|
-| Steam login | IP; SteamID | 10 per minute; 5 per minute |
+| Steam login | IP (the gateway's last `x-forwarded-for` hop, or the CDN header when `TRUST_CDN_IP` is set); SteamID | 10 per minute (`KINETIC_LOGIN_IP_LIMIT`); 5 per minute |
 | Queue join or cancel | account | 20 per minute |
 | Crew create, invite, accept, kick | account | 30 per minute |
 | Crew chat | account | 10 messages per 10 seconds |
@@ -611,6 +612,10 @@ Free-plan Storage is 1 GB, which holds only a short window of replays; set the r
 - Only the `api` schema is exposed; every `game` table has RLS enabled even though it is not exposed.
 - Every `security definer` function sets `search_path = ''` and schema-qualifies every name.
 - Publishable key in the client; secret key only in function secrets and the worker; no Supabase key on game servers.
+- Public signup off on every Supabase project; Auth users are adopted only through the `app_metadata` check (section 8.1).
+- Nothing is granted to `PUBLIC`: Postgres grants new functions to `PUBLIC` by default, so every migration that adds a function revokes and re-grants explicitly.
+- Game-server processes start with a clean environment: only their match settings, never the signing key, service key or database URL.
+- The worker's leader lock is held on its own direct database connection; losing that connection ends leadership at once.
 - Steam publisher key and KINETIC signing keys in function secrets; nothing secret in the game build.
 - Server and join tokens are Ed25519 with key IDs, rotated quarterly.
 - Supabase's database advisors (security and performance) run in CI against staging; any new warning fails the build.
@@ -638,9 +643,9 @@ Rough production backend cost at 1,000 concurrent players: $60 to $250 a month b
 ## 23. Local development on the Mac
 
 1. `supabase start` brings up Postgres, Auth, Data API, Realtime, Storage, Edge Functions runtime and Studio in Docker.
-2. `supabase db reset` applies migrations and `seed.sql` (catalog, playlists, a test Claim, two dev accounts).
-3. `supabase functions serve` runs the Edge Functions locally.
-4. `deno task worker` starts the worker with the `local` fleet adapter, which launches the Mac `KineticServer` build on a free port per match.
+2. `supabase db reset` applies migrations and `seed.sql` (config, regions, playlists).
+3. `deno task functions` serves the Edge Functions with the local secrets from `deno task keys`.
+4. `deno task worker` starts the worker with the `local` fleet adapter, which launches a game-server process on a free port per match: the fake server in `backend/tools/fake-server.ts` until the Mac `KineticServer` build exists. Local ports are 554xx so they do not clash with other local Supabase projects.
 5. The UE client (PIE or a packaged Mac build) points at the local URLs and logs in with the `dev` provider. The full loop (crew, queue, allocate, join, report, Ledger update, `match_processed` push) runs on one machine with no cloud account.
 
 ## 24. Unreal-side integration

@@ -1,0 +1,8 @@
+# Secrets: signing keys and provider keys. Generate with `deno task keys`.
+supabase/functions/.env
+.env
+.env.*
+!.env.example
+
+# Local fake-server logs
+.logs/

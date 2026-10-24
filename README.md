@@ -16,6 +16,7 @@ A complete pre-production design package: about 377,000 words across 165 documen
 | [docs/arenas/](docs/arenas/) | Four arenas, six documents each: overview, zone-by-zone layout with plans, prop manifest, events and moving parts, lighting and mood, signature plays. | [arenas/README.md](docs/arenas/README.md) |
 | [docs/systems/](docs/systems/) | HUD and front end, audio, VFX, animation, camera and controls, game modes, onboarding script. | [systems/README.md](docs/systems/README.md) |
 | [docs/tech/](docs/tech/) | UE5 architecture with verified citations: Spool and Line implementation, player physics, Chaos destruction, kinematics, networking, budgets, project structure, the backend, and the full tech stack plan. | [tech/README.md](docs/tech/README.md) |
+| [backend/](backend/) | Phase 1 backend code on Supabase: schema, Edge Functions, matchmaker worker, fake game server, tests. Runs on a Mac with Docker. | [backend/README.md](backend/README.md) |
 | [docs/production/](docs/production/) | Roadmap, team, art pipeline, risks, playtest plan, master asset list. | [roadmap-and-milestones.md](docs/production/roadmap-and-milestones.md) |
 
 ## The three sentences that hold it together
