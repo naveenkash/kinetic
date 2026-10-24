@@ -39,9 +39,13 @@ struct FPlayerLineResponse
 
 FPlayerBody PlayerBodyFor(const FHarnessTuning& Harness, bool bBraced, bool bGrounded);
 
+// Over this share of the line force upward, a pull that reaches the player's weight is a hoist.
+inline constexpr double HoistUpwardShare = 0.5;
+
 // Total line force on the player decides the footing: this step's Haul, Jack and Kick force
-// plus last step's Hang force (the Hang is solved after the forces). A push into the ground
-// does not count toward foot-hold. A Kick always lifts an unbraced grounded player into a
+// plus last step's Hang force (the Hang is solved after the forces). Foot-hold is judged on
+// the part of the force along the ground, lowered in proportion to the weight an upward pull
+// takes off the feet. A Kick always lifts an unbraced grounded player into a
 // flight body (spool-and-line section 3.3). A mostly upward pull that reaches the player's
 // weight unloads the feet: hoisted (bible/05 section 5.2).
 FPlayerLineResponse ResolvePlayerUnderLine(const FPlayerBody& Player, const FVec3& LineForce, bool bKickActive,

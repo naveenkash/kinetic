@@ -28,6 +28,7 @@ int FReferenceSim::AddBody(const FSimBody& Body)
 {
 	Bodies.push_back(Body);
 	LastHangForce.emplace_back();
+	LastActivePull.emplace_back();
 	return static_cast<int>(Bodies.size()) - 1;
 }
 
@@ -234,7 +235,8 @@ void FReferenceSim::SolveHangAndFloor(const FStepForces& Forces)
 	for (size_t I = 0; I < Bodies.size(); ++I)
 	{
 		const FSimBody& Body = Bodies[I];
-		Solve[I] = {Body.Position, Body.Velocity, HangInvMass(Body, Forces.ActivePull[I], Forces.BreakFreePull[I]), Body.FloorZ};
+		Solve[I] = {Body.Position, Body.Velocity, HangInvMass(Body, Forces.ActivePull[I], Forces.BreakFreePull[I]),
+		            HasFloorUnder(static_cast<int>(I)) ? Body.FloorZ : std::nullopt};
 	}
 	std::vector<FHangLine> HangLines;
 	std::vector<FSimLine*> Owners;
@@ -263,14 +265,24 @@ void FReferenceSim::SolveHangAndFloor(const FStepForces& Forces)
 		Body.Position = Solve[I].Position;
 		Body.Velocity = Solve[I].Velocity;
 		const bool bLifted = Body.FloorZ && Body.Position.Z > *Body.FloorZ + LiftOffHeight;
-		if (Body.Kind == ESimBodyKind::Player && Body.Player.bGrounded && bLifted)
+		const bool bOffLedge = Body.FloorZ && Body.FloorEndX && Body.Position.X > *Body.FloorEndX;
+		if (Body.Kind == ESimBodyKind::Player && Body.Player.bGrounded && (bLifted || bOffLedge))
 		{
-			Body.Player.bGrounded = false;  // Lifted off their feet by a Hang line (the Gallows)
+			// Lifted off their feet by a Hang line (the Gallows), or dragged off a ledge (5.1).
+			Body.Player.bGrounded = false;
 			Body.Player.bBraced = false;
 			Body.Footing = EFooting::Hoisted;
 			Body.AirborneAt = Now;
 		}
 	}
+}
+
+FVec3 FReferenceSim::LineForceOn(int Index) const { return LastActivePull.at(Index) + LastHangForce.at(Index); }
+
+bool FReferenceSim::HasFloorUnder(int Index) const
+{
+	const FSimBody& Body = Bodies.at(Index);
+	return Body.FloorZ.has_value() && (!Body.FloorEndX || Body.Position.X <= *Body.FloorEndX);
 }
 
 void FReferenceSim::ApplyCap(FSimBody& Body) const
@@ -288,6 +300,7 @@ void FReferenceSim::Step()
 	const FStepForces Forces = StepActiveLines();
 	Integrate(Forces);
 	SolveHangAndFloor(Forces);
+	LastActivePull = Forces.ActivePull;
 	for (FSimBody& Body : Bodies)
 	{
 		ApplyCap(Body);

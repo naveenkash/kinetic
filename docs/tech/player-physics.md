@@ -64,6 +64,19 @@ Entry and exit conditions, from 05 sections 5 and 7:
 
 Own-power jumping and falling stay in CMC's `Falling` mode with class air control. Only line-driven, impact-driven and force-volume-driven flight uses the flight body. Firing a Dog while airborne is allowed for every class; the Climber keeps full momentum and every other class loses 15 percent of horizontal speed per airborne fire (2.3), applied as a velocity scale on the flight body or on CMC `Falling` velocity. The Dragged skid accelerates the capsule at `F / m`, so the 3.3 mass split holds whether or not the feet leave the floor. The bible's 5.1 wording "they leave a ledge" applies to a player who is being dragged; a voluntary step off a ledge is CMC falling.
 
+### 2.1 Rulings the implementation needed (PROPOSED)
+
+The engine-free state machine ([game/Source/KineticCore/Public/Kinetic/PlayerState.h](../../game/Source/KineticCore/Public/Kinetic/PlayerState.h)) settles these; design should confirm or change them.
+
+- Foot-hold is judged on the part of the line force along the ground, and holds like friction: a line pulling up takes weight off the feet and lowers foot-hold in proportion, to nothing once it lifts the whole weight (then a mostly upward line hoists). Pulling down does not raise it. A flat pull is judged exactly as 5.3 says, and 5.3 and 5.4's examples hold at 30° up too.
+- Look and the Cutter stay live in every state but Stalled, so the panic window survives a stagger or a flip. The Spool is locked while Staggered or Flipped.
+- A stagger taken in the air keeps the player on the flight body; its timer runs, and landing after it has run out is a normal landing. A stagger on a perch or a ledge drops the player onto the flight body.
+- Landing at or over the stagger speed staggers (the flip, the tumble, belongs to hits in the air); landing at the Stall speed Stalls; a moving platform is judged on the kinematic table. Falls under the player's own power are judged too, on the contact speed or, when the floor appears without a contact report, on the vertical speed. Only a contact within 45° of up is a landing. Any such contact at the Stall speed Stalls, on either body, whatever else happens that step. The switch back to the capsule needs the line and any force volume to leave the player standing there, and waits out the step of a capsule-to-flight handoff and the step after, so the switch never bounces back. Contacts at or over the Flip speed still count while the handoff settles (4.2). A contact the player cannot stand on yet ends a flip, and a hard one staggers, on the flight body; while staggered, only a contact at the Flip speed restarts the stagger. On the capsule, only a walkable contact is floor.
+- Stagger times: 0.6 s; a Hang line hit uses the line owner's class value (Rigger 1.0 s); overspin recoil 0.8 s; a Cutter melee 0.3 s.
+- One perch per time in the air; standing again, however the player got there, gives it back. A perch ends at 1.5 s, on release, or when a line or force volume pulls harder than the Climber's foot-hold; it drops the player under their own power.
+- A ledge is grabbed only falling, at under 8 m/s in all (a player pulled past it fast does not get it). Jumping from a ledge hang climbs up; the drop input (crouch, by default) lets go.
+- A body in the Anchor's Well that never falls clear of the volume despawns 10 s after the Stall.
+
 ## 3. Handoff between bodies
 
 Grounded to Airborne (server and owning client both run this):

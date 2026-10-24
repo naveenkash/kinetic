@@ -31,6 +31,7 @@ struct FSimBody
 	double MassKg = 1.0;
 	bool bGravity = false;
 	std::optional<double> FloorZ;  // A frictionless floor at this height
+	std::optional<double> FloorEndX;  // The floor ends here: a ledge (it covers x <= FloorEndX)
 	FPlayerBody Player;            // Kind == Player
 	FObjectBody Object;            // Kind == Object
 	bool bSmallPropBonus = false;  // Objects only: see IsSmallPropBonusTarget
@@ -72,6 +73,8 @@ public:
 	double StepSeconds() const { return Dt; }
 	const FSimBody& Body(int Index) const { return Bodies.at(Index); }
 	int BodyCount() const { return static_cast<int>(Bodies.size()); }
+	FVec3 LineForceOn(int Index) const;  // Last step's line force: Haul, Jack and Kick plus Hang
+	bool HasFloorUnder(int Index) const;
 	const FSimLine& Line(int Index) const { return Lines.at(Index); }
 
 private:
@@ -98,7 +101,8 @@ private:
 	double Now = 0.0;
 	std::vector<FSimBody> Bodies;
 	std::vector<FSimLine> Lines;
-	std::vector<FVec3> LastHangForce;  // Previous step's Hang force per body: the footing mailbox
+	std::vector<FVec3> LastHangForce;    // Previous step's Hang force per body: the footing mailbox
+	std::vector<FVec3> LastActivePull;  // Previous step's Haul, Jack and Kick force per body
 };
 
 // The panic-window bench (project-structure section 8): a Haul on a grounded victim from a

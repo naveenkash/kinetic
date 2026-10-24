@@ -6,8 +6,6 @@ namespace Kinetic
 {
 namespace
 {
-// Below this, "the line pulls upward" is not a hoist: a hoist needs most of the force vertical.
-constexpr double HoistUpwardShare = 0.5;
 // Floating-point slack for hold timers that should land exactly on a step boundary.
 constexpr double TimeEpsilon = 1e-9;
 } // namespace
@@ -21,8 +19,13 @@ FPlayerLineResponse ResolvePlayerUnderLine(const FPlayerBody& Player, const FVec
                                            double Gravity)
 {
 	const double FreeInvMass = 1.0 / Player.MassKg;
-	// A push into the ground loads the feet; it does not count toward foot-hold.
-	const double ForceN = (LineForce - Up * std::min(LineForce.Dot(Up), 0.0)).Length();
+	// Foot-hold is judged on the pull along the ground, and holds like friction: a line pulling
+	// up takes weight off the feet and lowers foot-hold in proportion, to nothing once it lifts
+	// the whole weight (the hoist below); pulling down does not raise it (PROPOSED: 5.3's
+	// examples are all along the ground). A flat pull is judged exactly as 5.3 says.
+	const double Upward = LineForce.Dot(Up);
+	const double ForceN = (LineForce - Up * Upward).Length();
+	const double Unloaded = std::clamp(Upward / (Player.MassKg * Gravity), 0.0, 1.0);
 	const double Acceleration = ForceN / Player.MassKg;
 	FPlayerLineResponse Out;
 
@@ -34,22 +37,21 @@ FPlayerLineResponse ResolvePlayerUnderLine(const FPlayerBody& Player, const FVec
 	}
 	if (Player.bBraced)
 	{
-		if (Acceleration <= Player.BracedFootHold)
+		if (Acceleration <= Player.BracedFootHold * (1.0 - Unloaded))
 		{
 			Out.Footing = EFooting::Braced;  // Static to this line, the Kick included
 			return Out;
 		}
 		Out.bBraceBroken = true;  // Over the brace foot-hold: the body is free
 	}
-	const double Upward = LineForce.Dot(Up);
 	const bool bFeetUnloaded = Upward >= Player.MassKg * Gravity;
-	if (!bKickActive && bFeetUnloaded && Upward > HoistUpwardShare * ForceN)
+	if (!bKickActive && bFeetUnloaded && Upward > HoistUpwardShare * LineForce.Length())
 	{
 		Out.Footing = EFooting::Hoisted;
 		Out.InvMass = FreeInvMass;
 		return Out;
 	}
-	if (bKickActive || Out.bBraceBroken || Acceleration > Player.FootHold)
+	if (bKickActive || Out.bBraceBroken || Acceleration > Player.FootHold * (1.0 - Unloaded))
 	{
 		Out.Footing = EFooting::Airborne;
 		Out.InvMass = FreeInvMass;
