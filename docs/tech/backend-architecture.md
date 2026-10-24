@@ -1,6 +1,6 @@
 # KINETIC: Backend Architecture
 
-_Status: proposal v0.2, 2026-10-24. v0.2 rebuilds the backend on Supabase (Postgres, Auth, Realtime, Storage, Edge Functions, Cron, Queues) and drops Redis at launch. This is everything that runs outside a match: accounts, Steam login, crews, presence, matchmaking, server allocation, the Ledger, the economy, Contracts, Claims, moderation, rate limiting, config, telemetry and live-ops tooling. In-match networking is in [networking.md](networking.md) and is unchanged. Progression rules come from [bible/04-progression.md](../bible/04-progression.md); the screens that read this data are in [systems/menus-and-frontend.md](../systems/menus-and-frontend.md). Numbers design has not set yet are marked **PROPOSED**. Vendor limits and prices read on the date above are marked **CHECK**; Supabase's own pricing page is the authority ([supabase.com/pricing](https://supabase.com/pricing))._
+_Status: proposal v0.2, 2026-10-24. v0.2 rebuilds the backend on Supabase (Postgres, Auth, Realtime, Storage, Edge Functions, Cron, Queues) and drops Redis at launch. This is everything that runs outside a match: accounts, Steam login, crews, presence, matchmaking, server allocation, the Ledger, the economy, Contracts, Claims, moderation, rate limiting, config, telemetry and live-ops tooling. In-match networking is in [networking.md](networking.md) and is unchanged. Progression rules come from [bible/04-progression.md](../bible/04-progression.md); the screens that read this data are in [systems/menus-and-frontend.md](../systems/menus-and-frontend.md). Numbers design has not set yet are marked **PROPOSED**. Vendor limits and prices read on the date above are marked **CHECK**; Supabase's own pricing page is the authority._
 
 ## 1. Principles
 
@@ -51,7 +51,7 @@ A one-page version with Mermaid diagrams and Simplified Technical English text i
 
 | Need | Supabase feature | Used for | Free plan (**CHECK**) | When to upgrade |
 |---|---|---|---|---|
-| Database | Postgres | Everything durable | 500 MB, shared CPU, 500 MB RAM; paused after 1 week of inactivity; no backups ([pricing](https://supabase.com/pricing)) | Before any data you cannot lose: Pro is $25 a month with 8 GB, daily backups and a $10 compute credit ([pricing guide](https://www.jetadmin.io/blog/supabase-pricing-2026-guide-to-plans-limits-and-real-world-costs/)) |
+| Database | Postgres | Everything durable | 500 MB, shared CPU, 500 MB RAM; paused after 1 week of inactivity; no backups | Before any data you cannot lose: Pro is $25 a month with 8 GB, daily backups and a $10 compute credit |
 | Accounts and sessions | Auth | Session and refresh tokens for every player; MFA for staff; account bans | 50,000 monthly active users | Pro includes 100,000 |
 | Steam login | Not provided: Steam uses OpenID 2.0 and web API tickets, not a Supabase provider | Edge Function `auth-steam` (section 8) | | |
 | Data access | Data API (PostgREST) with RLS | Reads through `api` views; writes through `api` functions | Unlimited API requests | |
@@ -82,7 +82,7 @@ A one-page version with Mermaid diagrams and Simplified Technical English text i
 | Matchmaker leader lock | Postgres advisory lock |
 | WebSocket fan-out | Realtime |
 
-**Add Redis (Upstash, serverless) when any of these is measured:** rate-limit and ticket writes reach a noticeable share of database CPU; matchmaking tickets churn faster than a few hundred updates a second; or Edge Functions need a limiter that does not touch the database. Upstash's free tier is 256 MB and 500,000 commands a month, which covers testing only; pay-as-you-go is about $0.20 per 100,000 commands ([Upstash comparison](https://upstash.com/blog/upstash-vs-redis-cloud-a-2026-comparison); **CHECK**). The limiter in section 15 has the same interface either way, so the switch is one module.
+**Add Redis (Upstash, serverless) when any of these is measured:** rate-limit and ticket writes reach a noticeable share of database CPU; matchmaking tickets churn faster than a few hundred updates a second; or Edge Functions need a limiter that does not touch the database. Upstash's free tier is 256 MB and 500,000 commands a month, which covers testing only; pay-as-you-go is about $0.20 per 100,000 commands (**CHECK**). The limiter in section 15 has the same interface either way, so the switch is one module.
 
 ## 5. Projects, environments and repository
 
@@ -232,7 +232,7 @@ Supabase Auth owns sessions. Supabase has no Steam provider, so an Edge Function
 
 ### 8.2 Minting the session
 
-The pattern: the admin API generates a one-time magic-link token for the user, and the function immediately exchanges it for a session with `verifyOtp`, without sending any email. One user reports the same token being returned on repeated calls for the same user ([supabase/gotrue#1357](https://github.com/supabase/gotrue/issues/1357)), so this is the **first thing to prototype** in Phase 1 week 1, including two logins within a minute and logins from two machines.
+The pattern: the admin API generates a one-time magic-link token for the user, and the function immediately exchanges it for a session with `verifyOtp`, without sending any email. One user reports the same token being returned on repeated calls for the same user (a reported Supabase Auth issue), so this is the **first thing to prototype** in Phase 1 week 1, including two logins within a minute and logins from two machines.
 
 If it proves unreliable, the fallback is to sign Supabase-compatible access tokens in `auth-steam` with the project's JWT signing key and manage KINETIC's own refresh tokens. That costs Supabase Auth's refresh and revocation handling, so it is the second choice.
 
@@ -601,7 +601,7 @@ Free-plan Storage is 1 GB, which holds only a short window of replays; set the r
 | Phase 0 | Local CLI only | None | $0 |
 | Phase 1 (Steam Playtest) | `kinetic-dev` and `kinetic-staging` on Free | Worker on a small container host, a few dollars a month (**CHECK**) | Free projects pause after a week idle and have no backups; acceptable for playtest data only |
 | Phase 2 | Same, plus a Pro `kinetic-prod` once any data must persist: $25 a month with a $10 compute credit | Same | Pro adds daily backups |
-| Phase 3 (1,000-player beta) | Pro with Small or Medium compute ($15 or $60 a month instance; credit applies) plus Realtime connections beyond the included amount ([pricing guide](https://www.jetadmin.io/blog/supabase-pricing-2026-guide-to-plans-limits-and-real-world-costs/); **CHECK**) | Two worker instances; voice vendor | Point-in-time recovery is a paid add-on; buy it before real money flows |
+| Phase 3 (1,000-player beta) | Pro with Small or Medium compute ($15 or $60 a month instance; credit applies) plus Realtime connections beyond the included amount (**CHECK**) | Two worker instances; voice vendor | Point-in-time recovery is a paid add-on; buy it before real money flows |
 | Live | Compute and Realtime scale with players | Upstash Redis only if section 4's triggers are met | Game-server hosting dominates total cost ([tech-stack-plan.md](tech-stack-plan.md) section 11) |
 
 Rough production backend cost at 1,000 concurrent players: $60 to $250 a month before point-in-time recovery, mostly compute and Realtime connections (**PROPOSED** estimate; confirm on Supabase's calculator).

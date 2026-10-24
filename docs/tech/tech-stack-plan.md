@@ -135,7 +135,7 @@ Scale: 73 objects, 5 harnesses, 10 Faces, 5 NPC types and 4 arenas ([asset-maste
 
 ## 8. Source control, CI and build distribution
 
-**Source control.** Perforce P4 as decided in [project-structure.md](project-structure.md) section 6. The free tier is 5 users and 20 workspaces ([Perforce](https://www.perforce.com/products/helix-core/free-version-control)); above that the cloud plan was listed at $39 per user per month (**CHECK**). Host it on a small cloud VM with nightly checkpoint and depot backups to object storage, or on a local machine with off-site backups. A one-person project can run Git with LFS and file locking instead, but switches to Perforce before the first artist joins.
+**Source control.** Perforce P4 as decided in [project-structure.md](project-structure.md) section 6. The free tier is 5 users and 20 workspaces; above that the cloud plan was listed at $39 per user per month (**CHECK**). Host it on a small cloud VM with nightly checkpoint and depot backups to object storage, or on a local machine with off-site backups. A one-person project can run Git with LFS and file locking instead, but switches to Perforce before the first artist joins.
 
 **The docs repository.** The design package is in Git today. The CI table check needs to read the bible. Either move `docs/` into the depot as `//Kinetic/main/docs` and keep the Git repository read-only, or mirror Git into Perforce on every commit. Pick one before the first data table exists.
 
@@ -158,7 +158,7 @@ Scale: 73 objects, 5 harnesses, 10 Faces, 5 NPC types and 4 arenas ([asset-maste
 |---|---|
 | Client form | A native desktop (and later console) game client. Not a web app: UE5 has no browser export, and Pixel Streaming from the cloud adds a video round trip on top of the network one, which breaks the panic window and costs a GPU per player. Web is for companion pieces only: the marketing site, a read-only Ledger and Claims season map, and internal admin tools |
 | Launch platform | PC first, on Steam |
-| Unreal royalty | 5% of gross revenue above the first $1M lifetime per product, under the standard Unreal Engine EULA ([EULA change log](https://www.unrealengine.com/en-US/eula-change-log/unreal); **CHECK** against the EULA in force) |
+| Unreal royalty | 5% of gross revenue above the first $1M lifetime per product, under the standard Unreal Engine EULA (**CHECK** against the EULA in force) |
 | Store fees | Steam takes 30% at first, stepping down at revenue thresholds (**CHECK**) |
 | Crossplay and cross-progression | The KINETIC account links platform identities (backend-architecture section 8); everything keys on the KINETIC account ID; platform policies on cross-purchase and cross-currency apply per console |
 | Consoles | Apply to PlayStation Partners, ID@Xbox and the Nintendo developer portal well before Phase 3. After approval, the Unreal Engine console platform code is released to the approved studio. Budget dev kits, a TRC/XR/Lotcheck pass per platform, and two to three months for a first certification |
@@ -182,7 +182,7 @@ Scale: 73 objects, 5 harnesses, 10 Faces, 5 NPC types and 4 arenas ([asset-maste
 
 ### 11.1 Hosting per match
 
-From [networking.md](networking.md) section 3 and Edgegap's January 2025 published rates ($0.00115 per vCPU-minute, $0.10 per GB egress; [Edgegap](https://edgegap.com/blog/announcement-offering-changes-for-2025); **CHECK**, rates may have changed):
+From [networking.md](networking.md) section 3 and Edgegap's January 2025 published rates ($0.00115 per vCPU-minute, $0.10 per GB egress; **CHECK**, rates may have changed):
 
 | Item | Per match-hour (6 players, 2 vCPU) |
 |---|---|
