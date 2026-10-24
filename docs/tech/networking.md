@@ -4,7 +4,7 @@ _Status: proposal v0.1, 2026-10-24. Engine: UE 5.8.x. Player counts and timings 
 
 ## 1. Model
 
-Dedicated server, authoritative over all physics outcomes. Clients send inputs, predict their own character, Dog, line and flight body, and interpolate everything else. No listen servers, no peer-to-peer. EOS relays are for P2P and are not a dedicated-server substitute ([Edgegap and EOS](https://edgegap.com/blog/can-epic-online-services-eos-relays-allow-for-dedicated-server-or-authoritative-server)).
+Dedicated server, authoritative over all physics outcomes. Clients send inputs, predict their own character, Dog, line and flight body, and interpolate everything else. No listen servers, no peer-to-peer, no relays.
 
 Player counts: 6 for Scrap, Claim and Haul (3v3); 8 for Free Scrap. 3v3v3 (9 players) is post-launch per the bible v0.2.1 rulings. Budgets below are computed for 6 and 8; 9 is noted where it changes a number.
 
@@ -115,18 +115,14 @@ Automated test at 30, 80 and 150 ms simulated RTT with 20 ms jitter, 20 trials e
 
 ## 8. Matchmaking and session flow
 
-Epic Online Services provides identity, lobbies, sessions, stats, voice and Easy Anti-Cheat at no charge; it does not host servers ([Edgegap and EOS](https://edgegap.com/blog/can-epic-online-services-eos-relays-allow-for-dedicated-server-or-authoritative-server)). The EOS documentation pages themselves could not be fetched during this review, so the EOS-side specifics below are taken from Unreal's Online Services documentation and third-party integration guides and must be confirmed against the EOS SDK docs before implementation.
+KINETIC runs its own backend for identity, crews, matchmaking, allocation and results; no platform-vendor online services are used. The full design is [backend-architecture.md](backend-architecture.md). The in-match side of the flow:
 
-Flow:
-
-1. **Identity**: EOS Auth with platform accounts. Crews are EOS Lobbies (player-created, voice, host migration; lobbies vs sessions per [Edgegap guide](https://edgegap.com/blog/eos-lobbies-vs-sessions-and-how-to-add-matchmaking)).
-2. **Matchmaking**: a thin project matchmaker service (or the fleet provider's matchmaker). Inputs: crew lobby, mode, region ping table, skill. It is not an EOS feature; EOS Sessions offer search and the `StartMatchmaking` convenience that searches then creates a session ([Unreal Sessions interface, Beta](https://dev.epicgames.com/documentation/unreal-engine/sessions-interface-in-unreal-engine)), which is not skill matchmaking.
-3. **Allocation**: the matchmaker asks the fleet (Edgegap, AWS GameLift, or Agones on our own Kubernetes) for a server in the chosen region. Hathora is reported to have shut down in May 2026 and Unity Multiplay ended direct support in March 2026 ([secondary source](https://tech-insider.org/gameye-vs-edgegap-vs-aws-gamelift-2026/)); both are off the list pending confirmation.
-4. **Session**: the dedicated server creates an EOS Session with the match attributes and registers players as they connect; it unregisters on disconnect. Registration is manual in the current Online Services interface ([Unreal Sessions interface](https://dev.epicgames.com/documentation/unreal-engine/sessions-interface-in-unreal-engine); [Redpoint guide](https://docs.redpoint.games/eos-online-subsystem/docs/sessions_creating)).
-5. **Join**: clients travel to the connect string, authenticate with an EOS ticket, pass the EAC handshake.
-6. **End**: results to EOS Stats and the Ledger service; the session is destroyed; the server is returned to the fleet.
-
-Easy Anti-Cheat client and server modules via EOS. Confirm the dedicated-server integration path in the EOS SDK docs.
+1. **Identity**: the client exchanges a Steam web API ticket for a Supabase Auth session through the `auth-steam` function (backend-architecture section 8).
+2. **Crews and matchmaking**: crews of one to three queue with mode, region ping table and rating; the KINETIC matchmaker pairs teams under the 150 ms cap (backend-architecture section 10).
+3. **Allocation**: the matchmaker asks the fleet (Edgegap, AWS GameLift, or Agones on our own Kubernetes) for a server in the chosen region through one adapter interface. Hathora is reported to have shut down in May 2026 and Unity Multiplay ended direct support in March 2026 ([secondary source](https://tech-insider.org/gameye-vs-edgegap-vs-aws-gamelift-2026/)); both are off the list pending confirmation.
+4. **Manifest**: the dedicated server boots, fetches the match manifest (roster, validated loadouts, arena variant, rules) with a credential bound to that match, and reports ready.
+5. **Join**: clients travel to the connect string with a backend-signed join ticket. The server verifies the signature locally in `PreLogin` and checks the roster; no backend round trip on join. Reconnects fetch a fresh ticket.
+6. **End**: the server posts one match report of facts to the backend, uploads the replay and raw events, and is returned to the fleet.
 
 ## 9. Region strategy
 
@@ -150,5 +146,5 @@ Easy Anti-Cheat client and server modules via EOS. Confirm the dedicated-server 
 | Speed or tension hacks | Tension and ramps are server data; clients predict with the same table but the server's line state wins |
 | Wallhack on lines | Lines are the game's intended readable; nothing to hide. Enemy positions are needed for interpolation; the arenas are small. Accept |
 | Physics misprediction farming | Per-player correction statistics; flag systematic favourable corrections |
-| Server-side bots or DoS | Fleet provider DDoS protection; EOS auth tickets; connection rate limits |
-| Memory tampering | Easy Anti-Cheat client module |
+| Server-side bots or DoS | Fleet provider DDoS protection; backend-signed join tickets checked against the roster; connection rate limits |
+| Memory tampering | Server authority limits what tampering can change; commercial client anti-cheat evaluated in Phase 3 (backend-architecture section 16) |

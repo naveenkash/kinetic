@@ -11,9 +11,12 @@ _v0.1, 2026-10-24. Target engine: Unreal Engine 5.8.x. The gameplay bible in `do
 | [player-physics.md](player-physics.md) | Two-body character, CMC vs Mover decision, state machine, impact detection, crush test, Stall sequence, ring-out, Brace, Perch, mantle, ledge grab, airborne prediction, anti-cheat |
 | [chaos-destruction.md](chaos-destruction.md) | Geometry collection mapping per destructible, unit conversion, cluster strategy, anchor fields, scripted events, pooling, rated-load consequences, replication, Nanite, budgets, artist workflow |
 | [kinematics-and-force-volumes.md](kinematics-and-force-volumes.md) | Time-synced kinematic actors, carried objects and the tilted hull, force volumes, tell scheduling |
-| [networking.md](networking.md) | Dedicated server, tick rates, bandwidth arithmetic, priority, prediction per class, panic-window fairness, lag compensation, EOS session flow, regions, replays, cheat surfaces |
+| [networking.md](networking.md) | Dedicated server, tick rates, bandwidth arithmetic, priority, prediction per class, panic-window fairness, lag compensation, session flow with the KINETIC backend, regions, replays, cheat surfaces |
 | [performance-budgets.md](performance-budgets.md) | Platform tiers, frame budgets, object caps, memory, World Partition, scalability, profiling plan |
 | [project-structure.md](project-structure.md) | Modules, folders, naming, data tables, Blueprint vs C++, Perforce, CI, editor tools |
+| [backend-architecture.md](backend-architecture.md) | KINETIC's backend on Supabase: schemas and RLS, data model, Steam login bridge, crews and Realtime channels, matchmaker and allocation, game-server endpoints, match reports, Ledger, economy, Contracts, Claims and the season flip, rate limiting, Redis policy, moderation, privacy, security, cost, Mac local dev, build order |
+| [backend-architecture-diagram.md](backend-architecture-diagram.md) | One-page backend view: Mermaid system and match-flow diagrams, description and safety rules in ASD-STE100 Simplified Technical English |
+| [tech-stack-plan.md](tech-stack-plan.md) | The whole stack around the engine: workstations, week 0 setup, backend and live services, telemetry, content tools, CI and release, platforms, legal, hosting cost, build order, new decisions |
 
 ## Key engine findings (verified 2026-10-24)
 
@@ -25,7 +28,7 @@ _v0.1, 2026-10-24. Target engine: Unreal Engine 5.8.x. The gameplay bible in `do
 6. PhysicsConstraintComponent has linear limits, soft constraints, breakable thresholds, plasticity and position/velocity drives, but community reports say its break event is unreliable; Cable Component is cosmetic and applies no force; Physics Control drives bodies toward targets. None of them is a line between two arbitrary bodies with slip, so the line is a custom physics-thread constraint.
 7. Chaos Vehicles is a wheeled suspension sim still under the Experimental plugin folder with wheel outputs not replicated. Haulers are kinematic splines.
 8. Async fixed-step physics is required by networked physics and Chaos Mover, yet the Physics Settings page still labels it experimental. The docs disagree with themselves; the feature is in use.
-9. EOS provides identity, lobbies, sessions, stats, voice and Easy Anti-Cheat but no dedicated-server hosting. Hosting goes to Edgegap, AWS GameLift or Agones; Hathora and Unity Multiplay are reported closed in 2026. Bandwidth, not CPU, is the server cost driver.
+9. Online services are KINETIC's own backend on Supabase ([backend-architecture.md](backend-architecture.md)); Steam is used only for login tickets, overlay invites and payments. Hosting goes to Edgegap, AWS GameLift or Agones; Hathora and Unity Multiplay are reported closed in 2026. Bandwidth, not CPU, is the server cost driver.
 10. Lumen, Nanite and VSM have been positioned for 60 fps on current consoles since 5.1; VSM is "still actively being developed" and wants Nanite geometry; Lumen Lite is Beta in 5.8. MetaSounds is labelled Beta on its 5.8 quick start despite wide use.
 
 ## Contradictions found in the bible
@@ -71,7 +74,7 @@ Resolved by the 2026-10-24 bible v0.2 and v0.2.1 changelogs and no longer open: 
 
 ## Research citations
 
-All accessed 2026-10-24. Epic documentation pages render for UE 5.8 unless noted. Several Epic pages (Physics Control overview, GeometryCollectionComponent C++ reference, Mover vs CMC comparison, EOS game-services pages, 5.8 and 5.1 news posts) returned only a table of contents or an HTTP error during this review; where that happened the nearest fetchable page or a clearly labelled secondary source is cited instead.
+All accessed 2026-10-24. Epic documentation pages render for UE 5.8 unless noted. Several Epic pages (Physics Control overview, GeometryCollectionComponent C++ reference, Mover vs CMC comparison, 5.8 and 5.1 news posts) returned only a table of contents or an HTTP error during this review; where that happened the nearest fetchable page or a clearly labelled secondary source is cited instead.
 
 **Engine releases**
 - UE 5.8 release notes: https://dev.epicgames.com/documentation/unreal-engine/unreal-engine-5-8-release-notes
@@ -146,10 +149,6 @@ All accessed 2026-10-24. Epic documentation pages render for UE 5.8 unless noted
 - Rocket League 120 Hz physics, 60 Hz network (community): https://steamcommunity.com/app/252950/discussions/0/1693788202025800838
 
 **Online services and hosting**
-- Unreal Online Services Sessions interface (Beta): https://dev.epicgames.com/documentation/unreal-engine/sessions-interface-in-unreal-engine
-- Edgegap: EOS relays and dedicated servers: https://edgegap.com/blog/can-epic-online-services-eos-relays-allow-for-dedicated-server-or-authoritative-server
-- Edgegap: EOS Lobbies vs Sessions and matchmaking: https://edgegap.com/blog/eos-lobbies-vs-sessions-and-how-to-add-matchmaking
-- Redpoint: registering players on dedicated servers: https://docs.redpoint.games/eos-online-subsystem/docs/sessions_creating
 - Edgegap vs AWS GameLift (vendor pricing and regions): https://edgegap.com/comparison/edgegap-vs-aws-gamelift
 - Edgegap vs Agones: https://edgegap.com/comparison/edgegap-vs-agones
 - Gameye cost comparison (vendor; GameLift egress note): https://gameye.com/cost-comparison/

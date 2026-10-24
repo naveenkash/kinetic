@@ -168,5 +168,5 @@ Air control is the only input that moves an airborne player, and it is small (0.
 - Threshold evaluation, Stall, ring-out, seat, cut and break-free are server-only. A client claiming a cut sends the swing frame and camera rotation; the server reruns the cone test from its own line state at that frame.
 - Camera rotation rate is clamped server-side at 3,000 degrees per second for the cut cone test, so a scripted instant turn-and-cut is rejected.
 - Catch Plate rewind is capped at 150 ms; a client reporting an older frame gets a present-time test.
-- Easy Anti-Cheat via EOS for the client and server modules. EOS documentation pages could not be fetched directly during this review; the services list is confirmed by third-party integration guides ([Edgegap](https://edgegap.com/blog/eos-lobbies-vs-sessions-and-how-to-add-matchmaking)). Confirm the EAC server-side integration against the EOS SDK docs before committing.
+- Client anti-cheat: server authority is the primary defense; a commercial client anti-cheat is evaluated in Phase 3 ([backend-architecture.md](backend-architecture.md) section 16). Statistical detection of impossible match facts runs in the backend.
 - Physics mispredictions are logged per player; a client whose corrections are systematically in its favour (lower impact speeds, later ring-outs) is flagged for review.

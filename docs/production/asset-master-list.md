@@ -24,9 +24,9 @@ _Generated 2026-10-24 from docs/. Regenerate with python3 docs/production/genera
 | Arena: Hangtown | 6 | 21,427 |
 | Arena: The Anchor | 6 | 19,137 |
 | Systems (UI, audio, VFX, animation, camera, modes, onboarding) | 9 | 26,271 |
-| Technical architecture (UE5) | 9 | 25,103 |
-| Production | 7 | 10,278 |
-| **Total (with folder indexes)** | **161** | **359,591** |
+| Technical architecture (UE5) | 12 | 37,717 |
+| Production | 7 | 10,412 |
+| **Total (with folder indexes)** | **164** | **372,413** |
 
 ## Bible (canonical world, factions, arenas, progression, mechanics)
 
@@ -295,12 +295,14 @@ _9 files, about 26,271 words._
 
 ## Technical architecture (UE5)
 
-_9 files, about 25,103 words._
+_12 files, about 37,717 words._
 
 | File | Title | Summary |
 |---|---|---|
 | [README.md](tech/README.md) | KINETIC Technical Documentation | 1. UE 5.8 shipped 2026-06-17 with hotfixes through at least 5.8.4. Epic's 5.8 notes mark Iris, MegaLights and Dataflow production-ready and the Physics Control … |
 | [architecture-overview.md](tech/architecture-overview.md) | KINETIC Technical Architecture: Overview | Six players (eight in Free Scrap) on a dedicated server. Every elimination is a physics event: a Stall threshold crossed by relative speed, impulse, crush force… |
+| [backend-architecture-diagram.md](tech/backend-architecture-diagram.md) | KINETIC: Backend Architecture Diagram | flowchart TB |
+| [backend-architecture.md](tech/backend-architecture.md) | KINETIC: Backend Architecture | 1. The dedicated server is the only source of match truth. Clients never report results, Tonnage, Contract counts or Claim standing. The backend accepts those o… |
 | [chaos-destruction.md](tech/chaos-destruction.md) | KINETIC: Chaos Destruction | - Geometry Collections (GCs) are built in Fracture Mode with the Uniform, Cluster, Radial, Planar, Slice, Brick (experimental), Mesh and Custom tools. Each frac… |
 | [kinematics-and-force-volumes.md](tech/kinematics-and-force-volumes.md) | KINETIC: Kinematics, Force Volumes and Tells | Haulers, the Gantry, the Maintenance Ring, the Lift and its counterweight, the Breathing hull and the Shear Press ram are AKineticKinematicActor. Infinite mass,… |
 | [networking.md](tech/networking.md) | KINETIC: Networking | Dedicated server, authoritative over all physics outcomes. Clients send inputs, predict their own character, Dog, line and flight body, and interpolate everythi… |
@@ -308,10 +310,11 @@ _9 files, about 25,103 words._
 | [player-physics.md](tech/player-physics.md) | KINETIC: Player Physics | Only one of the first two is in the simulation at a time. The other is disabled (collision off, not ticking). The visual ragdoll is driven toward the flight bod… |
 | [project-structure.md](tech/project-structure.md) | KINETIC: Project Structure | Build targets: KineticEditor, KineticGame, KineticServer, KineticClient. The server target compiles without Niagara and MetaSound runtime content. |
 | [spool-and-line-implementation.md](tech/spool-and-line-implementation.md) | KINETIC: Spool and Line Implementation | The solver runs inside a Chaos::TSimCallbackObject registered with rewind support so it participates in networked physics resimulation. Epic's 5.8 overview stat… |
+| [tech-stack-plan.md](tech/tech-stack-plan.md) | KINETIC: Tech Stack and Implementation Plan | 1. Team size decides the tooling. The roadmap assumes five core people in Phase 0 and about fifteen by Phase 1 ([team-and-roles.md](../production/team-and-roles… |
 
 ## Production
 
-_7 files, about 10,278 words._
+_7 files, about 10,412 words._
 
 | File | Title | Summary |
 |---|---|---|

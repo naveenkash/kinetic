@@ -7,10 +7,11 @@ _Status: proposal v0.1, 2026-10-24. Engine: UE 5.8.x. The data-table schemas mir
 | Module | Type | Depends on | Contents |
 |---|---|---|---|
 | `KineticCore` | Runtime | Engine, Chaos, PhysicsCore, NetCore | Shared types (`FLineState`, tiers, thresholds), data-table row structs, the line solver (`FKineticLineSolver`), Impact Monitor, unit conversion, timeline evaluation. No gameplay actors. Unit-testable headless |
-| `KineticGameplay` | Runtime | KineticCore, GameplayAbilities, GameplayTags, Niagara, MetasoundEngine, GeometryCollectionEngine, FieldSystemEngine, PhysicsControl | Characters, Spool, Dog, Line, Cutter, flight body, kinematic actors, force volumes, Destruction Director, Tell Scheduler, match modes, replay hooks, EOS session glue |
+| `KineticGameplay` | Runtime | KineticCore, GameplayAbilities, GameplayTags, Niagara, MetasoundEngine, GeometryCollectionEngine, FieldSystemEngine, PhysicsControl | Characters, Spool, Dog, Line, Cutter, flight body, kinematic actors, force volumes, Destruction Director, Tell Scheduler, match modes, replay hooks |
 | `KineticUI` | Runtime | KineticGameplay, UMG, CommonUI | HUD, edge indicator, Scrap Cards, Ledger, menus, LayCast overlay |
 | `KineticEditor` | Editor | KineticGameplay, UnrealEd, EditorSubsystem, ComponentVisualizer | Line-debug visualizer, impact-threshold overlay, tell-timeline inspector, GC validator commandlet, table import |
-| `KineticServer` (optional, later) | Runtime, server-only | KineticGameplay | Fleet SDK adapters, metrics export. Split out only if the client build must not link fleet SDKs |
+| `KineticOnline` (Phase 1) | Runtime, client | KineticCore, HTTP, WebSockets, Json, JsonUtilities, OnlineSubsystemSteam | Client side of the Supabase backend (no official Unreal SDK; direct HTTP and Realtime WebSocket): login and tokens, crews, matchmaking and join tickets, profile, shop and Steam purchases ([backend-architecture.md](backend-architecture.md) section 24) |
+| `KineticServer` (Phase 1) | Runtime, server-only | KineticGameplay, HTTP, Json | Server side of the backend: manifest fetch at boot, join-ticket verification in `PreLogin`, heartbeats, match report builder from the `KineticCore` event stream, replay and raw-event upload, fleet SDK adapters, metrics export. The client build never links it |
 
 Build targets: `KineticEditor`, `KineticGame`, `KineticServer`, `KineticClient`. The server target compiles without Niagara and MetaSound runtime content.
 
@@ -20,7 +21,9 @@ Build targets: `KineticEditor`, `KineticGame`, `KineticServer`, `KineticClient`.
 Kinetic/
   Source/
     KineticCore/        Public/ Private/   (Types, Tables, Solver, Impact, Timeline, Units)
-    KineticGameplay/    Public/ Private/   (Player, Spool, Line, Cutter, Kinematics, Volumes, Destruction, Match, Online, Replay)
+    KineticGameplay/    Public/ Private/   (Player, Spool, Line, Cutter, Kinematics, Volumes, Destruction, Match, Replay)
+    KineticOnline/      Public/ Private/   (Session, Crew, Matchmaking, Profile, Store, BackendClient)
+    KineticServer/      Public/ Private/   (Manifest, JoinTicket, Heartbeat, MatchReport, Upload, Fleet)
     KineticUI/
     KineticEditor/
   Content/

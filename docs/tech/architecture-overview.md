@@ -105,7 +105,7 @@ Known caveat: async physics slows down when the game thread cannot keep up ([for
 | World Partition | In engine | One persistent level per arena, streaming mostly off |
 | Replay (DemoNetDriver) | In engine ([docs](https://dev.epicgames.com/documentation/en-us/unreal-engine/using-the-replay-system-in-unreal-engine)) | Victim-camera replay, LayCast |
 | Chaos Visual Debugger | In engine, extended in 5.8 | Physics debugging |
-| Online Services (Sessions) | Beta interface ([docs](https://dev.epicgames.com/documentation/unreal-engine/sessions-interface-in-unreal-engine)); EOS SDK 1.19.1.2 ships with 5.8 | Matchmaking and session registry |
+| Online Subsystem Steam | In engine | Steam login ticket, overlay invites and purchases only. Accounts, crews, matchmaking and sessions are the KINETIC backend ([backend-architecture.md](backend-architecture.md)) |
 
 ## 6. Decision log
 
@@ -118,7 +118,7 @@ Known caveat: async physics slows down when the game thread cannot keep up ([for
 | D5 | Geometry collection breaks are server events; fragments simulate locally on clients; replication abandons below cluster level 1 | Full fragment replication; client-authoritative destruction | Bandwidth and determinism. Engine exposes `enable_abandon_after_level` for exactly this ([API](https://dev.epicgames.com/documentation/en-us/unreal-engine/python-api/class/GeometryCollectionComponent)) |
 | D6 | GAS for ability activation, cooldowns, tags, cues only | Hand-rolled ability layer; GAS for forces too | GAS prediction covers activation, effects, tags and cues, not physics. It gives us the 0.25 s mode switch, recall timers, Staggered/Hoisted tags for free |
 | D7 | Legacy replication at launch, Iris evaluated on a branch | Iris from day one | Sources disagree on Iris status; 6 to 8 players do not need it |
-| D8 | Dedicated servers on a managed fleet (Edgegap or AWS GameLift), EOS for sessions, identity, anti-cheat | EOS P2P relay; listen servers | EOS does not host authoritative servers ([Edgegap/EOS post](https://edgegap.com/blog/can-epic-online-services-eos-relays-allow-for-dedicated-server-or-authoritative-server)). Physics games need one authority |
+| D8 | Dedicated servers on a managed fleet (Edgegap or AWS GameLift); KINETIC's own backend for identity, crews, matchmaking, allocation and results | Platform-vendor online services; P2P relays; listen servers | Physics games need one authority, and progression must come only from servers the backend issued credentials to. See [backend-architecture.md](backend-architecture.md) |
 | D9 | Dog is a swept-trace projectile, not a rigid body | Rigid sphere with CCD | Deterministic, predictable, cheap; rewind-friendly |
 | D10 | Perforce with Unreal Game Sync | Git LFS | See `project-structure.md` |
 

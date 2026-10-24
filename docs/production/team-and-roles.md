@@ -29,7 +29,7 @@ _Minimum viable team for the roadmap, with the documents each role owns. A solo 
 
 | Role | Count | Owns |
 |---|---|---|
-| Live/backend engineer | 1 | Claims season system, Ledger persistence, Contracts, matchmaking integration |
+| Live/backend engineer | 1 | tech/backend-architecture.md: Claims season system, Ledger persistence, Contracts, matchmaking, economy (the Phase 1 slice lands before this hire if needed; see its section 19) |
 | QA | 2 | production/playtest-plan.md execution, the signature-play verification videos |
 | Additional environment artist | 1 | Parallel arena production |
 | Voice director (contract) | | Face and Marshal recording per characters/faces |

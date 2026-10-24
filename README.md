@@ -6,7 +6,7 @@ Sixty-one years ago the only space elevator ever built snapped and fell across t
 
 ## What is here
 
-A complete pre-production design package: about 360,000 words across 161 documents, one file per object, character, arena, and system, written so that each can be handed to the person building it. The full list with word counts is in [docs/production/asset-master-list.md](docs/production/asset-master-list.md).
+A complete pre-production design package: about 372,000 words across 164 documents, one file per object, character, arena, and system, written so that each can be handed to the person building it. The full list with word counts is in [docs/production/asset-master-list.md](docs/production/asset-master-list.md).
 
 | Folder | What it holds | Start with |
 |---|---|---|
@@ -15,7 +15,7 @@ A complete pre-production design package: about 360,000 words across 161 documen
 | [docs/objects/](docs/objects/) | 73 objects in eight categories: light and medium props, volatiles, heavy loads, structures, rated loads, kinematics, environment. Appearance, physics, interactions, states, VFX hooks, Chaos setup, budgets. | [README-props.md](docs/objects/README-props.md), [README-structures.md](docs/objects/README-structures.md) |
 | [docs/arenas/](docs/arenas/) | Four arenas, six documents each: overview, zone-by-zone layout with plans, prop manifest, events and moving parts, lighting and mood, signature plays. | [arenas/README.md](docs/arenas/README.md) |
 | [docs/systems/](docs/systems/) | HUD and front end, audio, VFX, animation, camera and controls, game modes, onboarding script. | [systems/README.md](docs/systems/README.md) |
-| [docs/tech/](docs/tech/) | UE5 architecture with verified citations: Spool and Line implementation, player physics, Chaos destruction, kinematics, networking, budgets, project structure. | [tech/README.md](docs/tech/README.md) |
+| [docs/tech/](docs/tech/) | UE5 architecture with verified citations: Spool and Line implementation, player physics, Chaos destruction, kinematics, networking, budgets, project structure, the backend, and the full tech stack plan. | [tech/README.md](docs/tech/README.md) |
 | [docs/production/](docs/production/) | Roadmap, team, art pipeline, risks, playtest plan, master asset list. | [roadmap-and-milestones.md](docs/production/roadmap-and-milestones.md) |
 
 ## The three sentences that hold it together
