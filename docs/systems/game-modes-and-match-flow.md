@@ -183,3 +183,26 @@ Bot rules:
 - Bots cut lines on their own body between 1.0 and 1.6 s after seat, uniformly random, which puts their panic-window survival near the 50% launch target (05 section 12).
 - Bots never earn Standing for anyone. Tonnage earned by a bot's Spotter credit goes to the human it set up.
 - A crew of three bots cannot exist in a live match; if a crew loses all humans, the match ends as a forfeit by that crew.
+
+### 9.1 Implementation (engine-free)
+
+`game/Source/KineticCore/Public/Kinetic/Bots.h` holds the decisions the bot behavior trees call; the trees move, aim and press. It is tested by `game/Source/KineticCore/Tests/BotTest.cpp`.
+
+| Piece | What it does |
+|---|---|
+| `FBotRandom` | Each bot's random draws come from the match seed and its slot, so a match with bots replays exactly. |
+| `FBotDefense` | The cut reflex for lines seated in the bot's own plates. Backfill bots cut between 1.0 and 1.6 s after the seat, uniformly at random. The tutorial's Probationers cut at 1.4 s. The cut is the swing request, which the server judges at that frame (networking 7.1). The draw starts one class warm-up earlier, so the warm-up ends at the swing. A bot has one Cutter, so a second seated line waits for the swing and the recovery (0.45 s together, from the Cutter's table). A swing that does not end the line, because it was aimed off or refused by the server, is tried again after each recovery until the line ends. A line cut by someone else is dropped from the plan. |
+| `ChooseRig` | A backfill bot's next rig from the base kit, in this order: Caboose, Haul to an anchor over an edge, Clothesline at a doorway, Haul to a wall, then Slingshot. **Caboose:** Dog A goes into an enemy within 10 m of the stretch of track a Hauler is about to run, fired 1.5 s or less before the train reaches the point beside them (never after it has passed them). Dog B goes into the train there (05 10). **Haul to an anchor:** the anchor must be at least 4 m from the enemy, with the bot at least 2 m off the drag path. **Clothesline:** an enemy within 8 m heading for the doorway; the bot Hangs, then releases the line into a set line. **Slingshot:** only when every enemy is out of line range, off a wall at least 120° behind the bot. Targets are only standing enemies, never teammates. A bot with a live line, or a Dog in its own plate, starts nothing. |
+| `BotMayUse` | What bots never do: Haul a teammate or use Hangtown's map cables. The tutorial crew also never Jacks or moves rated loads. Bots never overspin: they release the mode input on engagement. |
+| `FProbationerCrew` | The tutorial crew's schedule from characters/npcs/bot-crew.md. A Probationer on a line (the player, the stack or the Hauler) keeps it until the game reports it gone, and fires nothing else meanwhile. A Probationer who is down gets no orders, and the lead skips it. **Fire and Haul:** the lead fires at 15 m after a 1 s wind-up, braces 0.3 s on a seat, then Hauls. **When cut:** the lead gives a 0.5 s look and a 0.9 s recall, does not fire again for 6 s, and the lead passes to the next Probationer. **Avalanche:** P-02 makes one after a 2 s wind-up once the player stands within 6 m of a stack. **Caboose:** P-03 makes one when a klaxon sounds with the player within 10 m of the trench. **Scrap cap:** after the second scrap of the player, Dogs aim 1 m off, and an Avalanche wind-up under way is called off. **Otherwise:** they hold the marker when on it, and walk the route when not. |
+
+Choices this section did not make (**PROPOSED**):
+
+- ChooseRig's ranges and order.
+- The scrap cap also withdraws the Avalanche and the Caboose, since neither can miss by 1 m.
+- A missed Dog is recalled and fired again.
+- After each cut the lead passes from P-01 to P-02 to P-03 in turn.
+- Callsigns: O-01 upward for Office bots in matches, P-01 to P-03 in the tutorial.
+- The tutorial crew follows bot-crew.md: three Breakers that cut at 1.4 s and never move rated loads. onboarding-script.md step 9 describes a different crew: one Breaker, one Rigger and one Scrapper cutting at 1.0 to 1.6 s, a bot Breaker Hauling a hull section, and a Guild bot Climber on the player's side. The Guild Climber uses the backfill profile. The rest is open-items 7d.
+
+**Survival depends on how a victim stops after a cut** (open-items 7c). The cut window above puts a bot's swing at 1.0 to 1.6 s. On 05 4.3's bench (a Haul from 15 m, every attacker and victim class), the victim reaches the edge at 1.85 s at the soonest (Breaker on Climber), so every bot cut lands before the edge. But a cut ends the pull, not the slide: that Climber, cut at 1.6 s, is 11 m along at 15.5 m/s. Nothing in 05 says how fast a cut victim stops. If they slow at their own foot-hold (05 5.3), the backfill window gives 73% survival in 05 4.3's own case (a Breaker on a Rigger). That ranges from 0% (a Breaker on a Climber) to 100% (any Climber or Scrapper Haul), about 85% across all 25 pairings. The tests pin these figures.
