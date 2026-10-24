@@ -194,7 +194,7 @@ All tables live in `game` unless noted. `account_id` is the Supabase Auth user I
 | `wallets` | `account_id`, `currency` (tonnage_credit, sponsor_credit), `balance` with `check (balance >= 0)` |
 | `wallet_txns` | `txn_id`, `account_id`, `currency`, `delta`, `reason`, `ref`, `idempotency_key`, `created_at`; unique `(account_id, idempotency_key)` |
 | `shop_rotation` | `claim_id`, `item_id`, `currency`, `price`, `starts_at`, `ends_at` |
-| `purchases` | `platform`, `platform_order_id`, `account_id`, `sku`, `amount`, `currency_code`, `status` (initiated, authorized, finalized, refunded, charged_back), timestamps |
+| `purchases` | `platform`, `platform_order_id`, `account_id`, `sku`, what it sells as created (`kind`, `credit`, `claim_id`), `amount`, `currency_code`, `status` (initiated, failed, cancelled, finalized, refunded, charged_back), `granted`, the worker's `checks` and `next_check_at`, timestamps |
 | `entitlements` | `account_id`, `entitlement` (for example `sponsorship:<claim_id>`), `granted_at`, `source_ref` |
 
 ### 7.5 Allegiance, Contracts and Claims
@@ -535,6 +535,16 @@ The `balance >= v_price` guard in the `update` and the unique `(account_id, idem
 3. `store-steam-finalize` calls Steam's finalize endpoint, then in one transaction marks the purchase finalized and inserts the `wallet_txns` credit, keyed on the order ID.
 4. A daily worker job reads Steam's transaction report for refunds and chargebacks and reverses grants. A balance never goes negative; if credit was already spent, the account is flagged for support.
 
+Implemented in migration `20261027000100_purchases.sql`, `supabase/functions/store-steam-*`, `_shared/purchases.ts` and `_shared/steam_store.ts`, and `worker/purchases_pass.ts`:
+- **SKUs** (`game.skus`) sell sponsor credit or a Claim's Sponsorship, priced per currency. Steam bills the player's wallet currency, read with GetUserInfo. A missing price refuses the sale.
+- **One open order** per player at a time.
+- **Finalize** and the grant happen in one transaction, and a retry grants nothing more. If FinalizeTxn fails, QueryTxn decides whether the money was taken.
+- **Each order keeps what it was sold as** (kind, credit, Claim) from creation, so a later SKU edit changes neither its grant nor its reversal. Creating an order is serialized per player, so two taps of Buy open one order. A Sponsorship already held grants nothing more, and support is flagged to refund it. The store refuses a banned or inactive account.
+- **The worker** checks orders left open by a crashed client or a closed overlay, from 10 minutes after they opened, each on its own backoff (from a minute, doubling, at most hourly). It closes an order still unpaid after a day, or one Steam does not know. It reads Steam's report hourly, every 5 minutes after a failure, and moves the cursor only once every row was handled. A partial refund is flagged for support, not reversed automatically. The worker:
+  - A refund or chargeback of credit takes back what is left of the balance. A shortfall flags the account in `game.support_flags`.
+  - A reversed Sponsorship removes the entitlement and flags the account. Manifest crates already paid are kept (**PROPOSED**).
+- **Sandbox by default:** the store calls Steam's sandbox unless `STEAM_MICROTXN_LIVE=true`. **CHECK** every Steam endpoint version and field before launch.
+
 Real-money prices are always shown next to credit amounts. There are no randomized paid items, by design. How Sponsorship and the Weight interact in numbers is still a design decision (section 27, B5).
 
 ## 14. Allegiance, Contracts and Claims
@@ -684,8 +694,13 @@ A fixed window per key. Unlogged, so counters are cheap and are lost on a databa
 
 ## 17. Moderation and the admin console
 
-- `api.report_player(match_id, reported_id, reason, text)` attaches the server replay path automatically.
-- Name filter on `api.change_display_name`.
+- `api.report_player(match_id, reported_id, reason, text)` attaches the server replay path automatically. The reporter and the reported player must both have been in the match, and each pair is recorded once per match.
+- Name filter on `api.change_display_name`: the character rules, then a blocked-word list.
+  - **Folding:** a name is lowered, `ph` becomes f, stand-ins become letters (`0`→o, `1` `|` `l`→i, `3`→e, `4` `@`→a, `5` `$`→s, `6` `9`→g, `7`→t, `v`→u), and separators are dropped.
+  - **Patterns:** each listed word is a pattern in which a run of k letters must appear at least k times. Repeating any letter does not hide a word (Fuuck, Niigger, Staaff), and a word with one letter where the listed word has two is not that word (Niger).
+  - **Allowed words** (Scunthorpe, Scraper) excuse a match only as a whole token of the name. Tokens are split at `_`, `-` and a lower-to-upper case change, so Nazir_Khan passes but NaziReich and Office_Rat do not.
+  - **Uniqueness and changes:** names are unique whatever their case. A name changes once every 30 days (**PROPOSED**).
+- Staff work the queue from the console (`reports`, `report:handle`, `name:reset`, `word:block`). Outcomes are never published.
 - **Admin console:** a web app (the web is the right place for it) using Supabase Auth with email and TOTP multi-factor authentication. Staff get `app_role` through the access-token hook; every admin function checks it and writes `admin.audit` through a trigger. Screens: player lookup, Ledger and inventory, grants and refunds, sanctions, report queue with replay links, quarantined reports, Claims dashboard and flip controls, playlists and regions, matchmaking health.
 
 Admin console v1 is [backend/tools/admin.ts](../../backend/tools/admin.ts), a command-line tool over the service connection. A web console with staff sign-in can call the same SQL later. Each command runs as one transaction, with the staff member named in `kinetic.staff`. The commands:
@@ -711,8 +726,9 @@ Triggers write `admin.audit`, which is append-only and unreadable to players:
 
 | Bucket or data | Retention (**PROPOSED**) |
 |---|---|
-| `replays` (private) | 30 days; kept while attached to a report |
-| `match-events` (private, raw event files) | 90 days; kept while attached to a report |
+| `replays` (private) | 30 days; kept while an open player report or a quarantined match report needs them |
+| `match-events` (private, raw event files) | 90 days; kept while an open player report or a quarantined match report needs them |
+| `exports` (private) | 7 days after the archive is written |
 | Accounts, Ledger, inventory | Life of the account |
 | Wallet and purchase history | As long as tax law requires |
 | Match records and summaries | Life of the account; anonymized after deletion |
@@ -722,6 +738,21 @@ Free-plan Storage is 1 GB, which holds only a short window of replays; set the r
 
 - `api.request_export` queues a job that writes an archive to a private bucket and returns a signed download URL.
 - `api.request_deletion` starts a 14-day grace period; then a job deletes the Auth user, identities, display name and personal fields, chat records and voice records, and anonymizes match rows so other players' history stays intact.
+
+Implemented in migration `20261027000300_accounts.sql` and `worker/accounts_pass.ts`:
+- **Export:** the worker writes the archive (`private.account_archive`) to the private `exports` bucket under the player's own folder. A storage policy lets only that player read it, and they sign their own download URL.
+- **Deletion:**
+  - The account stays usable through the grace, so `api.cancel_deletion` works, even while the job runs.
+  - Then the worker removes the exports and runs `private.delete_account` in one transaction:
+    - active sanctions are kept against a keyed hash (HMAC-SHA-256, with a key made in and kept by the database) of each provider identity (`game.retained_sanctions`), and applied again if that identity signs up anew;
+    - the player's id is removed from stored match report payloads;
+    - the Auth audit trail for the user is deleted;
+    - the Auth user is deleted. The cascade removes personal rows (support flags included) and sets account ids to null on match rows, purchases, Standing events, and reports filed by or about the player.
+  - Crew chat is not stored, and there is no voice service yet.
+  - The earned-credit wallet history is deleted with the account; purchases are kept, anonymized.
+  - Account jobs left running by a crashed worker are taken again after 30 minutes. Failures retry with backoff, then the job is failed for a person (runbooks section 7).
+- **Retention:** once a day the worker removes replays after 30 days and raw events after 90, except for matches with an open player report or a quarantined report, and export archives after 7 days. It works in batches until the backlog is clear.
+- **Rate-limit rows** are kept for 25 hours, longer than the longest window, so the daily export and deletion limits hold.
 
 ## 20. Security checklist
 
@@ -785,7 +816,7 @@ Server side, in `KineticServer` ([project-structure.md](project-structure.md)): 
 - **Database:** pgTAP tests for every `api` function, RLS policy and the rate limiter (`supabase test db`), including "another account cannot read this" for every view.
 - **Economy:** golden-file tests in the worker: report in, Ledger, wallet and Contract deltas out, per ruleset version.
 - **Integration:** the local stack with the `local` fleet; a scripted crew queues, plays a bot match and checks the Ledger.
-- **Load:** a Deno simulator plays thousands of clients through login, crew, queue and match against staging with fake servers posting reports; it measures database CPU, Realtime connections and queue time before each phase exit.
+- **Load:** a Deno simulator plays thousands of clients through login, crew, queue and match against staging with fake servers posting reports; it measures database CPU, Realtime connections and queue time before each phase exit. It is `backend/tools/load-sim.ts`: it reports per-step latencies and failures, and the database and Realtime figures are read from the Supabase dashboard while it runs ([runbooks.md](runbooks.md) section 9).
 - **Contract:** CI checks the UE client wrapper against the OpenAPI document.
 
 ## 26. Build order

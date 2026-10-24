@@ -433,6 +433,12 @@ verify_jwt = false
 [functions.server-loadout]
 verify_jwt = false
 
+[functions.store-steam-init]
+verify_jwt = true
+
+[functions.store-steam-finalize]
+verify_jwt = true
+
 [functions.server-report]
 verify_jwt = false
 

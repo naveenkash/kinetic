@@ -14,6 +14,11 @@
 //   grant:item      --account <uuid> --item <item id>
 //   grant:entitlement --account <uuid> --entitlement <kind:ref>
 //   sanction        --account <uuid> --type <type> --reason <text> [--ends <iso>]
+//   reports         [--limit n]                     (the open report queue, oldest first)
+//   report:handle   --id <uuid> --status (actioned|dismissed)
+//   name:reset      --account <uuid>
+//   word:block      --word <word>
+//   word:allow      --word <word>                   (a word the filter wrongly refuses)
 //   audit           [--limit n]
 import postgres from "npm:postgres@3.4.5";
 import { loadLocalEnv } from "./env.ts";
@@ -88,6 +93,30 @@ export const COMMANDS: Record<string, Command> = {
       tx`insert into game.sanctions (account_id, type, reason, ends_at, issued_by)
          values (${a.account}, ${a.type}, ${a.reason}, ${a.ends ?? null}, current_setting('kinetic.staff'))
          returning sanction_id`,
+  },
+  "reports": {
+    required: [],
+    optional: ["limit"],
+    run: (tx, a) =>
+      tx`select r.report_id, r.created_at, r.reason, r.text, r.replay_path, r.match_id, a.display_name as reported
+           from game.reports r left join game.accounts a on a.account_id = r.reported_id
+          where r.status = 'open' order by r.created_at limit ${Number(a.limit ?? 20)}`,
+  },
+  "report:handle": {
+    required: ["id", "status"],
+    run: (tx, a) => tx`select api.srv_report_handle(${a.id}, ${a.status}, current_setting('kinetic.staff')) as result`,
+  },
+  "name:reset": {
+    required: ["account"],
+    run: (tx, a) => tx`select api.srv_reset_display_name(${a.account}) as result`,
+  },
+  "word:block": {
+    required: ["word"],
+    run: (tx, a) => tx`insert into game.blocked_words (word) values (${a.word}) returning word`,
+  },
+  "word:allow": {
+    required: ["word"],
+    run: (tx, a) => tx`insert into game.allowed_words (word) values (${a.word}) returning word`,
   },
   "audit": {
     required: [],

@@ -5,13 +5,16 @@
 // reason, the lock is gone: the instance stops leading at once and competes again.
 // DATABASE_URL must be a direct or session-mode connection, never the transaction pooler.
 //
-// Env: DATABASE_URL, FUNCTIONS_URL, KINETIC_SIGNING_PRIVATE_JWK, KINETIC_SIGNING_PUBLIC_JWKS,
-//      FLEET (local | edgegap), LOCAL_SERVER_CMD (JSON array, local fleet only).
+// Env: DATABASE_URL, FUNCTIONS_URL, SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (Storage), KINETIC_SIGNING_PRIVATE_JWK, KINETIC_SIGNING_PUBLIC_JWKS,
+//      FLEET (local | edgegap), LOCAL_SERVER_CMD (JSON array, local fleet only),
+//      STEAM_PUBLISHER_KEY and STEAM_APP_ID (purchases; sandbox unless STEAM_MICROTXN_LIVE=true).
 import postgres from "npm:postgres@3.4.5";
 import { keyringFromEnv } from "../supabase/functions/_shared/tokens.ts";
 import { loadLocalEnv } from "../tools/env.ts";
 import { EdgegapFleet } from "./fleet/edgegap.ts";
 import { LocalFleet } from "./fleet/local.ts";
+import { steamStoreFromEnv } from "../supabase/functions/_shared/steam_store.ts";
+import { supabaseStorage } from "./storage.ts";
 import type { Fleet } from "./fleet/types.ts";
 import { LEADER_LOCK_KEY, tick, type WorkerContext } from "./loop.ts";
 
@@ -37,7 +40,8 @@ function makeFleet(): Fleet {
 }
 
 const databaseUrl = Deno.env.get("DATABASE_URL")!;
-const sql = postgres(databaseUrl, { max: 4, onnotice: () => {} });
+// Database notices are worth reading in the worker's log; nothing else reports them.
+const sql = postgres(databaseUrl, { max: 4, onnotice: (n) => console.log("[worker] db notice:", n.message) });
 const fleet = makeFleet();
 
 let lockClient: postgres.Sql | null = null;
@@ -82,6 +86,8 @@ const ctx: WorkerContext = {
   fleet,
   keyring: keyringFromEnv(),
   functionsUrl: Deno.env.get("FUNCTIONS_URL")!,
+  steam: steamStoreFromEnv(),
+  storage: supabaseStorage(),
   isLeader: () => leading,
 };
 

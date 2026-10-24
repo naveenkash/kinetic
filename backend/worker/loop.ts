@@ -6,6 +6,9 @@ import { formMatches, type Member, type Playlist, type Proposal, type Ticket } f
 import type { Allocation, Fleet } from "./fleet/types.ts";
 import { type Keyring, signJoinTicket, signServerCredential } from "../supabase/functions/_shared/tokens.ts";
 import { claimsPass } from "./claims_pass.ts";
+import { purchasesPass } from "./purchases_pass.ts";
+import { accountsPass, type ObjectStore } from "./accounts_pass.ts";
+import type { SteamStore } from "../supabase/functions/_shared/steam_store.ts";
 import { rewardsPass } from "./rewards_pass.ts";
 
 export const LEADER_LOCK_KEY = 4257100001;
@@ -14,13 +17,18 @@ export const BOOT_TIMEOUT_S = 90;
 export const NOBODY_JOINED_S = 60;
 export const HEARTBEAT_LOST_S = 60;
 const SERVER_CREDENTIAL_TTL_S = 4 * 3600;
-const RATE_LIMIT_RETENTION_S = 3600;
+// Longer than the longest rate-limit window (a day), so cleanup never resets a live window.
+const RATE_LIMIT_RETENTION_S = 25 * 3600;
 
 export interface WorkerContext {
   sql: postgres.Sql;
   fleet: Fleet;
   keyring: Keyring;
   functionsUrl: string;
+  // Steam microtransactions; null where no publisher key is configured.
+  steam?: SteamStore | null;
+  // Storage for exports and retention; the account pass does nothing without it.
+  storage?: ObjectStore | null;
   // False once this instance may have lost the leader lock; passes stop at the next check.
   isLeader?: () => boolean;
   now?: () => Date;
@@ -355,6 +363,8 @@ export async function tick(ctx: WorkerContext): Promise<void> {
     ["timeouts", timeoutPass],
     ["rewards", rewardsPass],
     ["claims", claimsPass],
+    ["purchases", purchasesPass],
+    ["accounts", accountsPass],
     ["deallocate", deallocatePass],
     ["cleanup", cleanupPass],
   ];

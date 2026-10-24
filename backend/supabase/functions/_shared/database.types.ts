@@ -132,6 +132,36 @@ export type Database = {
         };
         Relationships: [];
       };
+      my_account_jobs: {
+        Row: {
+          completed_at: string | null;
+          job_id: string | null;
+          kind: string | null;
+          requested_at: string | null;
+          result_path: string | null;
+          run_after: string | null;
+          status: string | null;
+        };
+        Insert: {
+          completed_at?: string | null;
+          job_id?: string | null;
+          kind?: string | null;
+          requested_at?: string | null;
+          result_path?: string | null;
+          run_after?: string | null;
+          status?: string | null;
+        };
+        Update: {
+          completed_at?: string | null;
+          job_id?: string | null;
+          kind?: string | null;
+          requested_at?: string | null;
+          result_path?: string | null;
+          run_after?: string | null;
+          status?: string | null;
+        };
+        Relationships: [];
+      };
       my_allegiance: {
         Row: {
           claim_id: string | null;
@@ -522,6 +552,44 @@ export type Database = {
         };
         Relationships: [];
       };
+      my_purchases: {
+        Row: {
+          amount: number | null;
+          created_at: string | null;
+          currency_code: string | null;
+          finalized_at: string | null;
+          order_id: string | null;
+          sku: string | null;
+          status: string | null;
+        };
+        Insert: {
+          amount?: number | null;
+          created_at?: string | null;
+          currency_code?: string | null;
+          finalized_at?: string | null;
+          order_id?: never;
+          sku?: string | null;
+          status?: string | null;
+        };
+        Update: {
+          amount?: number | null;
+          created_at?: string | null;
+          currency_code?: string | null;
+          finalized_at?: string | null;
+          order_id?: never;
+          sku?: string | null;
+          status?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "purchases_sku_fkey";
+            columns: ["sku"];
+            isOneToOne: false;
+            referencedRelation: "store";
+            referencedColumns: ["sku"];
+          },
+        ];
+      };
       my_ratings: {
         Row: {
           band: string | null;
@@ -650,8 +718,45 @@ export type Database = {
           },
         ];
       };
+      store: {
+        Row: {
+          claim_id: string | null;
+          credit: number | null;
+          description: string | null;
+          kind: string | null;
+          prices: Json | null;
+          sku: string | null;
+        };
+        Insert: {
+          claim_id?: string | null;
+          credit?: number | null;
+          description?: string | null;
+          kind?: string | null;
+          prices?: Json | null;
+          sku?: string | null;
+        };
+        Update: {
+          claim_id?: string | null;
+          credit?: number | null;
+          description?: string | null;
+          kind?: string | null;
+          prices?: Json | null;
+          sku?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "skus_claim_id_fkey";
+            columns: ["claim_id"];
+            isOneToOne: false;
+            referencedRelation: "claims";
+            referencedColumns: ["claim_id"];
+          },
+        ];
+      };
     };
     Functions: {
+      cancel_deletion: { Args: never; Returns: Json };
+      change_display_name: { Args: { p_name: string }; Returns: Json };
       crew_accept: { Args: { p_crew: string }; Returns: Json };
       crew_create: { Args: never; Returns: Json };
       crew_decline: { Args: { p_crew: string }; Returns: undefined };
@@ -681,6 +786,17 @@ export type Database = {
         Args: { p_build: string; p_pings: Json; p_playlist: string };
         Returns: Json;
       };
+      report_player: {
+        Args: {
+          p_match: string;
+          p_reason: string;
+          p_reported: string;
+          p_text?: string;
+        };
+        Returns: Json;
+      };
+      request_deletion: { Args: never; Returns: Json };
+      request_export: { Args: never; Returns: Json };
       set_loadout: {
         Args: {
           p_cosmetics?: Json;
@@ -747,11 +863,46 @@ export type Database = {
         Args: { p_account: string; p_allocation: string; p_match: string };
         Returns: Json;
       };
+      srv_purchase_checked: { Args: { p_order: number }; Returns: undefined };
+      srv_purchase_create: {
+        Args: { p_account: string; p_currency: string; p_sku: string };
+        Returns: Json;
+      };
+      srv_purchase_failed: {
+        Args: { p_order: number; p_reason: string; p_status: string };
+        Returns: undefined;
+      };
+      srv_purchase_finalize: {
+        Args: { p_order: number; p_trans: string };
+        Returns: Json;
+      };
+      srv_purchase_flag: {
+        Args: { p_order: number; p_reason: string };
+        Returns: undefined;
+      };
+      srv_purchase_initiated: {
+        Args: { p_order: number; p_trans: string };
+        Returns: undefined;
+      };
+      srv_purchase_of: {
+        Args: { p_account: string; p_order: number };
+        Returns: Json;
+      };
+      srv_purchase_reverse: {
+        Args: { p_order: number; p_status: string };
+        Returns: Json;
+      };
       srv_rate_limit: {
         Args: { p_key: string; p_max: number; p_window_s: number };
         Returns: boolean;
       };
+      srv_report_handle: {
+        Args: { p_report: string; p_staff: string; p_status: string };
+        Returns: Json;
+      };
       srv_requeue_report: { Args: { p_match: string }; Returns: Json };
+      srv_reset_display_name: { Args: { p_account: string }; Returns: Json };
+      srv_steam_id: { Args: { p_account: string }; Returns: string };
       srv_store_report: {
         Args: { p_allocation: string; p_match: string; p_payload: Json };
         Returns: Json;
