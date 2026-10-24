@@ -2,6 +2,18 @@
 
 _How an object goes from its spec document to a shipped asset. Every object in docs/objects, every character in docs/characters, and every arena in docs/arenas follows this._
 
+> **Decided 2026-10-25: every asset is generated from code.** No asset is hand-modelled, bought or outsourced. Each one is a script in [art/](../../art/README.md) that builds it from its spec:
+> - meshes in Blender;
+> - procedural materials baked to textures;
+> - sockets, collision and pivots as the spec names them;
+> - exports for Unreal and for the browser client.
+>
+> The steps below still apply, with "the artist" read as "the asset's script". Two steps change:
+> - **High-poly sculpts (section 3)** give way to scripted bevels, weighted normals and procedural detail. The look is stylized hard-surface, which suits code.
+> - **Characters (section 10)** are built from rigid harness and armour pieces under a scripted skeleton.
+>
+> The team table in team-and-roles.md no longer staffs artists for asset production.
+
 ## 1. Read the spec
 
 Each object has one markdown file. Before modeling, the artist confirms from the spec:
