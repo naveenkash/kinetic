@@ -1,17 +1,24 @@
 // Plays the Yard grey-box in the editor: the character spawns on West Mesa (Spawn A), stands,
-// runs at its class's run speed and jumps its class's jump height (bible/05 section 2.2).
-// Needs the level built (make yard-greybox) and the props imported (make import-props).
+// runs at its class's run speed and jumps its class's jump height (bible/05 section 2.2); the
+// Spool and hits on the mesa; and a Scrap match of six bots. Needs the level built (make
+// yard-greybox) and the props imported (make import-props). The one-character tests play the
+// walk-the-arena mode (kinetic.Mode Walk).
 #include "Camera/CameraComponent.h"
 #include "Engine/Engine.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerStart.h"
 #include "Kismet/GameplayStatics.h"
 #include "EngineUtils.h"
+#include "HAL/IConsoleManager.h"
+#include "KineticBotController.h"
 #include "KineticCharacter.h"
+#include "KineticGameMode.h"
 #include "KineticProp.h"
 #include "KineticRulesSubsystem.h"
 #include "KineticSpoolWorld.h"
 #include "Misc/AutomationTest.h"
+#include "NavigationSystem.h"
 #include "Tests/AutomationCommon.h"
 
 #if WITH_EDITOR && WITH_DEV_AUTOMATION_TESTS
@@ -22,6 +29,13 @@
 namespace
 {
 const TCHAR* YardMap = TEXT("/Game/Arenas/YRD_Yard/L_YRD_Greybox");
+
+// The mode the next play session starts in (AKineticGameMode reads it at InitGame).
+void PlayMode(const TCHAR* Mode, bool bAllBots)
+{
+	IConsoleManager::Get().FindConsoleVariable(TEXT("kinetic.Mode"))->Set(Mode, ECVF_SetByCode);
+	IConsoleManager::Get().FindConsoleVariable(TEXT("kinetic.AllBots"))->Set(bAllBots ? 1 : 0, ECVF_SetByCode);
+}
 
 // Waits for the play world. In the editor, AutomationOpenMap opens the map in PIE itself, so
 // nothing else may start a session (a second request tears the first down).
@@ -433,11 +447,195 @@ private:
 	double StageAt = 0.0;
 };
 
+
+// A Scrap match of six bots on the Yard, with shorter rounds (120 s, 20 s of sudden death): the
+// crews start at their sides' spawns and are held through the reset; lines open at Live; the
+// bots come down off the Stacks (the ladders are navigation links) and fire Dogs; the round
+// ends, and at the next reset the sides have swapped.
+class FScrapInTheYard : public IAutomationLatentCommand
+{
+public:
+	explicit FScrapInTheYard(FAutomationTestBase* InTest) : Test(InTest) {}
+
+	virtual bool Update() override
+	{
+		UWorld* World = GEditor ? GEditor->PlayWorld.Get() : nullptr;
+		const AKineticGameMode* Mode = World ? World->GetAuthGameMode<AKineticGameMode>() : nullptr;
+		FKineticScrap* Scrap = Mode ? Mode->Scrap() : nullptr;
+		UKineticSpoolWorld* Spool = World ? World->GetSubsystem<UKineticSpoolWorld>() : nullptr;
+		if (!Scrap || !Spool)
+		{
+			return Fail(TEXT("no Scrap match (kinetic.Mode Scrap)"));
+		}
+		const double Now = World->GetTimeSeconds();
+		const Kinetic::FScrapMatch& M = Scrap->Match();
+		if (Stage > 0 && Now - StartedAt > 260.0)
+		{
+			return Fail(*FString::Printf(TEXT("timed out in stage %d: round %d, phase %d, clock %.1f"), Stage, M.Round(),
+			                             static_cast<int>(M.Phase()), M.ClockRemaining()));
+		}
+		const auto SpawnOfSide = [World](int32 Side) {
+			for (TActorIterator<APlayerStart> It(World); It; ++It)
+			{
+				if (It->PlayerStartTag == FName(Side == 0 ? TEXT("Spawn_A") : TEXT("Spawn_B")))
+				{
+					return It->GetActorLocation();
+				}
+			}
+			return FVector::ZeroVector;
+		};
+		const auto AllAtSpawns = [&]() {
+			for (int32 Slot = 0; Slot < Scrap->SlotCount(); ++Slot)
+			{
+				const AKineticCharacter* R = Scrap->Rigger(Slot);
+				const FVector Spawn = SpawnOfSide(M.SpawnOf(Scrap->TeamOf(Slot)));
+				if (!R || FVector::Dist2D(R->GetActorLocation(), Spawn) > 600.0)
+				{
+					return false;
+				}
+			}
+			return true;
+		};
+		switch (Stage)
+		{
+		case 0:  // A fresh match on short rules.
+		{
+			if (Now < 0.5)
+			{
+				return false;
+			}
+			Test->TestEqual(TEXT("six riggers"), Scrap->SlotCount(), 6);
+			Kinetic::FScrapRules Rules;
+			Rules.RoundSeconds = 120.0;
+			Rules.SirenRemaining = 30.0;
+			Rules.EventRemaining = 25.0;
+			Rules.SuddenDeathSeconds = 20.0;
+			Scrap->SetRules(Rules);
+			Scrap->StartMatch();
+			StartedAt = Now;
+			Stage = 1;
+			return false;
+		}
+		case 1:  // The reset: at the spawns, held.
+			if (Now - StartedAt < 1.0)
+			{
+				return false;
+			}
+			Test->TestEqual(TEXT("the reset phase"), static_cast<int>(M.Phase()), static_cast<int>(Kinetic::EScrapPhase::Reset));
+			Test->TestTrue(TEXT("every rigger at their crew's spawn"), AllAtSpawns());
+			Test->TestFalse(TEXT("held in the reset"), Scrap->Rigger(0)->IsMovementAllowed());
+			Test->TestFalse(TEXT("no lines in the reset"), Spool->LinesAllowed());
+			for (int32 Slot = 0; Slot < Scrap->SlotCount(); ++Slot)
+			{
+				LowestFeet.Add(TNumericLimits<double>::Max());
+			}
+			Stage = 2;
+			return false;
+		case 2:  // Live: lines open.
+			if (M.Phase() != Kinetic::EScrapPhase::Live)
+			{
+				return false;
+			}
+			Test->TestTrue(TEXT("lines from Live"), Spool->LinesAllowed());
+			Test->TestFalse(TEXT("the navmesh is built by Live"), UNavigationSystemV1::IsNavigationBeingBuilt(World));
+			Stage = 3;
+			return false;
+		case 3:  // The round: the bots come down and rig, until it ends.
+			for (int32 Slot = 0; Slot < Scrap->SlotCount(); ++Slot)
+			{
+				if (const AKineticCharacter* R = Scrap->Rigger(Slot))
+				{
+					if (Spool->IsStanding(R))
+					{
+						LowestFeet[Slot] = FMath::Min(LowestFeet[Slot], R->GetActorLocation().Z - 95.0);
+					}
+				}
+			}
+			MostLines = FMath::Max(MostLines, Spool->Lines().Num());
+			if (M.Round() < 1)
+			{
+				return false;
+			}
+			{
+				int32 Down = 0;
+				int32 Dogs = 0;
+				for (int32 Slot = 0; Slot < Scrap->SlotCount(); ++Slot)
+				{
+					Down += LowestFeet[Slot] < 700.0 ? 1 : 0;
+					Dogs += Scrap->Bot(Slot) ? Scrap->Bot(Slot)->DogsFired() : 0;
+				}
+				Test->AddInfo(FString::Printf(TEXT("round 1 over at %.0f s: %d of 6 came off the Stacks, %d Dogs fired, %d lines at once, %d Stalls, score %d-%d"),
+				                              Now - StartedAt, Down, Dogs, MostLines, Scrap->StallsSeen(), M.Wins(0), M.Wins(1)));
+				for (const FString& Line : Scrap->Feed())
+				{
+					Test->AddInfo(Line);
+				}
+				Test->TestTrue(TEXT("most bots came down off the 8 m Stacks"), Down >= 4);
+				Test->TestTrue(TEXT("the bots fired Dogs"), Dogs > 0);
+			}
+			Stage = 4;
+			StageAt = Now;
+			return false;
+		case 4:  // The next reset: sides swapped.
+			if (M.Phase() != Kinetic::EScrapPhase::Reset || Now - StageAt < 1.0)
+			{
+				return M.Phase() == Kinetic::EScrapPhase::MatchOver ? Fail(TEXT("the match ended after one round")) : false;
+			}
+			Test->TestEqual(TEXT("crew 0 starts round 2 at Spawn B"), M.SpawnOf(0), 1);
+			for (int32 Slot = 0; Slot < Scrap->SlotCount(); ++Slot)
+			{
+				const AKineticCharacter* R = Scrap->Rigger(Slot);
+				const FVector Spawn = SpawnOfSide(M.SpawnOf(Scrap->TeamOf(Slot)));
+				Test->TestTrue(*FString::Printf(TEXT("slot %d at their crew's new spawn (%s, spawn %s)"), Slot,
+				                                R ? *R->GetActorLocation().ToCompactString() : TEXT("-"), *Spawn.ToCompactString()),
+				               R && FVector::Dist2D(R->GetActorLocation(), Spawn) < 600.0);
+			}
+			Test->TestTrue(TEXT("two resets"), Scrap->ResetsSeen() >= 2);
+			return true;
+		default:
+			return true;
+		}
+	}
+
+private:
+	bool Fail(const TCHAR* Why)
+	{
+		Test->AddError(Why);
+		return true;
+	}
+
+	FAutomationTestBase* Test;
+	int Stage = 0;
+	double StartedAt = 0.0;
+	double StageAt = 0.0;
+	TArray<double> LowestFeet;
+	int32 MostLines = 0;
+};
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FKineticYardScrapTest, "Kinetic.Yard.Scrap",
+                                 EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FKineticYardScrapTest::RunTest(const FString& Parameters)
+{
+	PlayMode(TEXT("Scrap"), true);
+	IConsoleManager::Get().FindConsoleVariable(TEXT("kinetic.Seed"))->Set(7, ECVF_SetByCode);
+	if (!AutomationOpenMap(YardMap))
+	{
+		AddError(TEXT("the Yard grey-box did not open (make yard-greybox)"));
+		return false;
+	}
+	ADD_LATENT_AUTOMATION_COMMAND(FWaitForPlay(this));
+	ADD_LATENT_AUTOMATION_COMMAND(FScrapInTheYard(this));
+	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FKineticYardHitsTest, "Kinetic.Yard.Hits",
                                  EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
 bool FKineticYardHitsTest::RunTest(const FString& Parameters)
 {
+	PlayMode(TEXT("Walk"), false);
 	if (!AutomationOpenMap(YardMap))
 	{
 		AddError(TEXT("the Yard grey-box did not open (make yard-greybox)"));
@@ -454,6 +652,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FKineticYardSpoolTest, "Kinetic.Yard.Spool",
 
 bool FKineticYardSpoolTest::RunTest(const FString& Parameters)
 {
+	PlayMode(TEXT("Walk"), false);
 	if (!AutomationOpenMap(YardMap))
 	{
 		AddError(TEXT("the Yard grey-box did not open (make yard-greybox)"));
@@ -470,6 +669,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FKineticYardPlayTest, "Kinetic.Yard.Play",
 
 bool FKineticYardPlayTest::RunTest(const FString& Parameters)
 {
+	PlayMode(TEXT("Walk"), false);
 	if (!AutomationOpenMap(YardMap))
 	{
 		AddError(TEXT("the Yard grey-box did not open (make yard-greybox)"));

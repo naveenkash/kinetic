@@ -1,7 +1,7 @@
 """Shared helpers for KINETIC's generated assets (art/README.md).
 
 Every asset is a Python script that builds its meshes from its spec in docs/objects, gives them
-procedural materials, bakes those to textures, and exports FBX for Unreal and GLB for the browser
+procedural materials, bakes those to textures, and exports FBX for Unreal and a GLB preview
 client. Runs headless: blender -b --factory-startup -P art/build.py -- <asset>.
 
 Conventions (docs/objects/README-props.md): metres, Z up, X+ toward the object's front (and
@@ -705,7 +705,7 @@ def bake(obj: bpy.types.Object, out_dir: str, prefix: str, resolution: int = 204
 
 def baked_material(name: str, maps: dict[str, str], masked: bool = False,
                    emission: float = 0.0, two_sided: bool = False) -> bpy.types.Material:
-    """A material reading only the baked textures: what Unreal and the browser get."""
+    """A material reading only the baked textures: what Unreal and the GLB preview get."""
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
     nt = mat.node_tree
@@ -770,7 +770,7 @@ def _fbx(path: str, objects: list[bpy.types.Object]) -> None:
 
 
 def export(objects: list[bpy.types.Object], out_dir: str, name: str) -> dict:
-    """FBX for Unreal and GLB for the browser. A part with its own pivot (a container door, on
+    """FBX for Unreal and a GLB preview. A part with its own pivot (a container door, on
     its hinge) gets an FBX of its own with that pivot at the origin, since Unreal's importer
     bakes node positions into the vertices; the body carries an ATTACH_ socket where it goes."""
     meshes = [o for o in objects if not o.name.startswith("UCX_")]
@@ -794,7 +794,7 @@ def export(objects: list[bpy.types.Object], out_dir: str, name: str) -> dict:
         for c in hulls(m):
             c.location += at
     glb = os.path.join(out_dir, f"{name}.glb")
-    # The browser gets the render meshes only, not collision or sockets.
+    # The GLB preview gets the render meshes only, not collision or sockets.
     bpy.ops.object.select_all(action="DESELECT")
     for o in objects:
         if not o.name.startswith("UCX_"):

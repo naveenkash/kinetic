@@ -60,9 +60,13 @@ public:
 	// level builder after setting the properties.
 	void ApplyBody();
 
+	// Back where the level put it, at rest and in its placement (a round's reset, game-modes 2).
+	void ResetToAuthored();
+
 protected:
 	virtual void BeginPlay() override;
 
 private:
 	bool bBrokenFree = false;
+	FTransform Authored;
 };

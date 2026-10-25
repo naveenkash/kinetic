@@ -11,6 +11,7 @@ AKineticProp::AKineticProp()
 	Mesh->SetCollisionProfileName(TEXT("PhysicsActor"));
 	Mesh->SetMobility(EComponentMobility::Movable);
 	Mesh->SetNotifyRigidBodyCollision(true);  // A prop striking a player reports its impulse
+	Mesh->SetCanEverAffectNavigation(false);  // It moves: bots path round the scenery, not round props
 	RootComponent = Mesh;
 }
 
@@ -35,7 +36,22 @@ void AKineticProp::ApplyBody()
 void AKineticProp::BeginPlay()
 {
 	Super::BeginPlay();
+	Authored = GetActorTransform();
 	ApplyBody();
+}
+
+void AKineticProp::ResetToAuthored()
+{
+	Mesh->SetSimulatePhysics(false);
+	SetActorTransform(Authored, false, nullptr, ETeleportType::ResetPhysics);
+	bBrokenFree = false;
+	ApplyBody();
+	if (Mesh->IsSimulatingPhysics())
+	{
+		Mesh->SetPhysicsLinearVelocity(FVector::ZeroVector);
+		Mesh->SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);
+		Mesh->PutRigidBodyToSleep();
+	}
 }
 
 void AKineticProp::BreakFree()

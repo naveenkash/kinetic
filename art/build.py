@@ -4,7 +4,7 @@
         [--preview-only] [--res N]
 
 Writes to art/out/<asset>/<mesh>/: the preview renders (procedural and baked), the baked textures, an FBX
-for Unreal and a GLB for the browser client, and report.json (triangle counts, sizes, sockets).
+for Unreal and a GLB preview, and report.json (triangle counts, sizes, sockets).
 """
 from __future__ import annotations
 

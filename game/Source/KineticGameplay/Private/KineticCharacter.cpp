@@ -2,7 +2,9 @@
 
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Engine/Engine.h"
+#include "EngineUtils.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -15,6 +17,8 @@
 #include "KineticMovementComponent.h"
 #include "KineticRulesSubsystem.h"
 #include "KineticSpoolWorld.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "UObject/ConstructorHelpers.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogKineticCharacter, Log, All);
 
@@ -38,6 +42,25 @@ AKineticCharacter::AKineticCharacter(const FObjectInitializer& ObjectInitializer
 	Camera->SetRelativeLocation(FVector(0.0, 0.0, EyeAboveCentreCm));
 	Camera->bUsePawnControlRotation = true;
 	bUseControllerRotationYaw = true;
+	// The grey-box body: the engine's 1 m cylinder and cube, coloured like the lines.
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> Cylinder(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> Cube(TEXT("/Engine/BasicShapes/Cube.Cube"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> Shape(TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+	const auto Part = [&](const TCHAR* Name, UStaticMesh* Mesh, const FVector& At, const FVector& Scale) {
+		UStaticMeshComponent* C = CreateDefaultSubobject<UStaticMeshComponent>(Name);
+		C->SetupAttachment(GetCapsuleComponent());
+		C->SetStaticMesh(Mesh);
+		C->SetMaterial(0, Shape.Object);
+		C->SetRelativeLocation(At);
+		C->SetRelativeScale3D(Scale);
+		C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		C->SetCanEverAffectNavigation(false);
+		C->SetOwnerNoSee(true);  // First person: the owner sees the world, not their own body
+		C->CastShadow = true;
+		return C;
+	};
+	Body = Part(TEXT("Body"), Cylinder.Object, FVector::ZeroVector, FVector(0.8, 0.8, 1.9));
+	Visor = Part(TEXT("Visor"), Cube.Object, FVector(36.0, 0.0, EyeAboveCentreCm - 5.0), FVector(0.12, 0.5, 0.14));
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
 	Movement->NavAgentProps.bCanCrouch = true;
 	Movement->bRunPhysicsWithNoController = true;  // Tests and bots move it without a player
@@ -78,6 +101,33 @@ void AKineticCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 	ApplyHarness();
+}
+
+void AKineticCharacter::SetCrewColour(const FLinearColor& Colour)
+{
+	if (UMaterialInstanceDynamic* M = Body->CreateDynamicMaterialInstance(0))
+	{
+		M->SetVectorParameterValue(TEXT("Color"), Colour);
+	}
+	if (UMaterialInstanceDynamic* M = Visor->CreateDynamicMaterialInstance(0))
+	{
+		M->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.05f, 0.05f, 0.05f));
+	}
+}
+
+void AKineticCharacter::SetMovementAllowed(bool bAllowed)
+{
+	if (bAllowed == bMovementAllowed)
+	{
+		return;
+	}
+	bMovementAllowed = bAllowed;
+	if (!bAllowed)
+	{
+		ForwardInput = 0.0f;
+		ConsumeMovementInputVector();
+		SetSprinting(false);
+	}
 }
 
 void AKineticCharacter::SetSprinting(bool bSprint)
@@ -221,6 +271,11 @@ void AKineticCharacter::RecordContact(const FHitResult& Hit, const FVector& MyVe
 
 void AKineticCharacter::Move(const FVector2D& Axis)
 {
+	if (!bMovementAllowed)
+	{
+		ForwardInput = 0.0f;
+		return;  // The match is holding the crews
+	}
 	ForwardInput = static_cast<float>(Axis.Y);
 	if (IsClimbing() || bUnderLine || bHeldStill || bStunned)
 	{
@@ -285,6 +340,38 @@ void AKineticCharacter::UpdateLadder(float DeltaSeconds)
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
 	if (!Ladder)
 	{
+		if (!bTakesLadders)
+		{
+			return;
+		}
+		const FVector Facing = FRotationMatrix(FRotator(0.0, GetActorRotation().Yaw, 0.0)).GetUnitAxis(EAxis::X);
+		const float Feet = static_cast<float>(GetActorLocation().Z) - CapsuleHalfHeightCm;
+		if (ForwardInput < -0.1f && Movement->IsMovingOnGround())
+		{
+			// Backing over the top of a ladder, facing the wall: onto the rungs, going down.
+			for (TActorIterator<AKineticLadder> It(GetWorld()); It; ++It)
+			{
+				AKineticLadder* Candidate = *It;
+				if (FVector::DotProduct(Facing, Candidate->IntoWall) > 0.5 && FMath::Abs(Feet - Candidate->TopZ()) < 40.0f &&
+				    FVector::Dist2D(GetActorLocation(), Candidate->StepOff()) < 110.0)
+				{
+					// Room on the rungs below the top (nobody climbing there).
+					const FVector Hold = Candidate->ClimbAt(Candidate->TopZ() - 120.0 + CapsuleHalfHeightCm);
+					FCollisionQueryParams Params(SCENE_QUERY_STAT(KineticLadderMount), false, this);
+					if (GetWorld()->OverlapBlockingTestByChannel(Hold, FQuat::Identity, ECC_Pawn,
+					                                             FCollisionShape::MakeCapsule(CapsuleRadiusCm - 5.0f, CapsuleHalfHeightCm - 5.0f), Params))
+					{
+						return;
+					}
+					SetActorLocation(Hold, false, nullptr, ETeleportType::TeleportPhysics);
+					Ladder = Candidate;
+					Movement->Velocity = FVector::ZeroVector;
+					Movement->SetMovementMode(MOVE_Flying);
+					return;
+				}
+			}
+			return;
+		}
 		// Grab a ladder we are inside and pushing toward.
 		if (ForwardInput <= 0.1f)
 		{
@@ -292,12 +379,10 @@ void AKineticCharacter::UpdateLadder(float DeltaSeconds)
 		}
 		TArray<AActor*> Overlaps;
 		GetOverlappingActors(Overlaps, AKineticLadder::StaticClass());
-		const FVector Facing = FRotationMatrix(FRotator(0.0, GetActorRotation().Yaw, 0.0)).GetUnitAxis(EAxis::X);
 		for (AActor* Actor : Overlaps)
 		{
 			AKineticLadder* Candidate = Cast<AKineticLadder>(Actor);
-			if (Candidate && FVector::DotProduct(Facing, Candidate->IntoWall) > 0.5 &&
-			    GetActorLocation().Z - CapsuleHalfHeightCm < Candidate->TopZ() - 10.0f)
+			if (Candidate && FVector::DotProduct(Facing, Candidate->IntoWall) > 0.5 && Feet < Candidate->TopZ() - 10.0f)
 			{
 				Ladder = Candidate;
 				Movement->SetMovementMode(MOVE_Flying);
@@ -306,23 +391,51 @@ void AKineticCharacter::UpdateLadder(float DeltaSeconds)
 		}
 		return;
 	}
-	// Climbing: forward is up, back is down, at the class's ladder speed.
-	Movement->Velocity = FVector(0.0, 0.0, Cm(LadderSpeedM) * FMath::Clamp(ForwardInput, -1.0f, 1.0f));
+	// Climbing: forward is up, back is down, at the class's ladder speed, held on the ladder's
+	// line (a bump does not knock the climber off the rungs).
+	const FVector Line = (Ladder->ClimbAt(GetActorLocation().Z) - GetActorLocation()) * 10.0;
+	Movement->Velocity = FVector(FMath::Clamp(Line.X, -150.0, 150.0), FMath::Clamp(Line.Y, -150.0, 150.0),
+	                             Cm(LadderSpeedM) * FMath::Clamp(ForwardInput, -1.0f, 1.0f));
 	const float Feet = static_cast<float>(GetActorLocation().Z) - CapsuleHalfHeightCm;
 	if (Feet >= Ladder->TopZ() - 5.0f)
 	{
-		// Off the top: onto whatever the ladder leads to.
+		// Off the top: onto whatever the ladder leads to, beside anyone standing there.
 		const FVector StepOff = GetActorLocation() + Ladder->IntoWall * (CapsuleRadiusCm * 2.0f + 10.0f) +
 		                        FVector(0.0, 0.0, 10.0);
-		SetActorLocation(StepOff, false, nullptr, ETeleportType::TeleportPhysics);
+		if (!TeleportTo(StepOff, GetActorRotation()))
+		{
+			Movement->Velocity = FVector::ZeroVector;  // No room yet: hold at the top
+			return;
+		}
 		Ladder = nullptr;
 		Movement->SetMovementMode(MOVE_Falling);
 	}
-	else if (!IsOverlappingActor(Ladder) || (ForwardInput < -0.1f && Movement->IsMovingOnGround()))
+	else if (FVector::Dist2D(GetActorLocation(), Ladder->ClimbAt(GetActorLocation().Z)) > 80.0 ||
+	         (ForwardInput < -0.1f && FloorUnderFeet()))
 	{
 		Ladder = nullptr;
 		Movement->SetMovementMode(MOVE_Falling);
 	}
+}
+
+void AKineticCharacter::LeaveLadder()
+{
+	if (Ladder)
+	{
+		Ladder = nullptr;
+		GetCharacterMovement()->SetMovementMode(MOVE_Falling);
+	}
+}
+
+bool AKineticCharacter::FloorUnderFeet() const
+{
+	// Climbing down onto the ground: something to stand on just under the capsule.
+	const FVector Feet = GetActorLocation() - FVector(0.0, 0.0, CapsuleHalfHeightCm);
+	FHitResult Hit;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(KineticLadderFoot), false, this);
+	return GetWorld()->LineTraceSingleByChannel(Hit, Feet + FVector(0.0, 0.0, 5.0), Feet - FVector(0.0, 0.0, 10.0),
+	                                            ECC_Visibility, Params) &&
+	       Hit.ImpactNormal.Z > 0.7;
 }
 
 void AKineticCharacter::BuildInput()
@@ -374,7 +487,7 @@ void AKineticCharacter::BuildInput()
 	InputContext->MapKey(JumpAction, EKeys::SpaceBar);
 	InputContext->MapKey(SprintAction, EKeys::LeftShift);
 	InputContext->MapKey(CrouchAction, EKeys::C);
-	// The Spool (the browser client's controls).
+	// The Spool.
 	InputContext->MapKey(FireAction, EKeys::LeftMouseButton);
 	InputContext->MapKey(SelfDogAction, EKeys::E);
 	InputContext->MapKey(ModeActions[0], EKeys::One);
@@ -425,7 +538,16 @@ void AKineticCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	Input->BindAction(ReleaseAction, ETriggerEvent::Started, this, &AKineticCharacter::OnRelease);
 	Input->BindAction(DrawAction, ETriggerEvent::Started, this, &AKineticCharacter::OnDraw);
 	Input->BindAction(DrawAction, ETriggerEvent::Completed, this, &AKineticCharacter::OnDraw);
+	// Any of them is input for the idle rules.
+	for (UInputAction* Any : {MoveAction.Get(), LookAction.Get(), JumpAction.Get(), SprintAction.Get(), CrouchAction.Get(),
+	                          FireAction.Get(), SelfDogAction.Get(), ModeActions[0].Get(), ModeActions[1].Get(),
+	                          ModeActions[2].Get(), ReleaseAction.Get(), DrawAction.Get()})
+	{
+		Input->BindAction(Any, ETriggerEvent::Triggered, this, &AKineticCharacter::NoteInput);
+	}
 }
+
+void AKineticCharacter::NoteInput() { ++Inputs; }
 
 void AKineticCharacter::OnFire()
 {
@@ -492,6 +614,10 @@ void AKineticCharacter::OnLook(const FInputActionValue& Value)
 
 void AKineticCharacter::OnJump()
 {
+	if (!bMovementAllowed || bStunned)
+	{
+		return;
+	}
 	if (IsClimbing())
 	{
 		// Let go, pushed back off the ladder.

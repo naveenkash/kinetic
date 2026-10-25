@@ -4,7 +4,7 @@ _Status: **PROPOSED**, not decided. Raised 2026-10-25. The baseline in networkin
 
 ## The idea
 
-Run matches on one engine-free server program built on `KineticCore`, instead of on an Unreal dedicated server. Clients send inputs and draw what the server reports. The Unreal client and the browser client (`web/`) both talk to the same server, so browser and Unreal players could share a match.
+Run matches on one engine-free server program built on `KineticCore`, instead of on an Unreal dedicated server. Clients send inputs and draw what the server reports. Any client that speaks the protocol could join: the Unreal client, and later a browser client, so browser and Unreal players could share a match.
 
 ## What already supports it
 
@@ -12,7 +12,7 @@ Run matches on one engine-free server program built on `KineticCore`, instead of
 - **Most of the server's networking:**
   - the encodings, priority, tiers and the bandwidth scheduler;
   - the rewind history, cut validation, the Dog re-sweep and the Stall grace window (networking.md section 12).
-- **The browser client:** it runs the same `KineticCore`, compiled to WebAssembly. It is the first client that could connect to such a server.
+- **A browser client is possible:** `KineticCore` compiled to WebAssembly ran a full single-player match in a browser prototype (`web/`, removed on 2026-10-25 once the Unreal project played a Scrap match; it is in the git history).
 
 ## What it changes
 
@@ -34,4 +34,4 @@ Run matches on one engine-free server program built on `KineticCore`, instead of
 
 ## Proposed path
 
-Build the browser client first, single player against bots (`web/`). Then, if the decision goes ahead, add a minimal standalone server that runs one match for two browser clients. Measure risks 1 to 4 on it before any Unreal client work depends on the choice.
+If the decision goes ahead, add a minimal standalone server that runs one match for two clients, and measure risks 1 to 3 on it (and 4, if a browser client comes back) before Unreal client netcode depends on the choice. The browser prototype that was to be its first client was removed on 2026-10-25; the Unreal client is now the first.

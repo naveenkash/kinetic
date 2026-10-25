@@ -25,6 +25,7 @@ enum class ELineModeInput : uint8
 	Hang
 };
 class UCameraComponent;
+class UStaticMeshComponent;
 class UInputAction;
 class UInputMappingContext;
 struct FInputActionValue;
@@ -43,6 +44,14 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = "Kinetic")
 	TObjectPtr<UCameraComponent> Camera;
 
+	// The grey-box body other players see (the owner does not): a 1.9 m column in the crew's
+	// colour, with a visor on the facing side.
+	UPROPERTY(VisibleAnywhere, Category = "Kinetic")
+	TObjectPtr<UStaticMeshComponent> Body;
+	UPROPERTY(VisibleAnywhere, Category = "Kinetic")
+	TObjectPtr<UStaticMeshComponent> Visor;
+	void SetCrewColour(const FLinearColor& Colour);
+
 	// Sets the movement from the class's table row. Called at BeginPlay; call again after
 	// changing Harness at run time. False (and logged) if the tables did not load.
 	bool ApplyHarness();
@@ -56,6 +65,20 @@ public:
 	void SetSprinting(bool bSprint);
 	bool IsSprinting() const { return bSprinting; }
 	bool IsClimbing() const { return Ladder != nullptr; }
+	const AKineticLadder* GetLadder() const { return Ladder; }
+	// Lets go of the ladder (a reset or a Stall moves the character off it).
+	void LeaveLadder();
+	// Whether pressing into a ladder takes hold of it (or backing over its top climbs down). On
+	// for players; a bot turns it on only when its route takes the ladder.
+	void SetTakesLadders(bool bTakes) { bTakesLadders = bTakes; }
+
+	// The match's hold (game-modes 2: no movement until 2:26 of the Drop). Held, move, jump and
+	// the ladder are ignored.
+	void SetMovementAllowed(bool bAllowed);
+	bool IsMovementAllowed() const { return bMovementAllowed; }
+
+	// Counts the owner's own input (any key or the mouse), for the match's idle rules.
+	uint32 InputCount() const { return Inputs; }
 
 	// Climbs onto a ledge within the class's mantle height in front, if there is one and the
 	// character fits on top. Returns whether it did.
@@ -72,6 +95,8 @@ public:
 
 	// The Spool's buttons, for tests and bots.
 	void FirePressed();
+	// Jump, or mantle a ledge in front, or let go of a ladder: the jump key.
+	void JumpPressed() { OnJump(); }
 
 	// What the capsule hit since the Spool last asked: the Impact Monitor's contacts for the
 	// step (player-physics 4.1), taken and cleared by UKineticSpoolWorld.
@@ -109,6 +134,8 @@ private:
 	void OnRelease();
 	void OnDraw(const FInputActionValue& Value);
 	void UpdateLadder(float DeltaSeconds);
+	bool FloorUnderFeet() const;
+	void NoteInput();
 	void BuildInput();
 
 	float RunSpeedM = 6.2f, SprintSpeedM = 7.5f, MantleHeightM = 2.2f, LadderSpeedM = 2.0f;
@@ -117,6 +144,9 @@ private:
 	bool bUnderLine = false;
 	bool bHeldStill = false;
 	bool bStunned = false;
+	bool bMovementAllowed = true;
+	bool bTakesLadders = true;
+	uint32 Inputs = 0;
 	std::vector<Kinetic::FContact> Contacts;
 	bool bDrawn = false;
 	float NormalFriction = 8.0f, NormalBraking = 2048.0f;

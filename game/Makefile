@@ -12,7 +12,8 @@
 #
 # With Unreal 5.8 installed (UE_ROOT, the Launcher's folder by default):
 #   make editor        builds the KineticEditor target
-#   make unreal-test   runs the Kinetic.* automation tests in a headless editor
+#   make unreal-test   runs the Kinetic.* automation tests in a headless editor (UNREAL_TESTS=
+#                      Kinetic.Yard.Scrap runs just those)
 #   make import-props  imports the generated props in art/out (art/README.md) into Content
 #   make yard-greybox  builds the Yard grey-box level from the layout docs, with the props
 #
@@ -39,6 +40,8 @@ HEADERS := $(wildcard $(CORE)/Public/Kinetic/*.h) $(wildcard $(TESTS)/*.h)
 BUILD_KEY := $(shell printf '%s' "$(CXX) $(CXXFLAGS) $(SANITIZE) $(LIB_SRC) $(TEST_SRC)" | shasum | cut -c1-16)
 STAMP := $(BUILD)/flags-$(BUILD_KEY).stamp
 DEPS := $(HEADERS) $(STAMP) Makefile
+
+UNREAL_TESTS ?= Kinetic
 
 .PHONY: test test-asan bench check report all-checks clean editor unreal-test import-props yard-greybox
 
@@ -96,7 +99,7 @@ editor:
 # The editor's exit code does not carry test failures, so the log is checked for them.
 unreal-test: editor | $(BUILD)
 	@rm -f $(BUILD)/unreal-test.log
-	$(UE_CMD) -ExecCmds="Automation RunTests Kinetic; Quit" -abslog="$(abspath $(BUILD))/unreal-test.log" > /dev/null 2>&1 || true
+	$(UE_CMD) -ExecCmds="Automation RunTests $(UNREAL_TESTS); Quit" -abslog="$(abspath $(BUILD))/unreal-test.log" > /dev/null 2>&1 || true
 	@grep "Test Completed" $(BUILD)/unreal-test.log
 	@grep -q "TEST COMPLETE. EXIT CODE: 0" $(BUILD)/unreal-test.log
 	@! grep -q "Result={Fail" $(BUILD)/unreal-test.log

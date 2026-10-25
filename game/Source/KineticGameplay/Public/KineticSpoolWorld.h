@@ -1,6 +1,5 @@
 // Every Spool line in a level, solved once per step by KineticCore's rules (bible/05 sections
-// 3 to 6; docs/tech/spool-and-line-implementation.md). The step is the browser client's, with
-// engine bodies in place of its boxes:
+// 3 to 6; docs/tech/spool-and-line-implementation.md), with engine bodies for the rules' points:
 //
 //   1. Dogs in flight sweep the level and seat: a player's Catch Plate, a prop, or the world.
 //   2. Lines engage their mode once both Dogs seat, switch after the class delay, time out.
@@ -13,7 +12,11 @@
 //
 // It runs one step per frame: the project runs at a fixed 60 Hz (Config/DefaultEngine.ini), the
 // rules' step. Props are point masses at their centre of mass, as in the rules; a line is drawn
-// to where its Dog seated. Networking, the flight body, impacts and kinematic seats come later.
+// to where its Dog seated. Networking, the flight body and kinematic seats come later.
+//
+// A match (AKineticGameMode's Scrap mode) gates the Spool (no Dogs or swings before Live),
+// turns off the walk-the-arena respawn, puts riggers back at the round's spawns, and reads what
+// happened through TakeEvents: Dogs seating in plates, lines ending, Stalls.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -88,6 +91,24 @@ struct FKineticLine
 	bool IsLive() const { return A.Seat != EKineticSeat::None && B.Seat != EKineticSeat::None; }
 };
 
+// What happened in the Spool, for the match and the bots (TakeEvents).
+enum class EKineticSpoolEventKind : uint8
+{
+	Seat,       // A Dog of Line seated in Target's plate (Owner's line)
+	LineEnded,  // Line is gone: released, cut, met, expired, missed, ran out
+	Stall       // Target was Stalled (Cause)
+};
+
+struct FKineticSpoolEvent
+{
+	EKineticSpoolEventKind Kind = EKineticSpoolEventKind::Seat;
+	int32 LineId = 0;
+	TWeakObjectPtr<AKineticCharacter> Owner;
+	TWeakObjectPtr<AKineticCharacter> Target;
+	EKineticLineEnded Why = EKineticLineEnded::Released;
+	Kinetic::EStallCause Cause = Kinetic::EStallCause::WorldImpact;
+};
+
 // What the Spool needs to remember of each player between steps.
 struct FKineticSpoolPlayer
 {
@@ -120,7 +141,7 @@ class KINETICGAMEPLAY_API UKineticSpoolWorld : public UTickableWorldSubsystem
 public:
 	static constexpr double Dt = 1.0 / 60.0;
 
-	// The Spool's buttons (bible/05 section 3.1, the browser client's controls).
+	// The Spool's buttons (bible/05 section 3.1).
 	void FireDog(AKineticCharacter* Player);            // Dog A, then Dog B; a third press releases and fires a new A
 	void SelfDogNext(AKineticCharacter* Player);        // The next Dog goes into your own chest plate, and fires it
 	void SelectMode(AKineticCharacter* Player, Kinetic::ELineMode Mode);  // Haul, Jack or Hang
@@ -132,6 +153,25 @@ public:
 	const TArray<FKineticLine>& Lines() const { return LineList; }
 	const FKineticSpoolPlayer* PlayerState(const AKineticCharacter* Player) const;
 	double Now() const { return Clock; }
+	bool IsStanding(const AKineticCharacter* Player) const;
+	// The ids of other riggers' lines with a Dog in this player's plates.
+	TArray<int32> LinesOnPlayer(const AKineticCharacter* Player) const;
+	const FKineticLine* FindLine(int32 Id) const;
+	const FKineticLine* ActiveLine(const AKineticCharacter* Player) const;
+	double CutterWarmup(const AKineticCharacter* Player) const;
+
+	// What happened since the last call (one reader: the match). Kept to the last 1024.
+	TArray<FKineticSpoolEvent> TakeEvents();
+
+	// The match's controls. Lines: Dogs and the Cutter's swing (game-modes 2: from Live).
+	void SetLinesAllowed(bool bAllowed) { bLinesAllowed = bAllowed; }
+	bool LinesAllowed() const { return bLinesAllowed; }
+	// Off in a match: a Stalled rigger stays out until the round resets.
+	void SetAutoRespawn(bool bOn) { bAutoRespawn = bOn; }
+	// Every line ends (the round's reset clears set lines too).
+	void ClearLines();
+	// Puts a rigger back on their feet at a spawn: shown, colliding, no hits or lines carried over.
+	void PlaceStanding(AKineticCharacter* Player, const FVector& At, const FRotator& Facing);
 
 	// A player's Catch Plate, in the world (cm).
 	static FVector PlatePosition(const AKineticCharacter* Player, Kinetic::EPlate Plate);
@@ -149,7 +189,7 @@ public:
 	void Step();
 
 	// Takes a player out of the round (05 7.4): the Hooks lift them off, their lines go. In the
-	// walk-the-arena mode they are back at Spawn A after RespawnSeconds.
+	// walk-the-arena mode they are back at Spawn A after RespawnSeconds; in a match, at the reset.
 	void Stall(AKineticCharacter* Player, Kinetic::EStallCause Cause);
 	static constexpr double RespawnSeconds = 3.0;
 	static constexpr double KillZCm = -600.0;  // The Well's kill volume, and anything off the edge (layout.md)
@@ -174,12 +214,16 @@ private:
 	void Impacts();
 	void HangLineContacts();
 	void Respawn(AKineticCharacter* Player);
+	void Emit(FKineticSpoolEvent Event);
 	Kinetic::FLineEndpoint EndpointOf(const FKineticLineEnd& End, bool bHeld) const;
 
 	TArray<FKineticLine> LineList;
 	TMap<TWeakObjectPtr<AKineticCharacter>, FKineticSpoolPlayer> Players;
 	int32 NextLineId = 1;
 	double Clock = 0.0;
+	TArray<FKineticSpoolEvent> Events;
+	bool bLinesAllowed = true;
+	bool bAutoRespawn = true;
 
 	UPROPERTY()
 	TObjectPtr<AKineticLineRenderer> Renderer;

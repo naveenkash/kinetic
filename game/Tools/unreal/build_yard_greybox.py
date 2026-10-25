@@ -46,6 +46,9 @@ PROP_BODIES = {
     "SM_Light_FloodlightStand_Office": (22.0, "LOOSE"),
 }
 
+# Scenery a bot may Haul an enemy into (AKineticBotController): tagged Kinetic.Anchor.
+ANCHOR_ROLES = {"mesa", "ledge", "structure", "placeholder", "rated"}
+
 # Grey-box colours by role, so a tier reads at a glance.
 COLOURS = {
     "floor": (0.32, 0.31, 0.30),
@@ -112,6 +115,8 @@ class Builder:
         actor.set_actor_scale3d(unreal.Vector(x1 - x0, y1 - y0, z1 - z0))
         actor.set_actor_label(label)
         actor.set_folder_path(f"{folder}/{role.capitalize()}")
+        if role in ANCHOR_ROLES:
+            actor.set_editor_property("tags", [unreal.Name("Kinetic.Anchor")])
         self.count += 1
         self.solids.append((role, (x0, x1, y0, y1, z0, z1)))
         return actor
@@ -140,6 +145,17 @@ class Builder:
         volume.set_editor_property("into_wall", unreal.Vector(ix, -iy, 0.0))
         volume.set_actor_label(f"{label}_Climb")
         volume.set_folder_path("Greybox/Ladders")
+        # The foot stays clear, 1.5 m out and 2 m across, so a climber (and a bot's path) can
+        # reach it: later pieces (the grate stairs) are routed round it.
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        if ix:
+            face = x1 if ix > 0 else x0
+            clear = (face - ix * 1.6, face - ix * 0.1, cy - 1.0, cy + 1.0)
+        else:
+            face = y1 if iy > 0 else y0
+            clear = (cx - 1.0, cx + 1.0, face - iy * 1.6, face - iy * 0.1)
+        self.solids.append(("clearance", (min(clear[0], clear[1]), max(clear[0], clear[1]),
+                                          min(clear[2], clear[3]), max(clear[2], clear[3]), z0, z0 + 2.0)))
 
     def blocked(self, x0, x1, y0, y1, z0, z1, ignore=("floor", "trench", "ladder")) -> bool:
         """Whether a box would overlap anything built so far (beyond the floors), or the Haul
@@ -382,7 +398,9 @@ def rails(b: Builder) -> None:
             b.box("PortalLeg_Head", "rails", x - 1, x + 1, s * 32.2, s * 34.2, 35.6, 38)
             b.ladder("PortalLeg_CageLadder", x + 1, x + 1.7, s * 27, s * 27.7, 0, 34.1, (-1, 0))
             for z in (24, 10.5) if (x == -60 and s > 0) else (24,):
-                b.box("PortalLeg_Landing", "rails", x + 1, x + 2.2, s * 27, s * 28.3, z - 0.1, z)
+                # The landing, with a hatch the climber passes through (0.9 m by 0.8 m).
+                b.box("PortalLeg_Landing", "rails", x + 1.9, x + 2.2, s * 27, s * 28.3, z - 0.1, z)
+                b.box("PortalLeg_Landing", "rails", x + 1, x + 1.9, s * 27.8, s * 28.3, z - 0.1, z)
     # Rail walks, 1.2 m wide at Y +-31.5, deck at 36, handrail outboard only, rail head inboard
     # on the cross-heads.
     for s in (-1, 1):
@@ -400,8 +418,13 @@ def rails(b: Builder) -> None:
     for x in (-52, 52):
         for y in (-40, 40):
             b.box("FloodlightMast", "structure", x - 0.4, x + 0.4, y - 0.4, y + 0.4, 0, 24)
-            b.box("MastPlatform", "structure", x - 2, x + 2, y - 2, y + 2, 23.8, 24)
             side = 1 if y < 0 else -1  # The ladder on the face toward the Yard
+            # The platform, with a hatch over the ladder (1 m by 1.3 m) the climber passes through.
+            hy0, hy1 = sorted((y + side * 0.4, y + side * 1.7))
+            b.box("MastPlatform", "structure", x - 2, x - 0.5, y - 2, y + 2, 23.8, 24)
+            b.box("MastPlatform", "structure", x + 0.5, x + 2, y - 2, y + 2, 23.8, 24)
+            b.box("MastPlatform", "structure", x - 0.5, x + 0.5, y - 2, hy0, 23.8, 24)
+            b.box("MastPlatform", "structure", x - 0.5, x + 0.5, hy1, y + 2, 23.8, 24)
             b.ladder("MastLadder", x - 0.35, x + 0.35, y + side * 0.4, y + side * 1.1, 0, 23.8, (0, -side))
 
 
@@ -544,13 +567,29 @@ def lighting(b: Builder) -> None:
         start.set_editor_property("player_start_tag", label)
 
 
+def navigation() -> None:
+    """The navmesh's bounds: the whole arena, the Well's floor to above the gantry. The navmesh
+    itself is built when play starts (Config/DefaultEngine.ini: dynamic generation); the ladders
+    link its levels."""
+    x0, x1, y0, y1, z0, z1 = -81, 81, -46, 46, -12, 40
+    volume = actors.spawn_actor_from_class(unreal.NavMeshBoundsVolume,
+                                           to_unreal((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2),
+                                           unreal.Rotator(0, 0, 0))
+    # The default brush is a 2 m cube.
+    volume.set_actor_scale3d(unreal.Vector((x1 - x0) / 2, (y1 - y0) / 2, (z1 - z0) / 2))
+    volume.set_actor_label("Nav_Bounds")
+
+
 def main() -> None:
     # The level is rebuilt whole: an existing one is opened and emptied (it may be the map the
     # editor opened on, which cannot be deleted while loaded), a missing one created.
     if eal.does_asset_exist(LEVEL):
         if not levels.load_level(LEVEL):
             raise RuntimeError(f"could not open {LEVEL}")
-        doomed = [a for a in actors.get_all_level_actors() if not isinstance(a, (unreal.WorldSettings, unreal.Brush))]
+        # Everything but the world settings and the builder brush (a volume is a brush too).
+        doomed = [a for a in actors.get_all_level_actors()
+                  if not isinstance(a, unreal.WorldSettings)
+                  and not (isinstance(a, unreal.Brush) and not isinstance(a, unreal.Volume))]
         actors.destroy_actors(doomed)
     elif not levels.new_level(LEVEL):
         raise RuntimeError(f"could not create {LEVEL}")
@@ -563,6 +602,7 @@ def main() -> None:
     crossings(b)
     props(b)
     lighting(b)
+    navigation()
     game_mode()
     if not levels.save_current_level():
         raise RuntimeError(f"could not save {LEVEL}")

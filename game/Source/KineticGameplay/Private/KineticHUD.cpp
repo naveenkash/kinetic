@@ -4,7 +4,59 @@
 #include "Engine/Engine.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "KineticCharacter.h"
+#include "KineticGameMode.h"
 #include "KineticSpoolWorld.h"
+
+namespace
+{
+const TCHAR* PhaseName(Kinetic::EScrapPhase Phase)
+{
+	switch (Phase)
+	{
+	case Kinetic::EScrapPhase::Reset: return TEXT("RESET");
+	case Kinetic::EScrapPhase::Drop: return TEXT("DROP");
+	case Kinetic::EScrapPhase::Live: return TEXT("LIVE");
+	case Kinetic::EScrapPhase::SuddenDeath: return TEXT("SUDDEN DEATH");
+	case Kinetic::EScrapPhase::RoundEnd: return TEXT("ROUND OVER");
+	case Kinetic::EScrapPhase::MatchOver: return TEXT("MATCH OVER");
+	}
+	return TEXT("");
+}
+}  // namespace
+
+void AKineticHUD::DrawMatch()
+{
+	// The match: round, score, clock and phase across the top; the Marshal's calls and the
+	// Stalls down the left.
+	const AKineticGameMode* GameMode = GetWorld()->GetAuthGameMode<AKineticGameMode>();
+	const FKineticScrap* Scrap = GameMode ? GameMode->Scrap() : nullptr;
+	if (!Scrap)
+	{
+		return;
+	}
+	const Kinetic::FScrapMatch& M = Scrap->Match();
+	const int32 Mine = Scrap->HumanSlot() == INDEX_NONE ? 0 : Scrap->TeamOf(Scrap->HumanSlot());
+	const double Clock = FMath::Max(0.0, M.ClockRemaining());
+	const int32 Minutes = static_cast<int32>(Clock) / 60;
+	const int32 Seconds = static_cast<int32>(Clock) % 60;
+	const FString Top = FString::Printf(TEXT("Round %d    %s %d  -  %d %s    %d:%02d    %s"), M.Round() + 1,
+	                                    Scrap->HumanSlot() == INDEX_NONE ? TEXT("Crew A") : TEXT("Your crew"), M.Wins(Mine),
+	                                    M.Wins(1 - Mine), Scrap->HumanSlot() == INDEX_NONE ? TEXT("Crew B") : TEXT("Their crew"),
+	                                    Minutes, Seconds, PhaseName(M.Phase()));
+	const FLinearColor Text(0.95f, 0.92f, 0.85f);
+	float W = 0.0f, H = 0.0f;
+	GetTextSize(Top, W, H, GEngine->GetMediumFont());
+	DrawText(Top, Text, (static_cast<float>(Canvas->ClipX) - W) * 0.5f, 16.0f, GEngine->GetMediumFont());
+	const FString Standing = FString::Printf(TEXT("Standing  %d  -  %d"), M.StandingCount(Mine), M.StandingCount(1 - Mine));
+	GetTextSize(Standing, W, H, GEngine->GetSmallFont());
+	DrawText(Standing, Text, (static_cast<float>(Canvas->ClipX) - W) * 0.5f, 42.0f, GEngine->GetSmallFont());
+	float Y = 80.0f;
+	for (const FString& Line : Scrap->Feed())
+	{
+		DrawText(Line, FLinearColor(0.85f, 0.85f, 0.8f), 24.0f, Y, GEngine->GetSmallFont());
+		Y += 18.0f;
+	}
+}
 
 void AKineticHUD::DrawHUD()
 {
@@ -20,6 +72,7 @@ void AKineticHUD::DrawHUD()
 	DrawLine(X + 3.0f, Y, X + 8.0f, Y, Mark, 1.5f);
 	DrawLine(X, Y - 8.0f, X, Y - 3.0f, Mark, 1.5f);
 	DrawLine(X, Y + 3.0f, X, Y + 8.0f, Mark, 1.5f);
+	DrawMatch();
 	const AKineticCharacter* Character = Cast<AKineticCharacter>(GetOwningPawn());
 	if (!Character)
 	{
@@ -71,8 +124,11 @@ void AKineticHUD::DrawHUD()
 		{
 			const TCHAR* Causes[] = {TEXT("an object"), TEXT("the world"), TEXT("a moving part"), TEXT("a player"),
 			                         TEXT("a crush"), TEXT("a blast"), TEXT("a ring-out")};
-			Banner = FString::Printf(TEXT("STALLED by %s   back in %.0f s"), Causes[static_cast<int>(P->StallCause)],
-			                         FMath::Max(0.0, UKineticSpoolWorld::RespawnSeconds - (Now - P->StalledAt)));
+			const AKineticGameMode* GameMode = GetWorld()->GetAuthGameMode<AKineticGameMode>();
+			Banner = GameMode && GameMode->Scrap()
+			             ? FString::Printf(TEXT("STALLED by %s   out until the reset"), Causes[static_cast<int>(P->StallCause)])
+			             : FString::Printf(TEXT("STALLED by %s   back in %.0f s"), Causes[static_cast<int>(P->StallCause)],
+			                               FMath::Max(0.0, UKineticSpoolWorld::RespawnSeconds - (Now - P->StalledAt)));
 		}
 		else if (Now - P->LastOutcomeAt < 1.0 && P->LastOutcome != Kinetic::EOutcome::None)
 		{

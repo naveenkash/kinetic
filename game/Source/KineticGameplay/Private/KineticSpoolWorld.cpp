@@ -24,9 +24,9 @@ using Kinetic::FVec3;
 
 namespace
 {
-constexpr double BraceStillSpeed = 0.5;  // m/s, the browser client's
+constexpr double BraceStillSpeed = 0.5;  // m/s (PROPOSED)
 constexpr double BraceSeconds = 0.3;     // bible/05 section 5.4
-constexpr double StaggerSeconds = 0.5;   // PROPOSED, the browser client's
+constexpr double StaggerSeconds = 0.5;   // PROPOSED
 constexpr double FlipSeconds = 1.2;
 constexpr double LineStepOverCm = 30.0;  // A Hang line lower than this above the feet is stepped over (PROPOSED)
 constexpr double PlayerRadiusCm = 40.0;
@@ -82,7 +82,7 @@ const FKineticSpoolPlayer* UKineticSpoolWorld::PlayerState(const AKineticCharact
 
 FVector UKineticSpoolWorld::PlatePosition(const AKineticCharacter* Player, Kinetic::EPlate Plate)
 {
-	// The browser client's plate offsets from the body centre (05 section 5.5), in cm.
+	// The plate offsets from the body centre (05 section 5.5; PROPOSED), in cm.
 	const FRotator Yaw(0.0, Player->GetActorRotation().Yaw, 0.0);
 	const FVector F = FRotationMatrix(Yaw).GetUnitAxis(EAxis::X);
 	const FVector R = FRotationMatrix(Yaw).GetUnitAxis(EAxis::Y);
@@ -171,15 +171,84 @@ int32 UKineticSpoolWorld::ActiveLineOf(const AKineticCharacter* Player) const
 void UKineticSpoolWorld::EndLine(int32 Index, EKineticLineEnded Why)
 {
 	UE_LOG(LogKineticSpool, Verbose, TEXT("line %d ended (%d)"), LineList[Index].Id, static_cast<int>(Why));
+	FKineticSpoolEvent E;
+	E.Kind = EKineticSpoolEventKind::LineEnded;
+	E.LineId = LineList[Index].Id;
+	E.Owner = LineList[Index].Owner;
+	E.Why = Why;
+	Emit(MoveTemp(E));
 	LineList.RemoveAt(Index);
+}
+
+void UKineticSpoolWorld::Emit(FKineticSpoolEvent Event)
+{
+	if (Events.Num() >= 1024)
+	{
+		Events.RemoveAt(0);  // Nobody is reading (the walk-the-arena mode)
+	}
+	Events.Add(MoveTemp(Event));
+}
+
+TArray<FKineticSpoolEvent> UKineticSpoolWorld::TakeEvents()
+{
+	TArray<FKineticSpoolEvent> Out = MoveTemp(Events);
+	Events.Reset();
+	return Out;
+}
+
+bool UKineticSpoolWorld::IsStanding(const AKineticCharacter* Player) const
+{
+	const FKineticSpoolPlayer* P = PlayerState(Player);
+	return !P || P->bStanding;
+}
+
+TArray<int32> UKineticSpoolWorld::LinesOnPlayer(const AKineticCharacter* Player) const
+{
+	TArray<int32> Out;
+	for (const FKineticLine& L : LineList)
+	{
+		const bool bA = L.A.Seat == EKineticSeat::Plate && L.A.Player.Get() == Player;
+		const bool bB = L.B.Seat == EKineticSeat::Plate && L.B.Player.Get() == Player;
+		if (bA || bB)
+		{
+			Out.Add(L.Id);
+		}
+	}
+	return Out;
+}
+
+const FKineticLine* UKineticSpoolWorld::FindLine(int32 Id) const
+{
+	return LineList.FindByPredicate([Id](const FKineticLine& L) { return L.Id == Id; });
+}
+
+const FKineticLine* UKineticSpoolWorld::ActiveLine(const AKineticCharacter* Player) const
+{
+	const int32 I = ActiveLineOf(Player);
+	return I == INDEX_NONE ? nullptr : &LineList[I];
+}
+
+double UKineticSpoolWorld::CutterWarmup(const AKineticCharacter* Player) const
+{
+	const Kinetic::FKineticTables* T = Tables();
+	return T && Player ? Kinetic::CutterWarmupSeconds(Kinetic::ECutterVariant::Standard, KineticHarness::ToCore(Player->Harness), *T)
+	                   : 0.5;
+}
+
+void UKineticSpoolWorld::ClearLines()
+{
+	while (LineList.Num() > 0)
+	{
+		EndLine(LineList.Num() - 1, EKineticLineEnded::Released);
+	}
 }
 
 void UKineticSpoolWorld::FireDog(AKineticCharacter* Player)
 {
 	const Kinetic::FKineticTables* T = Tables();
-	if (!T || !Player)
+	if (!T || !Player || !bLinesAllowed || Player->IsStunned() || !IsStanding(Player))
 	{
-		return;
+		return;  // Before Live, staggered, or out of the round
 	}
 	FKineticSpoolPlayer& P = StateOf(Player);
 	const Kinetic::FHarnessTuning& H = T->Harness(KineticHarness::ToCore(Player->Harness));
@@ -237,7 +306,7 @@ void UKineticSpoolWorld::FireDog(AKineticCharacter* Player)
 
 void UKineticSpoolWorld::SelfDogNext(AKineticCharacter* Player)
 {
-	if (Player)
+	if (Player && bLinesAllowed)
 	{
 		StateOf(Player).bSelfDogNext = true;
 		FireDog(Player);
@@ -334,7 +403,7 @@ void UKineticSpoolWorld::SetCutterDrawn(AKineticCharacter* Player, bool bDrawn)
 void UKineticSpoolWorld::Swing(AKineticCharacter* Player)
 {
 	const Kinetic::FKineticTables* T = Tables();
-	if (!T || !Player)
+	if (!T || !Player || !bLinesAllowed || Player->IsStunned() || !IsStanding(Player))
 	{
 		return;
 	}
@@ -462,6 +531,15 @@ void UKineticSpoolWorld::UpdateDogs()
 			{
 				(bSideA ? L.A : L.B) = Seat.GetValue();
 				Dog.Reset();
+				if (Seat->Seat == EKineticSeat::Plate)
+				{
+					FKineticSpoolEvent E;
+					E.Kind = EKineticSpoolEventKind::Seat;
+					E.LineId = L.Id;
+					E.Owner = L.Owner;
+					E.Target = Seat->Player;
+					Emit(MoveTemp(E));
+				}
 				continue;
 			}
 			Dog->Position = To;
@@ -951,7 +1029,13 @@ void UKineticSpoolWorld::Stall(AKineticCharacter* Player, Kinetic::EStallCause C
 	P.bDrawn = false;
 	P.bBraced = false;
 	UE_LOG(LogKineticSpool, Log, TEXT("%s Stalled (%d)"), *Player->GetName(), static_cast<int>(Cause));
+	FKineticSpoolEvent E;
+	E.Kind = EKineticSpoolEventKind::Stall;
+	E.Target = Player;
+	E.Cause = Cause;
+	Emit(MoveTemp(E));
 	// The Hooks lift them out: off the board until they come back.
+	Player->LeaveLadder();
 	Player->SetStunned(true);
 	Player->SetUnderLine(false, false);
 	Player->GetCharacterMovement()->StopMovementImmediately();
@@ -962,18 +1046,25 @@ void UKineticSpoolWorld::Stall(AKineticCharacter* Player, Kinetic::EStallCause C
 
 void UKineticSpoolWorld::Respawn(AKineticCharacter* Player)
 {
-	FKineticSpoolPlayer& P = StateOf(Player);
-	FVector At = FVector::ZeroVector;
-	FRotator Facing = FRotator::ZeroRotator;
 	for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
 	{
 		if (It->PlayerStartTag == FName(TEXT("Spawn_A")))
 		{
-			At = It->GetActorLocation();
-			Facing = It->GetActorRotation();
-			break;
+			PlaceStanding(Player, It->GetActorLocation(), It->GetActorRotation());
+			return;
 		}
 	}
+	PlaceStanding(Player, FVector::ZeroVector, FRotator::ZeroRotator);
+}
+
+void UKineticSpoolWorld::PlaceStanding(AKineticCharacter* Player, const FVector& At, const FRotator& Facing)
+{
+	if (!Player)
+	{
+		return;
+	}
+	FKineticSpoolPlayer& P = StateOf(Player);
+	Player->LeaveLadder();
 	Player->SetActorEnableCollision(true);
 	Player->SetActorHiddenInGame(false);
 	Player->TeleportTo(At, Facing);
@@ -981,11 +1072,20 @@ void UKineticSpoolWorld::Respawn(AKineticCharacter* Player)
 	{
 		Controller->SetControlRotation(Facing);
 	}
-	Player->GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	UCharacterMovementComponent* Movement = Player->GetCharacterMovement();
+	Movement->StopMovementImmediately();
+	Movement->SetMovementMode(MOVE_Walking);
 	Player->SetStunned(false);
+	Player->SetUnderLine(false, false);
+	Player->TakeContacts();
 	P.bStanding = true;
 	P.StunnedUntil = -1.0;
+	P.LastOutcome = Kinetic::EOutcome::None;
 	P.LastHangForce = FVector::ZeroVector;
+	P.bDrawn = false;
+	P.bBraced = false;
+	P.BraceHeld = 0.0;
+	P.bSelfDogNext = false;
 	P.Monitor = MakeShared<Kinetic::FImpactMonitor>(*Tables());
 }
 
@@ -999,7 +1099,7 @@ void UKineticSpoolWorld::Impacts()
 		std::vector<Kinetic::FContact> Contacts = Character->TakeContacts();
 		if (!P.bStanding)
 		{
-			if (Clock - P.StalledAt >= RespawnSeconds)
+			if (bAutoRespawn && Clock - P.StalledAt >= RespawnSeconds)
 			{
 				Respawn(Character);
 			}
@@ -1041,7 +1141,7 @@ void UKineticSpoolWorld::HangLineContacts()
 	// Hang and set lines are solid to players (05 3.5): walking into one stops you; over 3 m/s
 	// it staggers you (the line owner's class time); over 6 m/s it flips you over it with your
 	// momentum. Haul and Jack lines are not solid. A line within a step of the feet is stepped
-	// over. (The browser client's rule, on the capsule's axis.)
+	// over, measured on the capsule's axis (PROPOSED).
 	const Kinetic::FKineticTables& T = *Tables();
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(KineticFlipOver), false);
 	for (const FKineticLine& L : LineList)

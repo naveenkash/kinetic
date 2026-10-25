@@ -21,6 +21,7 @@ enum class EKineticHarness : uint8
 namespace KineticHarness
 {
 inline Kinetic::EHarnessClass ToCore(EKineticHarness Harness) { return static_cast<Kinetic::EHarnessClass>(Harness); }
+inline EKineticHarness FromCore(Kinetic::EHarnessClass Class) { return static_cast<EKineticHarness>(Class); }
 
 // "Breaker", "breaker" and so on; false if no class has that name.
 KINETICGAMEPLAY_API bool Parse(const FString& Name, EKineticHarness& Out);

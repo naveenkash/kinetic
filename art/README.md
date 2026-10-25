@@ -17,7 +17,7 @@ Every asset in KINETIC is generated from code, from its spec in [docs/objects](.
    - **Budgets.** Each asset states its LOD0 budget from the spec. The build warns when the game meshes go over it.
 5. **Export.**
    - FBX for Unreal: the meshes, sockets and collision.
-   - GLB for the browser client: the render meshes, with the baked textures embedded.
+   - GLB: the render meshes with the baked textures embedded, a preview any glTF viewer opens.
 6. **Preview.** Two renders, one of the procedural material and one of the baked textures (what Unreal gets), under the arena's sodium light.
 
 In Unreal, materials, Chaos destruction, Niagara effects and MetaSounds are set up by Unreal editor scripts. That part starts once the engine is installed.

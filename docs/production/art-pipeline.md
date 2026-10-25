@@ -6,7 +6,7 @@ _How an object goes from its spec document to a shipped asset. Every object in d
 > - meshes in Blender;
 > - procedural materials baked to textures;
 > - sockets, collision and pivots as the spec names them;
-> - exports for Unreal and for the browser client.
+> - exports for Unreal (and a GLB preview).
 >
 > The steps below still apply, with "the artist" read as "the asset's script". Two steps change:
 > - **High-poly sculpts (section 3)** give way to scripted bevels, weighted normals and procedural detail. The look is stylized hard-surface, which suits code. Where detail is too dense for the budget (chain links, rope wraps, weld mesh), the script models it in full as the high mesh and bakes it onto a low one (normal map, colour, AO, and an alpha mask for cards).

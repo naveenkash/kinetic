@@ -1,5 +1,5 @@
 // The rules tables (game/Content/Core/Tables), loaded once per engine from the same CSV files the
-// headless tests, the browser client and the bible check read.
+// headless tests and the bible check read.
 #pragma once
 
 #include "CoreMinimal.h"

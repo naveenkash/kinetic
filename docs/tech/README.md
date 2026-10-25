@@ -75,7 +75,7 @@ Resolved by the 2026-10-24 bible v0.2 and v0.2.1 changelogs and no longer open: 
 | 18 | Switch 2 as a stretch platform using Lumen Lite | Not committed | Alpha |
 | 19 | Console scalability floor: Series S at 1080p60 with Lumen Lite or software global tracing | As stated | Alpha |
 | 20 | Victim-camera replay from local memory-streamer recording plus replicated victim camera rotation | As stated | Beta |
-| 21 | One engine-free game server for every client (Unreal and browser) instead of an Unreal dedicated server; see [standalone-server-option.md](standalone-server-option.md) | Unreal dedicated server | Before Unreal client netcode |
+| 21 | One engine-free game server for every client (Unreal, and any later client such as a browser one) instead of an Unreal dedicated server; see [standalone-server-option.md](standalone-server-option.md) | Unreal dedicated server | Before Unreal client netcode |
 
 ## Research citations
 

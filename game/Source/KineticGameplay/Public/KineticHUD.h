@@ -1,5 +1,5 @@
-// The grey-box HUD: a crosshair and the class, speed and state, until the UMG HUD of the match
-// modes replaces it.
+// The grey-box HUD: a crosshair, the class, speed and state, the Spool, hits, and in a Scrap
+// match the round, score, clock and the Marshal's calls, until a UMG HUD replaces it.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -14,4 +14,7 @@ class KINETICGAMEPLAY_API AKineticHUD : public AHUD
 
 public:
 	virtual void DrawHUD() override;
+
+private:
+	void DrawMatch();
 };

@@ -1,6 +1,6 @@
 // KineticCore: the rules of the game in standard C++20 with no engine types (game/README.md).
-// The same Public/Private sources build headless with game/Makefile and for the browser with
-// web/Makefile; only Private/Unreal/ is engine code, and only Unreal builds it.
+// The same Public/Private sources build headless with game/Makefile; only Private/Unreal/ is
+// engine code, and only Unreal builds it.
 using UnrealBuildTool;
 
 public class KineticCore : ModuleRules
