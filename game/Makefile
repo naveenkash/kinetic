@@ -18,6 +18,7 @@
 #   make yard-greybox  builds the Yard grey-box level from the layout docs, with the props
 #   make import-audio  generates the tells' sound cues (art/audio) and imports them
 #   make import-characters  imports the harness characters (art/characters, built with Blender)
+#   make import-kit    imports the arena kit and its surfaces (art/kit, art/surfaces, built with Blender)
 #   make metahumans    creates and shapes the five class MetaHumans (building them needs a sign-in)
 #   make shots         renders views of the Yard (crews, mesas, the Gantry) to Saved/Kinetic/Shots
 #
@@ -47,7 +48,7 @@ DEPS := $(HEADERS) $(STAMP) Makefile
 
 UNREAL_TESTS ?= Kinetic
 
-.PHONY: test test-asan bench check report all-checks clean editor unreal-test import-props yard-greybox import-audio import-characters shots metahumans
+.PHONY: test test-asan bench check report all-checks clean editor unreal-test import-props yard-greybox import-audio import-characters shots metahumans import-kit
 
 $(BUILD)/kinetic-core-tests: $(LIB_SRC) $(TEST_SRC) $(DEPS) | $(BUILD)
 	$(CXX) $(CXXFLAGS) -I$(TESTS) $(LIB_SRC) $(TEST_SRC) -o $@
@@ -134,6 +135,9 @@ shots: editor | $(BUILD)
 	$(UE_RENDER) -ExecCmds="Automation RunTests Kinetic.Shots; Quit" -abslog="$(abspath $(BUILD))/shots.log" > /dev/null 2>&1 || true
 	@grep "Kinetic.Shots\|shot " $(BUILD)/shots.log | grep -v "Queued" | tail -8
 	@ls Saved/Kinetic/Shots
+
+import-kit: editor | $(BUILD)
+	$(call run_editor_script,Tools/unreal/import_kit.py,import-kit)
 
 metahumans: editor | $(BUILD)
 	$(call run_editor_script,Tools/unreal/build_metahumans.py,metahumans)

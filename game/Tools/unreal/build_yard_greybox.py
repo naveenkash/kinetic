@@ -17,6 +17,7 @@ level; it replaces the whole level.
 """
 from __future__ import annotations
 
+import json
 import math
 import os
 import random
@@ -24,6 +25,8 @@ import random
 import unreal
 
 LEVEL = "/Game/Arenas/YRD_Yard/L_YRD_Greybox"
+REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
+KIT = "/Game/Arenas/YRD_Yard/Kit"
 MATERIALS = "/Game/Arenas/YRD_Yard/Greybox"
 CUBE = "/Engine/BasicShapes/Cube"
 LADDER = unreal.load_class(None, "/Script/KineticGameplay.KineticLadder")
@@ -80,7 +83,16 @@ def to_unreal(x: float, y: float, z: float) -> unreal.Vector:
     return unreal.Vector(x * 100.0, -y * 100.0, z * 100.0)
 
 
-def material(role: str) -> unreal.MaterialInstanceConstant:
+# The kit's surface for a box it does not cover (the press ram, the plank bridges), once imported.
+ROLE_SURFACE = {"floor": "Concrete", "trench": "Slag", "pit": "Rust", "mesa": "HullSteel", "ledge": "HullSteel",
+                "rated": "Hazard", "bridge": "Timber", "rails": "HullSteel", "structure": "DarkSteel", "ladder": "DarkSteel",
+                "placeholder": "DarkSteel"}
+
+
+def material(role: str):
+    surface = f"/Game/Arenas/YRD_Yard/Kit/MI_Surface_{ROLE_SURFACE.get(role, 'DarkSteel')}"
+    if eal.does_asset_exist(surface):
+        return unreal.load_asset(surface)
     name = f"MI_Greybox_{role.capitalize()}"
     path = f"{MATERIALS}/{name}"
     if eal.does_asset_exist(path):
@@ -105,6 +117,9 @@ class Builder:
         self.count = 0
         self.solids: list[tuple[str, tuple[float, ...]]] = []
         self.missing: list[str] = []
+        # Every box and ladder as built, for the visual kit (art/kit builds detail over them).
+        self.layout: dict = {"boxes": [], "ladders": []}
+        self.actors_by_box: list = []
 
     def box(self, label: str, role: str, x0: float, x1: float, y0: float, y1: float, z0: float, z1: float,
             folder: str = "Greybox") -> unreal.StaticMeshActor:
@@ -124,6 +139,8 @@ class Builder:
             actor.set_editor_property("tags", [unreal.Name("Kinetic.Anchor")])
         self.count += 1
         self.solids.append((role, (x0, x1, y0, y1, z0, z1)))
+        self.layout["boxes"].append({"label": label, "role": role, "min": [x0, y0, z0], "max": [x1, y1, z1]})
+        self.actors_by_box.append(actor)
         return actor
 
     def ladder(self, label: str, x0: float, x1: float, y0: float, y1: float, z0: float, z1: float,
@@ -150,6 +167,8 @@ class Builder:
         volume.set_editor_property("into_wall", unreal.Vector(ix, -iy, 0.0))
         volume.set_actor_label(f"{label}_Climb")
         volume.set_folder_path("Greybox/Ladders")
+        self.layout["ladders"].append({"label": label, "min": [min(x0, x1), min(y0, y1), z0], "max": [max(x0, x1), max(y0, y1), z1],
+                                       "into": [ix, iy]})
         # The foot stays clear, 1.5 m out and 2 m across, so a climber (and a bot's path) can
         # reach it: later pieces (the grate stairs) are routed round it.
         cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
@@ -616,20 +635,181 @@ def game_mode() -> None:
     world.get_world_settings().set_editor_property("default_game_mode", mode)
 
 
+def emissive_material(name: str, unlit: bool) -> unreal.Material:
+    """A glow: Color x Strength. Unlit for the sky dome (two-sided, no shadows), lit with
+    emission for the lamps (KineticYardDirector recolours them)."""
+    path = f"{MATERIALS}/{name}"
+    if eal.does_asset_exist(path):
+        mat = unreal.load_asset(path)
+        lib.delete_all_material_expressions(mat)
+    else:
+        mat = assets.create_asset(name, MATERIALS, unreal.Material, unreal.MaterialFactoryNew())
+    colour = lib.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -600, 0)
+    colour.set_editor_property("parameter_name", "Color")
+    colour.set_editor_property("default_value", unreal.LinearColor(1.0, 0.55, 0.1, 1.0))
+    strength = lib.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -600, 200)
+    strength.set_editor_property("parameter_name", "Strength")
+    strength.set_editor_property("default_value", 8.0)
+    glow = lib.create_material_expression(mat, unreal.MaterialExpressionMultiply, -300, 100)
+    if unlit:
+        # The sodium cloud deck: dull orange at the horizon fading to near black overhead
+        # (lighting-and-mood.md, Sky), by the height of the point on the dome.
+        mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+        mat.set_editor_property("two_sided", True)
+        mat.set_editor_property("is_sky", True)  # So the real-time sky light captures it
+        zenith = lib.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -900, -300)
+        zenith.set_editor_property("parameter_name", "Zenith")
+        zenith.set_editor_property("default_value", unreal.LinearColor(0.010, 0.006, 0.004, 1.0))
+        world = lib.create_material_expression(mat, unreal.MaterialExpressionWorldPosition, -1300, -100)
+        mask = lib.create_material_expression(mat, unreal.MaterialExpressionComponentMask, -1100, -100)
+        mask.set_editor_property("r", False)
+        mask.set_editor_property("g", False)
+        mask.set_editor_property("b", True)
+        lib.connect_material_expressions(world, "", mask, "")
+        scale = lib.create_material_expression(mat, unreal.MaterialExpressionDivide, -950, -100)
+        lib.connect_material_expressions(mask, "", scale, "A")
+        scale.set_editor_property("const_b", 40000.0)
+        up = lib.create_material_expression(mat, unreal.MaterialExpressionSaturate, -800, -100)
+        lib.connect_material_expressions(scale, "", up, "")
+        mix = lib.create_material_expression(mat, unreal.MaterialExpressionLinearInterpolate, -500, -150)
+        lib.connect_material_expressions(colour, "", mix, "A")
+        lib.connect_material_expressions(zenith, "", mix, "B")
+        lib.connect_material_expressions(up, "", mix, "Alpha")
+        lib.connect_material_expressions(mix, "", glow, "A")
+    else:
+        lib.connect_material_expressions(colour, "", glow, "A")
+        lib.connect_material_property(colour, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    lib.connect_material_expressions(strength, "", glow, "B")
+    lib.connect_material_property(glow, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    errors = lib.recompile_material(mat)
+    if errors:
+        raise RuntimeError(f"{name} does not compile: {list(errors)}")
+    eal.save_loaded_asset(mat)
+    return mat
+
+
+def spot(label: str, at, aim, kelvin: float, candela: float, cone: float, radius_m: float = 70.0,
+         shadows: bool = True) -> None:
+    """A flood: a shadowed spot at a layout point, aimed at another."""
+    origin, target = to_unreal(*at), to_unreal(*aim)
+    rotation = unreal.MathLibrary.find_look_at_rotation(origin, target)
+    light = actors.spawn_actor_from_class(unreal.SpotLight, origin, rotation)
+    c = light.spot_light_component
+    c.set_editor_property("intensity_units", unreal.LightUnits.CANDELAS)
+    c.set_editor_property("intensity", candela)
+    c.set_editor_property("use_temperature", True)
+    c.set_editor_property("temperature", kelvin)
+    c.set_editor_property("outer_cone_angle", cone)
+    c.set_editor_property("inner_cone_angle", cone * 0.6)
+    c.set_editor_property("attenuation_radius", radius_m * 100.0)
+    c.set_editor_property("cast_shadows", shadows)
+    light.set_actor_label(label)
+    light.set_folder_path("Lighting")
+
+
 def lighting(b: Builder) -> None:
-    sun = actors.spawn_actor_from_class(unreal.DirectionalLight, unreal.Vector(0, 0, 5000),
-                                        unreal.Rotator(roll=0, pitch=-35, yaw=-30))
-    sun.set_actor_label("Sun_Greybox")
-    actors.spawn_actor_from_class(unreal.SkyAtmosphere, unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0))
+    """Night shift, 02:40, overcast (lighting-and-mood.md): no sun or moon; the key is the four
+    corner masts' floods and the shack's roof floods, pooled; the fill is the sodium cloud deck
+    (a sky dome the sky light captures) and the trench lamps (KineticYardDirector); thin fog on
+    the Floor only. Exposure is fixed, so a live line stays the brightest thing in frame."""
+    dome_mat = emissive_material("M_Yard_SkyDome", unlit=True)
+    dome_mi = assets.create_asset("MI_Yard_SkyDome", MATERIALS, unreal.MaterialInstanceConstant,
+                                  unreal.MaterialInstanceConstantFactoryNew()) if not eal.does_asset_exist(
+        f"{MATERIALS}/MI_Yard_SkyDome") else unreal.load_asset(f"{MATERIALS}/MI_Yard_SkyDome")
+    lib.set_material_instance_parent(dome_mi, dome_mat)
+    lib.set_material_instance_vector_parameter_value(dome_mi, "Color", unreal.LinearColor(0.45, 0.09, 0.012, 1.0))
+    lib.set_material_instance_scalar_parameter_value(dome_mi, "Strength", SKY_FILL)
+    eal.save_loaded_asset(dome_mi)
+    emissive_material("M_Yard_Lamp", unlit=False)
+    dome = actors.spawn_actor_from_class(unreal.StaticMeshActor, unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0))
+    dome.static_mesh_component.set_static_mesh(unreal.load_asset("/Engine/BasicShapes/Sphere"))
+    dome.static_mesh_component.set_material(0, dome_mi)
+    # Not solid: the whole Yard is inside it, and a solid sphere pushes every player out to 800 m.
+    dome.static_mesh_component.set_collision_profile_name("NoCollision")
+    dome.static_mesh_component.set_editor_property("can_ever_affect_navigation", False)
+    dome.static_mesh_component.set_editor_property("cast_shadow", False)
+    dome.set_actor_scale3d(unreal.Vector(1600, 1600, 1600))  # 800 m radius
+    dome.set_actor_label("Sky_SodiumDome")
+    dome.set_folder_path("Lighting")
     sky = actors.spawn_actor_from_class(unreal.SkyLight, unreal.Vector(0, 0, 3000), unreal.Rotator(0, 0, 0))
     sky.light_component.set_editor_property("real_time_capture", True)
-    actors.spawn_actor_from_class(unreal.ExponentialHeightFog, unreal.Vector(0, 0, -500), unreal.Rotator(0, 0, 0))
+    sky.light_component.set_editor_property("intensity", SKY_LIGHT)  # The fill, from the dim dome
+    sky.set_folder_path("Lighting")
+    fog = actors.spawn_actor_from_class(unreal.ExponentialHeightFog, unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0))
+    f = fog.component
+    f.set_editor_property("fog_density", 0.02)
+    f.set_editor_property("fog_height_falloff", 1.2)  # Thin, at the Floor
+    f.set_editor_property("fog_inscattering_luminance", unreal.LinearColor(0.035, 0.014, 0.006, 1.0))
+    fog.set_folder_path("Lighting")
+    # The corner masts: three 30-degree pools each, inboard and down.
+    for x in (-52, 52):
+        for y in (-40, 40):
+            for k, (tx, ty) in enumerate(((x * 0.6, y * 0.72), (x * 0.86, y * 0.2), (x * 0.3, y * 0.55))):
+                spot(f"Flood_Mast_{x}_{y}_{k}", (x, y, 24.6), (tx, ty, 0), 5600, FLOOD_CD, 17.0, 75.0)
+    # The shack's roof floods over the west third of the Rails and Marker Flat.
+    for k, (tx, ty) in enumerate(((-40, 20), (-30, 8), (-55, 12), (-20, 30))):
+        spot(f"Flood_Shack_{k}", (-62 + (k - 1.5) * 2.0, 33.2, 14.3), (tx, ty, 0), 5600, 45000, 20.0, 60.0)
+    # The spawn mesas' cage lamps over the Drop points (PROPOSED: the crews drop there in the dark).
+    for label, (x, y) in (("A", (-68, -39)), ("B", (68, 39))):
+        spot(f"CageLamp_Spawn{label}", (x, y, 14.0), (x, y, 8.0), 4000, FLOOD_CD * 0.015, 45.0, 20.0)
+    # The press: frame work lights into the pit, and the east lip's stands.
+    for k, (x, y) in enumerate(((38.5, -7.5), (38.5, 7.5), (44.5, -7.5), (44.5, 7.5))):
+        spot(f"WorkLight_Press_{k}", (x, y, 11.5), (45, 0, -10), 4000, 25000, 30.0, 30.0)
+    for y in (-6.4, 6.4):
+        spot(f"Flood_PitStand_{y}", (52.7, y, 1.9), (44, 0, -8), 5600, 30000, 22.0, 30.0)
+    # The fixed exposure: the floods' pools read, the Floor between them is dark (map rule 8).
+    pp = actors.spawn_actor_from_class(unreal.PostProcessVolume, unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0))
+    pp.set_editor_property("unbound", True)
+    settings = pp.get_editor_property("settings")
+    settings.set_editor_property("override_auto_exposure_method", True)
+    settings.set_editor_property("auto_exposure_method", unreal.AutoExposureMethod.AEM_MANUAL)
+    settings.set_editor_property("override_auto_exposure_bias", True)
+    settings.set_editor_property("auto_exposure_bias", YARD_EXPOSURE)
+    settings.set_editor_property("override_auto_exposure_apply_physical_camera_exposure", True)
+    settings.set_editor_property("auto_exposure_apply_physical_camera_exposure", False)
+    pp.set_editor_property("settings", settings)
+    pp.set_actor_label("PostProcess_Yard")
+    pp.set_folder_path("Lighting")
     # Spawns (layout: Spawn A at (-68, -39, 8), Spawn B at (+68, +39, 8)), facing the Yard.
     for label, (x, y, z), yaw in (("Spawn_A", (-68, -39, 8), 30), ("Spawn_B", (68, 39, 8), 210)):
         start = actors.spawn_actor_from_class(unreal.PlayerStart, to_unreal(x, y, z + 1.0),
                                               unreal.Rotator(roll=0, pitch=0, yaw=-yaw))
         start.set_actor_label(label)
         start.set_editor_property("player_start_tag", label)
+
+
+YARD_EXPOSURE = -1.5  # EV: manual exposure is x8 at 0 EV; tuned on make shots
+SKY_FILL = 1.0        # The cloud deck's own glow, seen
+SKY_LIGHT = 20.0      # The fill the sky light carries from it
+FLOOD_CD = 40000.0    # A mast flood's centre intensity
+
+
+def kit(b: Builder) -> None:
+    """The visual kit (art/kit, make import-kit): detailed meshes over the grey boxes, in the
+    layout's frame. Where the kit covers a box, the box stays for collision and the navmesh but
+    is not drawn."""
+    meshes = [a for a in eal.list_assets(KIT, recursive=False) if a.split("/")[-1].split(".")[0].startswith("SM_Yard_")] \
+        if eal.does_directory_exist(KIT) else []
+    if not meshes:
+        unreal.log("Kinetic: no Yard kit imported (make import-kit): the grey boxes are drawn")
+        return
+    for path in meshes:
+        mesh = unreal.load_asset(path.split(".")[0])
+        actor = actors.spawn_actor_from_class(unreal.StaticMeshActor, unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0))
+        actor.static_mesh_component.set_static_mesh(mesh)
+        actor.static_mesh_component.set_collision_enabled(unreal.CollisionEnabled.NO_COLLISION)
+        actor.static_mesh_component.set_editor_property("can_ever_affect_navigation", False)
+        actor.set_actor_label(mesh.get_name())
+        actor.set_folder_path("Kit")
+    covered = json.load(open(os.path.join(REPO, "art", "kit", "covered.json"))) if os.path.exists(
+        os.path.join(REPO, "art", "kit", "covered.json")) else []
+    hidden = 0
+    for index, actor in enumerate(b.actors_by_box):
+        if index in covered:
+            actor.static_mesh_component.set_editor_property("visible", False)
+            actor.static_mesh_component.set_editor_property("cast_shadow", False)
+            hidden += 1
+    unreal.log(f"Kinetic: Yard kit: {len(meshes)} meshes, {hidden} grey boxes covered")
 
 
 def navigation() -> None:
@@ -670,6 +850,12 @@ def main() -> None:
     navigation()
     director = actors.spawn_actor_from_class(DIRECTOR, unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0))
     director.set_actor_label("Yard_Director")
+    # The layout for the visual kit, and the kit itself if it has been built and imported.
+    import json
+    for path in (os.path.join(REPO, "art", "kit", "yard_layout.json"),):
+        with open(path, "w") as f:
+            json.dump(b.layout, f, indent=1)
+    kit(b)
     game_mode()
     if not levels.save_current_level():
         raise RuntimeError(f"could not save {LEVEL}")

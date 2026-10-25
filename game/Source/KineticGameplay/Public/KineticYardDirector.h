@@ -109,6 +109,7 @@ private:
 	struct FLamp
 	{
 		TObjectPtr<UStaticMeshComponent> Mesh;
+		TObjectPtr<class UPointLightComponent> Light;
 		int32 Trench = 0;
 		double XM = 0.0;  // Layout X
 		int32 State = -1;

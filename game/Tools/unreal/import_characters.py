@@ -193,14 +193,18 @@ def main() -> None:
         raise RuntimeError(f"no characters in {SOURCE} (blender -b -P art/characters/harness.py)")
     problems: list[str] = []
     out: dict = {}
-    # The Rigger first: its import makes the skeleton the rest share.
-    reports.sort(key=lambda p: 0 if os.sep + "Rigger" + os.sep in p else 1)
+    # The Rigger first when there is no skeleton yet: its import makes the one the rest share. Once
+    # there is, the Rigger last: imported first onto the skeleton it made, it brings no takes.
     skeleton = unreal.load_asset(SKELETON) if eal.does_asset_exist(SKELETON) else None
+    reports.sort(key=lambda p: (0 if os.sep + "Rigger" + os.sep in p else 1) * (1 if skeleton is None else -1))
     for report_path in reports:
         report = json.load(open(report_path))
         cls, name = report["class"], report["name"]
         folder = f"{ROOT}/{cls}"
         fbx = os.path.join(os.path.dirname(report_path), f"{name}.fbx")
+        # From clean: an import over the last one keeps the mesh but brings no takes.
+        if eal.does_directory_exist(folder):
+            eal.delete_directory(folder)
         imported = import_fbx(fbx, folder, skeleton)
         mesh_path = next((p for p in imported if p.split(".")[0].endswith(name)), None)
         mesh = unreal.load_asset(mesh_path) if mesh_path else None
@@ -212,6 +216,8 @@ def main() -> None:
             skeleton = mesh.get_editor_property("skeleton")
             if eal.rename_asset(skeleton.get_path_name().split(".")[0], SKELETON):
                 skeleton = unreal.load_asset(SKELETON)
+                # Saved now pointing at the new name: the redirector the rename leaves is not kept.
+                eal.save_loaded_asset(mesh, only_if_is_dirty=False)
         # The takes, by name.
         takes = {}
         for path in imported:
@@ -236,12 +242,14 @@ def main() -> None:
                                                               "team_tint": True})
         materials = mesh.get_editor_property("materials")
         slots = []
-        for m in materials:
+        for i in range(len(materials)):
+            m = materials[i]  # A copy: set back into the array below
             slot = str(m.get_editor_property("material_slot_name"))
             m.set_editor_property("material_interface", team if slot.endswith("TeamTint") else harness)
+            materials[i] = m
             slots.append(slot)
         mesh.set_editor_property("materials", materials)
-        eal.save_loaded_asset(mesh)
+        eal.save_loaded_asset(mesh, only_if_is_dirty=False)  # Setting the slots does not mark it dirty
         # Bones, and which way it faces.
         bones = [str(n) for n in unreal.SkeletalMeshEditorSubsystem.get_bone_names(mesh)] if hasattr(
             unreal.SkeletalMeshEditorSubsystem, "get_bone_names") else []

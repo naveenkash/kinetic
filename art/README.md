@@ -60,6 +60,38 @@ The output goes to `art/out/<asset>/<mesh>/`, which is not committed: run the sc
 
 Requires Blender 5.2 (`brew install --cask blender`).
 
+## Arenas
+
+The Yard is drawn by a visual kit over the grey-box level, and the grey boxes stay underneath for collision and the navmesh. It is built in three steps:
+
+1. **Surfaces.** `art/surfaces/build_surfaces.py` bakes the arena's tiling surfaces to `art/out/surfaces/<name>/`:
+   - the surfaces are Concrete, Slag, HullSteel, Rust, Corrugated, Grating, Hazard, Ochre, HTROrange and DarkSteel;
+   - each has BaseColor, ORM and Normal maps, and its tile size in metres;
+   - every noise is sampled on a 4D torus, so the maps tile with no seam.
+2. **The kit.** `art/kit/yard_kit.py` reads `art/kit/yard_layout.json` and builds 16 meshes, `art/out/kit/SM_Yard_<Group>.fbx`:
+   - `make -C game yard-greybox` writes the layout file: every box with its role and label, and every ladder.
+   - The meshes cover the slabs and their lip angles, the trench walls and rail beds, and the hull-section Stacks.
+   - They also cover the corrugated perimeter walls, the portal legs, crossheads and rail walks, and the lattice masts.
+   - The rest are the press and the Well, ladders and cages, the grate bridges, the trucks and other placeholders as objects, the scrap heaps, and clutter.
+   - `art/kit/kitlib.py` holds the shapes. Faces are UV'd in metres, so a surface repeats at its true size.
+   - `art/kit/covered.json` lists the boxes the kit draws over. The press ram and the plank bridges move or break, so they are not covered.
+3. **Unreal.** `make -C game import-kit` imports the surfaces into `M_KineticSurface` instances and the kit as Nanite meshes. Then `make -C game yard-greybox` places the kit and stops drawing the covered boxes.
+
+```bash
+blender -b --factory-startup -P art/surfaces/build_surfaces.py -- --res 1024
+```
+
+```bash
+blender -b --factory-startup -P art/kit/yard_kit.py
+```
+
+The level's night lighting is set in `build_yard_greybox.py`:
+- the sodium cloud deck is a dim emissive sky dome, which a real-time sky light captures as the fill;
+- the mast, shack, press and pit-stand floods are spotlights in candela;
+- a cage lamp hangs over each spawn;
+- exposure is manual, tuned on `make -C game shots`;
+- Lumen lights it, with virtual shadow maps.
+
 ## Characters
 
 `art/characters/harness.py` builds the five harness classes (docs/characters/harnesses) on one shared skeleton with Unreal Mannequin bone names:

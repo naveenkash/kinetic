@@ -1,5 +1,6 @@
 #include "KineticYardDirector.h"
 
+#include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
@@ -144,6 +145,10 @@ void AKineticYardDirector::BeginPlay()
 	LampHolder->SetRootComponent(NewObject<USceneComponent>(LampHolder, TEXT("Root")));
 	LampHolder->GetRootComponent()->RegisterComponent();
 	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	// The lamps glow (build_yard_greybox.py's M_Yard_Lamp); every fourth throws light up the
+	// trench wall (lighting-and-mood.md: 2,700 K amber, red on alarm).
+	UMaterialInterface* Glow = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Arenas/YRD_Yard/Greybox/M_Yard_Lamp.M_Yard_Lamp"),
+	                                                          nullptr, LOAD_NoWarn | LOAD_Quiet);
 	for (int32 I = 0; I < 3; ++I)
 	{
 		for (const double Lip : {-3.15, 3.15})
@@ -158,8 +163,25 @@ void AKineticYardDirector::BeginPlay()
 				M->RegisterComponent();
 				M->SetWorldLocation(L(X, Trenches[I].YM + Lip, 0.1));
 				M->SetWorldScale3D(FVector(0.3, 0.3, 0.2));
+				if (Glow)
+				{
+					M->SetMaterial(0, Glow);
+				}
 				M->CreateDynamicMaterialInstance(0);
-				Lamps.Add({M, I, static_cast<double>(X), -1});
+				UPointLightComponent* Light = nullptr;
+				if ((X + 75) % 40 == 0)
+				{
+					Light = NewObject<UPointLightComponent>(LampHolder);
+					Light->SetupAttachment(LampHolder->GetRootComponent());
+					Light->RegisterComponent();
+					// Just inboard of the lip and below it, lighting the wall.
+					Light->SetWorldLocation(L(X, Trenches[I].YM + Lip * 0.8, -0.3));
+					Light->SetIntensityUnits(ELightUnits::Candelas);
+					Light->SetIntensity(600.0f);
+					Light->SetAttenuationRadius(900.0f);
+					Light->SetCastShadows(false);
+				}
+				Lamps.Add({M, Light, I, static_cast<double>(X), -1});
 			}
 		}
 	}
@@ -771,6 +793,12 @@ void AKineticYardDirector::UpdateLamps()
 			if (UMaterialInstanceDynamic* M = Cast<UMaterialInstanceDynamic>(Lamp.Mesh->GetMaterial(0)))
 			{
 				M->SetVectorParameterValue(TEXT("Color"), Colours[State]);
+				M->SetScalarParameterValue(TEXT("Strength"), State == 0 ? 6.0f : 30.0f);
+			}
+			if (Lamp.Light)
+			{
+				Lamp.Light->SetLightColor(Colours[State] * (1.0f / FMath::Max(0.01f, Colours[State].GetMax())));
+				Lamp.Light->SetIntensity(State == 0 ? 600.0f : 2500.0f);
 			}
 		}
 	}

@@ -1185,6 +1185,15 @@ public:
 			const FString File = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Kinetic/Shots") / V.Name) + TEXT(".png");
 			FScreenshotRequest::RequestScreenshot(File, false, false);
 			Test->AddInfo(FString::Printf(TEXT("shot %s"), *File));
+			if (Next == 0)
+			{
+				for (TActorIterator<AKineticCharacter> It(World); It; ++It)
+				{
+					const FVector P = It->GetActorLocation() / 100.0;
+					Test->AddInfo(FString::Printf(TEXT("rigger %s crew %d at (%.1f, %.1f, %.1f) hidden %d mesh %d"), *It->GetName(), It->Crew,
+					                              P.X, -P.Y, P.Z, It->IsHidden() ? 1 : 0, It->GetMesh()->IsVisible() ? 1 : 0));
+				}
+			}
 			++Next;
 			bAimed = false;
 		}
