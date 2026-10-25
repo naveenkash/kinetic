@@ -47,14 +47,22 @@ def placed(obj, frame: Matrix):
 
 def build(variant: str = "office") -> dict:
     v = VARIANTS[variant]
-    paint = ka.painted_steel("MI_Steel_Painted_Worn", ka.Wear(paint=v["paint"], chips=0.25, scrape_height=0.04,
-                                                              streak_band=(0.0, MAST)))
-    galv = ka.galvanized()
-    housing = ka.flat_material("MI_HTR_Grey_Matte", "#4A4D50", 0.6)
+    # The doc's wear: chipped at the feet and along the mast where it rides a shoulder, the mast
+    # collar polished bare.
+    wear = ka.Wear(paint=v["paint"], chips=0.25, scrape_height=0.04, streak_band=(0.0, MAST), detail=6.0, edge=0.003,
+                   grime_reach=0.03, rust_streaks=0.3, streaks=0.15, dents=0.3, bare_bands=((HUB - 0.04, HUB + 0.04),))
+    paint = ka.painted_steel("MI_Steel_Painted_Worn", wear)
+    galv = ka.galvanized(detail=8.0)
+    # Die-cast housings: matte grey, scorched grey-brown above the lens from the heat.
+    housing = ka.painted_steel("MI_HTR_Grey_Matte", ka.Wear(paint="#4A4D50", paint_rough=(0.55, 0.7), primer=None,
+                                                             chips=0.3, scrape_height=0.0, rust_streaks=0.0, streaks=0.0,
+                                                             detail=8.0, edge=0.004, grime_reach=0.03, dust=0.5,
+                                                             dirt_streaks=0.3, lower_grime=None,
+                                                             extra={"crevice": "#1E1A16"}))
     lens = ka.emissive("MI_Glass_Lamp", "#E8EEF2", 6.0)
-    rubber = ka.flat_material("MI_Rubber_Black", "#1E1F20", 0.8)
-    sand = ka.fabric("MI_Canvas_Natural", "#B9AE93")
-    white = ka.flat_material("MI_Stencil_White", "#E6E4DD", 0.6)
+    rubber = ka.rubber("MI_Rubber_Black", "#1E1F20", 0.8)
+    sand = ka.fabric("MI_Canvas_Natural", "#B9AE93", weave=0.003)
+    white = ka.stencil_paint("MI_Stencil_White", "#E6E4DD", wear)
     parts, detail = [], []
     # Tripod legs from the hub down to rubber pads on the floor, and the stays. The legs end at
     # the pads' tops, so nothing reaches below the floor.
@@ -108,15 +116,15 @@ def build(variant: str = "office") -> dict:
                                  cylinder=((0, 0, 0), (0, 0, 1), TUBE)))
         z += length + 0.05
     if variant == "guild":
-        glyph = ka.flat_material("MI_Stencil_Black", "#1C1B19", 0.6)
+        glyph = ka.stencil_paint("MI_Stencil_Black", "#1C1B19", wear)
         detail.append(ka.ring("hitch_glyph", 0.012, 0.002, (TUBE + 0.001, 0, 1.3), "X", 12, 4, glyph))
     if variant == "office":
-        sticker = ka.flat_material("MI_Decal_LayCast", "#1C1B19", 0.5)
+        sticker = ka.ink("MI_Decal_LayCast", "#1C1B19", "#4A4D50", wear=0.25)
         frame = head_frame(v["heads"][1])
         at = frame @ Vector((0.0, hy + 0.001, 0.04))
         detail.append(ka.decal_plate("laycast_sticker", 0.06, 0.03, sticker, at, (0, 1, 0)))
         # The sponsor's strip, either side of the mast.
-        navy = ka.flat_material("MI_Sponsor_Kessl_Navy", "#1F2A44", 0.5)
+        navy = ka.ink("MI_Sponsor_Kessl_Navy", "#1F2A44", "#9EA3A6", wear=0.3)
         bar_axis = ((0, 0, BAR_Z), (0, 1, 0), 0.0155)
         for word, y in (("KESSL", -0.1), ("HARNESS LEASING", 0.11)):
             length = 0.011 * 0.62 * len(word) + 0.03
@@ -124,7 +132,7 @@ def build(variant: str = "office") -> dict:
             detail.append(ka.stencil("sponsor_text", word, 0.011, white, (0.0155, y, BAR_Z), (1, 0, 0), up=(0, 0, 1),
                                      cylinder=bar_axis))
     name = v["mesh"]
-    obj, high = ka.high_low(name, parts, detail, [])
+    obj, high = ka.high_low(name, parts, detail, [], soft=True)
     # The doc's collision: capsules for the mast, the three legs and the crossbar (prisms here),
     # and a box per head.
     ka.collision_segment(name, 0, (0, 0, 0.3), (0, 0, MAST), 0.02)
@@ -148,4 +156,4 @@ def build(variant: str = "office") -> dict:
                              }.items():
         ka.socket(s, loc, obj, normal)
     return {"name": name, "meshes": [obj], "high": {name: high}, "cage": 0.004, "size": (0.9, 0.9, MAST),
-            "res": 1024, "budget": 2000}
+            "res": 2048, "budget": 2000}

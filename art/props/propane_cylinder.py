@@ -56,20 +56,26 @@ def build_parts(paint, steel, brass, red, white, hazard, body_ref=None) -> list:
 
 
 def materials():
-    paint = ka.painted_steel("MI_Cylinder_Propane_Grey", ka.Wear(paint="#B8B4A8", paint_rough=(0.4, 0.6), chips=0.4,
-                                                                 scrape_height=0.15, rust_streaks=0.2,
-                                                                 streak_band=(0.2, H), bottom_rust=0.1))
-    return dict(paint=paint, steel=ka.flat_material("MI_Steel_Bare", "#5C5F63", 0.55, 1.0),
-                brass=ka.flat_material("MI_Brass", "#A8894A", 0.35, 1.0),
-                red=ka.flat_material("MI_Handwheel_Red", "#B5302A", 0.55),
-                white=ka.flat_material("MI_Stencil_White", "#E6E4DD", 0.6),
-                hazard=ka.flat_material("MI_Decal_Hazard_Yellow", "#E0B52A", 0.2))
+    # The doc's wear: scraped bare 5 cm above the foot ring where it is rolled, rust from the
+    # foot ring's weld, dents on the shoulder; the diamond at 0.7 wear.
+    wear = ka.Wear(paint="#B8B4A8", paint_rough=(0.4, 0.6), chips=0.4, scrape_height=0.0, rust_streaks=0.3,
+                   streak_band=(0.2, H), bottom_rust=0.12, detail=4.0, edge=0.01, grime_reach=0.04, dents=0.5,
+                   bare_bands=((0.1, 0.15),), streak_from=(0.93,), streak_length=0.2, roof_dirt="#5A544C")
+    paint = ka.painted_steel("MI_Cylinder_Propane_Grey", wear)
+    return dict(paint=paint, steel=ka.bare_steel("MI_Steel_Bare", rough=(0.5, 0.65), rust=0.45, detail=8.0),
+                brass=ka.bare_steel("MI_Brass", "#A8894A", rough=(0.3, 0.45), rust=0.0, detail=12.0,
+                                    bare_steel="#BA9853"),
+                red=ka.painted_steel("MI_Handwheel_Red", ka.Wear(paint="#B5302A", chips=0.5, scrape_height=0.0,
+                                                                 rust_streaks=0.1, streaks=0.0, detail=12.0,
+                                                                 edge=0.003, dust=0.2, dirt_streaks=0.0)),
+                white=ka.stencil_paint("MI_Stencil_White", "#E6E4DD", wear),
+                hazard=ka.stencil_paint("MI_Decal_Hazard_Yellow", "#E0B52A", ka.Wear(**{**wear.__dict__, "chips": 0.7})))
 
 
 def build(variant: str = "yard") -> dict:
     m = materials()
     name = "SM_Volatile_PropaneCylinder"
-    obj = ka.join(name, build_parts(**m))
+    obj = ka.join(name, build_parts(**m), soft=True)
     # The doc's capsule body as a cylinder to the shoulder and a cone over the dome, and the
     # guard's cylinder, as convex hulls.
     ka.collision_cylinder(name, 0, R, 0.0, 0.86)

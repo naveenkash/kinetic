@@ -35,12 +35,17 @@ def chain(name: str, a, b, material, link: float = 0.035) -> list:
 
 
 def build(variant: str = "yard") -> dict:
-    frame_paint = ka.painted_steel("MI_Steel_Painted_Worn", ka.Wear(paint="#5B6670", chips=0.12, scrape_height=0.1,
-                                                                    rust_streaks=0.5, streak_band=(0.1, H)))
-    steel = ka.flat_material("MI_Steel_Bare", "#5C5F63", 0.55, 1.0)
-    oiled = ka.flat_material("MI_Chain_Oiled", "#3C3E42", 0.38, 1.0)
-    white = ka.flat_material("MI_Stencil_White", "#E6E4DD", 0.6)
-    ink = ka.flat_material("MI_Stencil_Black", "#141414", 0.6)
+    # The doc's wear: paint gone on the top rail where cylinders are lifted over it, rust at the
+    # feet and in the fork pockets.
+    frame_paint = ka.painted_steel("MI_Steel_Painted_Worn", ka.Wear(
+        paint="#5B6670", chips=0.12, scrape_height=0.1, rust_streaks=0.5, streak_band=(0.1, H), detail=4.0,
+        edge=0.008, grime_reach=0.05, bottom_rust=0.1, bare_bands=((H - 0.035, H + 0.01),), streak_from=(0.75, H - A)))
+    steel = ka.bare_steel("MI_Steel_Bare", rough=(0.5, 0.6), rust=0.6, detail=5.0, bottom_rust=0.06)
+    oiled = ka.bare_steel("MI_Chain_Oiled", "#3C3E42", rough=(0.3, 0.45), rust=0.15, detail=12.0, oil=0.8)
+    placard = ka.Wear(paint="#E6E4DD", chips=0.3, scrape_height=0.0, rust_streaks=0.3, streak_band=(0.6, 0.85),
+                      detail=8.0, edge=0.003, grime_reach=0.02)
+    white = ka.painted_steel("MI_Stencil_White", placard)
+    ink = ka.stencil_paint("MI_Stencil_Black", "#141414", placard)
 
     parts = []
     hx, hy = L / 2, W / 2
@@ -75,7 +80,7 @@ def build(variant: str = "yard") -> dict:
         parts.append(ka.stencil("placard_text", line, 0.024, ink, (hx + 0.005, 0.0, 0.8 - 0.045 * k), (1, 0, 0)))
 
     name = "SM_Volatile_CylinderRack"
-    obj = ka.join(name, parts)
+    obj = ka.join(name, parts, soft=True)
     # The doc's collision: the posts and rails as 4 cm boxes (the four posts, the top rails and
     # the chain rails) and the base (plate and fork pockets). The cylinders are their own bodies.
     boxes = [((A, A, H - BASE), (sx * (hx - A / 2), sy * (hy - A / 2), BASE + (H - BASE) / 2))

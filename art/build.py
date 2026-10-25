@@ -13,6 +13,7 @@ import importlib
 import json
 import os
 import sys
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path[:0] = [os.path.join(HERE, "lib"), os.path.join(HERE, "props")]
@@ -37,6 +38,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--preview-only", action="store_true")
     parser.add_argument("--res", type=int, default=None, help="body texture size; overrides the asset's")
     args = parser.parse_args(argv)
+    started = time.time()
 
     module = importlib.import_module(args.asset)
     ka.reset_scene()
@@ -114,8 +116,10 @@ def main(argv: list[str]) -> int:
                 o.hide_render = True
             sources = [highs[m.name]] if m.name in highs else [m]
             glow = ka.emission_strength(sources)
+            # Every mesh gets a Normal map: its high mesh's detail, or its materials' own dents,
+            # scratches and grain.
             maps = ka.bake(m, out, m.name, res if m is meshes[0] else max(512, res // 2), high=highs.get(m.name),
-                           cage=built.get("cage", 0.02), mask=m.name in masked)
+                           cage=built.get("cage", 0.02), mask=m.name in masked, normal=True)
             for o in preview_only:
                 o.hide_render = False
             ka.assign_only(m, ka.baked_material(f"M_{m.name}", maps, masked=m.name in masked, emission=glow,
@@ -126,7 +130,12 @@ def main(argv: list[str]) -> int:
             bpy.data.objects.remove(h)
         render(os.path.join(out, "preview_baked.png"))
         collision = [o for o in bpy.data.objects if o.name.startswith("UCX_")]
+        # The stencils' overspray attribute is for the bake only; the game meshes do not carry it.
+        for m in meshes:
+            if "spray" in m.data.attributes:
+                m.data.attributes.remove(m.data.attributes["spray"])
         report["exports"] = ka.export(meshes + collision, out, name)
+    report["build_seconds"] = round(time.time() - started, 1)
     with open(os.path.join(out, "report.json"), "w") as f:
         json.dump(report, f, indent=2)
     print(json.dumps(report, indent=2))

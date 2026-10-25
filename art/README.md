@@ -30,12 +30,12 @@ In Unreal, materials, Chaos destruction, Niagara effects and MetaSounds are set 
 
 The output goes to `art/out/<asset>/<mesh>/`, which is not committed: run the script to rebuild it. The output is:
 - `preview.png` and `preview_baked.png`;
-- the baked textures: BaseColor, ORM (and the AO, Roughness and Metallic maps it is packed from), plus Normal for a high-to-low bake and Emissive where something glows;
+- the baked textures: BaseColor, ORM (and the AO, Roughness and Metallic maps it is packed from), Normal (from the high mesh, or from the materials' dents, scratches and pitting where there is none) and Emissive where something glows;
 - for a part with its own pivot (a container door), its own `.fbx`;
 - the `.fbx` and `.glb`;
 - `report.json`, with triangle counts against the budget, the high mesh's count, size and sockets.
 
-`--preview-only` skips the bake for quick looks, and `--res` overrides the body texture size the asset sets (2048 for volatiles, crates and the container, 1024 for light props, per their specs).
+`--preview-only` skips the bake for quick looks, and `--res` overrides the body texture size the asset sets: 4096 for the container body, 2048 for everything else. Bakes run on the GPU (Metal) when Blender has it; `KINETIC_CPU=1` forces the CPU.
 
 ## What is here
 
@@ -84,7 +84,7 @@ The Yard is drawn by a visual kit over the grey-box level, and the grey boxes st
    - At play, `KineticYardDirector` draws each machine over its boxes, which keep colliding.
 
 ```bash
-blender -b --factory-startup -P art/surfaces/build_surfaces.py -- --res 1024
+blender -b --factory-startup -P art/surfaces/build_surfaces.py -- --res 2048
 ```
 
 ```bash

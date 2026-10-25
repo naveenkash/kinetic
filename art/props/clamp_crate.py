@@ -60,10 +60,10 @@ def card_box(name: str, material) -> object:
 
 
 def build(variant: str = "yard") -> dict:
-    galv = ka.galvanized()
-    steel = ka.flat_material("MI_Steel_Bare", "#5C5F63", 0.45, 1.0)
-    rust = ka.flat_material("MI_Steel_Rusted", "#7A3F1C", 0.8, 0.3)
-    ochre = ka.flat_material("MI_Stencil_Ochre", "#C8912A", 0.6)
+    galv = ka.galvanized(detail=8.0)
+    steel = ka.bare_steel("MI_Steel_Bare", rough=(0.4, 0.5), rust=0.2, detail=10.0)
+    rust = ka.rusted("MI_Steel_Rusted", detail=12.0)
+    ochre = ka.ink("MI_Stencil_Ochre", "#C8912A", "#9EA3A6", detail=10.0)
     parts, mesh = [], []
     hx, hy = L / 2, W / 2
     # Frame: the twelve edges.
@@ -129,7 +129,7 @@ def build(variant: str = "yard") -> dict:
     # Top_01 goes on the top of the heap's highest coupler (measured before the join).
     hx0, hx1, hy0, hy1, _, hz1 = max((bounds(p) for p in placed), key=lambda b: b[5])
     name = "SM_Light_ClampCrate"
-    obj, high = ka.high_low(name, parts, mesh, [card_box("card", galv)])
+    obj, high = ka.high_low(name, parts, mesh, [card_box("card", galv)], soft=True)
     ka.collision_box(name, 0, (L, W, H), (0, 0, H / 2))
     for s, (loc, normal) in {"SKT_Dog_Top_01": (((hx0 + hx1) / 2, (hy0 + hy1) / 2, hz1), None),
                              "SKT_Dog_Handle_01": ((hx + 0.047, 0, H - 0.03), (1, 0, 0)),
@@ -137,4 +137,4 @@ def build(variant: str = "yard") -> dict:
                              "SKT_Dog_SideN_01": ((hx, 0, 0.12), (1, 0, 0))}.items():
         ka.socket(s, loc, obj, normal)
     return {"name": name, "meshes": [obj], "high": {name: high}, "cage": 0.006, "masked": [name],
-            "size": (L + 0.08, W, H), "res": 1024, "budget": 2000}
+            "size": (L + 0.08, W, H), "res": 2048, "budget": 2000}

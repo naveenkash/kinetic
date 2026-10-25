@@ -30,12 +30,13 @@ def hook(name: str, at, heading: float, paint) -> list:
 
 
 def build(variant: str = "htr") -> dict:
-    oiled = ka.flat_material("MI_Chain_Oiled", "#3C3E42", 0.38, 1.0)
-    rusted = ka.flat_material("MI_Steel_Rusted", "#7A3F1C", 0.85, 0.3)
+    oiled = ka.bare_steel("MI_Chain_Oiled", "#3C3E42", rough=(0.3, 0.45), rust=0.1, detail=12.0, oil=0.8, dust=0.2, chips=0.15)
+    rusted = ka.rusted("MI_Steel_Rusted", detail=14.0)
     hook_paint = ka.painted_steel("MI_Steel_Painted_Worn", ka.Wear(paint="#E8620C", chips=0.5, scrape_height=0.0,
-                                                                   streak_band=(0.0, 0.05)))
-    galv = ka.galvanized()
-    ink = ka.flat_material("MI_Stencil_Black", "#141414", 0.6)
+                                                                   streak_band=(0.0, 0.05), detail=10.0, edge=0.004,
+                                                                   grime_reach=0.02, dents=0.2))
+    galv = ka.galvanized(detail=12.0)
+    ink = ka.ink("MI_Stencil_Black", "#141414", "#9EA3A6", detail=12.0, wear=0.2)
     links, path = [], []
     n = int(LENGTH / PITCH)
     # Laid down by hand in layers of two turns, spiralling in on one layer and out on the next,
@@ -87,7 +88,7 @@ def build(variant: str = "htr") -> dict:
         detail.append(ka.stencil("tag_stamp", line, 0.006, ink, (tx, ty + 0.006 - 0.01 * k, 0.0034), (0, 0, 1),
                                  up=(0, 1, 0)))
     name = "SM_Light_ChainCoil_HTR"
-    obj, high = ka.high_low(name, shared, detail, proxy)
+    obj, high = ka.high_low(name, shared, detail, proxy, soft=True)
     height = max(p[2] for p in path) + LINK
     ka.collision_cylinder(name, 0, outer + LINK / 2, 0.0, height)
     top = max(path, key=lambda p: p[2])
@@ -96,4 +97,4 @@ def build(variant: str = "htr") -> dict:
                              "SKT_Dog_Hook_02": ((bx, by, top_z + 0.022), (0, 0, 1))}.items():
         ka.socket(s, loc, obj, normal)
     return {"name": name, "meshes": [obj], "high": {name: high}, "cage": 0.012, "masked": [name],
-            "size": (0.5, 0.5, 0.2), "res": 1024, "budget": 2000}
+            "size": (0.5, 0.5, 0.2), "res": 2048, "budget": 2000}

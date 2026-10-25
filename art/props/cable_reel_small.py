@@ -21,13 +21,17 @@ WOUND = 0.19   # Rope radius at half wound
 
 
 def build(variant: str = "htr") -> dict:
-    ply = ka.wood("MI_Plywood_Weathered", "#9C8564", weathered="#8F8B83", grain_axis="Y")
-    galv = ka.galvanized()
+    # The doc's wear: the flanges grey outside and still brown inside, the rims dented from
+    # grates, the axle's ends bright where the stand's bearings ran.
+    ply = ka.wood("MI_Plywood_Weathered", "#9C8564", weathered="#8F8B83", grain_axis="Y", detail=3.0, ply_axis="X",
+                  checks=0.3)
+    galv = ka.galvanized(detail=8.0)
     core_paint = ka.painted_steel("MI_Steel_Painted_Worn", ka.Wear(paint="#E8620C", chips=0.4, scrape_height=0.0,
-                                                                   streak_band=(-0.05, 0.05)))
-    rope = ka.flat_material("MI_Chain_Oiled", "#3C3E42", 0.35, 1.0)
-    rust = ka.flat_material("MI_Steel_Rusted", "#7A3F1C", 0.8, 0.3)
-    orange = ka.flat_material("MI_Stencil_Orange", "#E8620C", 0.6)
+                                                                   streak_band=(-0.05, 0.05), detail=8.0, edge=0.004,
+                                                                   grime_reach=0.03))
+    rope = ka.bare_steel("MI_Chain_Oiled", "#3C3E42", rough=(0.3, 0.42), rust=0.1, detail=12.0, oil=0.8, dust=0.2)
+    rust = ka.rusted("MI_Steel_Rusted", detail=12.0)
+    orange = ka.ink("MI_Stencil_Orange", "#E8620C", "#9EA3A6", detail=10.0)
     parts = []
     hx = WIDTH / 2 - FLANGE_T / 2
     for sx in (-1, 1):
@@ -58,7 +62,7 @@ def build(variant: str = "htr") -> dict:
     parts.append(ka.box("plate", (0.003, 0.12, 0.06), (hx + FLANGE_T / 2 + 0.002, -0.12, -0.12), galv))
     parts.append(ka.stencil("lot", "HTR-RC-3340", 0.022, orange, (hx + FLANGE_T / 2 + 0.005, -0.12, -0.12), (1, 0, 0)))
     name = "SM_Light_CableReel_HTR"
-    obj, high = ka.high_low(name, parts, wraps, drum)
+    obj, high = ka.high_low(name, parts, wraps, drum, soft=True)
     # The doc's collision: the two flanges and the core, all on the X axis.
     for i, sx in enumerate((-1, 1)):
         ka.collision_cylinder(name, i, R, sx * hx - FLANGE_T / 2, sx * hx + FLANGE_T / 2, 16, axis="X")
@@ -70,4 +74,4 @@ def build(variant: str = "htr") -> dict:
         ka.socket(s, loc, obj, normal)
     # Previewed standing on its flanges; the pivot stays on the axle.
     return {"name": name, "meshes": [obj], "high": {name: high}, "cage": 0.01, "size": (WIDTH, 2 * R, 2 * R),
-            "res": 1024, "preview_lift": R, "budget": 2000}
+            "res": 2048, "preview_lift": R, "budget": 2000}

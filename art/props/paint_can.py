@@ -53,12 +53,15 @@ def label_band(name: str, material, radius: float, z0: float, z1: float, arc: fl
 
 def build(variant: str = "office") -> dict:
     v = VARIANTS[variant]
-    tin = ka.flat_material("MI_Steel_Bare", "#5C5F63", 0.45, 1.0)
-    label = ka.fabric("MI_Label_Paper", v["label"], rough=0.75)
-    paint = ka.flat_material("MI_Paint_Dried", v["paint"], 0.35)
-    galv = ka.galvanized()
-    ink = ka.flat_material("MI_Stencil", v["ink"], 0.6)
-    rust = ka.flat_material("MI_Steel_Rusted", "#7A3F1C", 0.85, 0.3)
+    clean = variant == "htr"  # The doc's HTR cans are new: barely worn
+    # Tinplate: brighter than the doc's steel grey, which reads black as a mirror of a dark arena.
+    tin = ka.bare_steel("MI_Steel_Bare", "#8A8D90", rough=(0.35, 0.45), rust=0.02 if clean else 0.12, detail=10.0,
+                        bare_steel="#73777B")
+    label = ka.fabric("MI_Label_Paper", v["label"], rough=0.75, weave=0.0007, detail=10.0)
+    paint = ka.plastic("MI_Paint_Dried", v["paint"], rough=(0.3, 0.4), scuff=v["paint"], detail=10.0, scratches=0.2)
+    galv = ka.galvanized(detail=10.0)
+    ink = ka.ink("MI_Stencil", v["ink"], v["label"], detail=10.0, wear=0.1 if clean else 0.35)
+    rust = ka.rusted("MI_Steel_Rusted", detail=12.0)
     parts, detail = [], []
     # Chime, a rolled bead near each end, and the lid's rim.
     profile = [(0.0, 0.0), (R - 0.004, 0.0), (R, 0.006), (R + 0.002, 0.016), (R, 0.024), (R, 0.178),
@@ -72,7 +75,7 @@ def build(variant: str = "office") -> dict:
                                  (0, -1, 0), can))
     parts.append(ka.ring("lid_paint", R - 0.012, 0.004, (0, 0, H + 0.001), "Z", 14, 3, paint))
     if "chalk" in v:
-        chalk = ka.flat_material("MI_Chalk", "#D8D4C8", 0.95)
+        chalk = ka.ink("MI_Chalk", "#D8D4C8", "#5C5F63", detail=10.0, wear=0.8)
         detail.append(ka.stencil("lid_price", v["chalk"], 0.03, chalk, (0, 0, H + 0.0015), (0, 0, 1), up=(1, 0, 0)))
     # Rust where it stood in water: a band round the chime, baked onto the can.
     detail.append(ka.lathe("rust_ring", [(R + 0.0008, 0.0), (R + 0.0028, 0.012)], 24, rust, cap_bottom=False,
@@ -93,10 +96,10 @@ def build(variant: str = "office") -> dict:
     pts.append((0.0, R + 0.006, 0.17))
     parts.append(ka.tube("bail", pts, 0.0022, galv, sides=4))
     name = v["mesh"]
-    obj, high = ka.high_low(name, parts, detail, [])
+    obj, high = ka.high_low(name, parts, detail, [], soft=True)
     ka.collision_cylinder(name, 0, R, 0.0, H, 12)
     for s, (loc, normal) in {"SKT_Dog_Top_01": ((0, 0, H), None), "SKT_Dog_Handle_01": ((0, 0, 0.29), (0, 0, 1)),
                              "SKT_Dog_Bot_01": ((0, 0, 0), None)}.items():
         ka.socket(s, loc, obj, normal)
     return {"name": name, "meshes": [obj], "high": {name: high}, "cage": 0.004, "size": (2 * R, 2 * R, 0.3),
-            "res": 1024, "budget": 800}
+            "res": 2048, "budget": 800}

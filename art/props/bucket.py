@@ -30,9 +30,9 @@ def wall(z: float) -> float:
 
 def build(variant: str = "water") -> dict:
     v = VARIANTS[variant]
-    hdpe = ka.plastic("MI_HDPE", v["body"])
-    black = ka.plastic("MI_HDPE_Black", "#232426", rough=(0.5, 0.55))
-    galv = ka.galvanized()
+    hdpe = ka.plastic("MI_HDPE", v["body"], parting=True, detail=6.0, edge=0.002, scratches=0.35)
+    black = ka.plastic("MI_HDPE_Black", "#232426", rough=(0.5, 0.55), scuff="#5A5A58", detail=8.0, edge=0.003)
+    galv = ka.galvanized(detail=10.0)
     parts = []
     profile = [(0.0, 0.0), (0.126, 0.0), (0.13, 0.006), (0.15, 0.335), (0.158, 0.348), (0.158, 0.36), (0.146, 0.36),
                (0.143, 0.35), (0.124, 0.012), (0.0, 0.012)]
@@ -57,15 +57,15 @@ def build(variant: str = "water") -> dict:
     parts.append(ka.cylinder("grip", 0.012, 0.1, (0, 0, 0.49), "Y", 12, black))
     detail = []
     if variant != "hanger_mustard":
-        ochre = ka.flat_material("MI_Stencil_Ochre", "#C8912A", 0.6)
+        ochre = ka.ink("MI_Stencil_Ochre", "#C8912A", v["body"], detail=8.0, wear=0.35)
         z = 0.2
         detail.append(ka.stencil("stores", "LG STORES", 0.04, ochre, (wall(z), 0, z), (1, 0, 0),
-                                 cylinder=((0, 0, 0), (0, 0, 1), wall(z))))
+                                 cylinder=((0, 0, 0), (0, 0, 1), wall(z)), spray=0.0015, resolution=4))
     name = v["mesh"]
-    obj, high = ka.high_low(name, parts, detail, [])
+    obj, high = ka.high_low(name, parts, detail, [], soft=True)
     ka.collision_cylinder(name, 0, 0.13, 0.0, H, 16, top_radius=0.158)  # The doc's truncated cone, out to the lip
     for s, (loc, normal) in {"SKT_Dog_Handle_01": ((0, 0, 0.502), (0, 0, 1)), "SKT_Dog_Rim_01": ((0.158, 0, H), (1, 0, 0)),
                              "SKT_Dog_Bot_01": ((0, 0, 0), None)}.items():
         ka.socket(s, loc, obj, normal)
     return {"name": name, "meshes": [obj], "high": {name: high}, "cage": 0.004, "size": (0.32, 0.32, 0.5),
-            "res": 1024, "budget": 1200}
+            "res": 2048, "budget": 1200}

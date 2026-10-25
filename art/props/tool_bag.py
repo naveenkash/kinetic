@@ -72,18 +72,21 @@ def patch(name: str, body, material):
 
 def build(variant: str = "guild") -> dict:
     guild = variant == "guild"
-    canvas = ka.fabric("MI_Canvas_Natural", "#B9AE93" if guild else "#4A4D50", grab_z=H - 0.01)
-    rubber = ka.flat_material("MI_Rubber_Black", "#1E1F20", 0.8)
-    # The doc's stand-in for the leather wrap over the steel core.
-    leather = ka.flat_material("MI_Timber_Dark", "#4A3522", 0.75)
-    inside = ka.flat_material("MI_Bag_Inside", "#2B2622", 0.95)
-    timber = ka.wood("MI_Timber_Rough", "#7A5C3A")
+    canvas = ka.fabric("MI_Canvas_Natural", "#B9AE93" if guild else "#4A4D50", grab_z=H - 0.01, weave=0.0018)
+    rubber = ka.rubber("MI_Rubber_Black", "#1E1F20", 0.8)
+    # The doc's stand-in for the leather wrap over the steel core: black with hand grease, worn
+    # pale at the grip's edges.
+    leather = ka.plastic("MI_Timber_Dark", "#4A3522", rough=(0.55, 0.75), scuff="#2A1E14", detail=10.0, edge=0.003,
+                         scratches=0.4)
+    inside = ka.fabric("MI_Bag_Inside", "#2B2622", rough=0.95)
+    timber = ka.wood("MI_Timber_Rough", "#7A5C3A", grain_axis="Z", detail=6.0, checks=0.2)
     tool_paint = ka.painted_steel("MI_Steel_Painted_Worn", ka.Wear(paint="#C8912A" if guild else "#E8620C",
                                                                    chips=0.5, scrape_height=0.0,
-                                                                   streak_band=(H, H + 0.15)))
-    steel = ka.flat_material("MI_Steel_Bare", "#5C5F63", 0.55, 1.0)
-    glyph = ka.flat_material("MI_Stencil_Ochre" if guild else "MI_Stencil_Orange", "#C8912A" if guild else "#E8620C",
-                             0.85)
+                                                                   streak_band=(H, H + 0.15), detail=10.0,
+                                                                   edge=0.004, grime_reach=0.02))
+    steel = ka.bare_steel("MI_Steel_Bare", rough=(0.5, 0.6), rust=0.3, detail=10.0)
+    glyph = ka.ink("MI_Stencil_Ochre" if guild else "MI_Stencil_Orange", "#C8912A" if guild else "#E8620C",
+                   "#B9AE93" if guild else "#4A4D50", detail=8.0, wear=0.4)
     parts = []
     body = loaf("bag", canvas)
     parts.append(body)
@@ -125,16 +128,16 @@ def build(variant: str = "guild") -> dict:
         parts.append(ka.tube("hitch_glyph_tail", [(end + 0.002, -0.03, 0.18), (end + 0.002, 0.0, 0.205),
                                                   (end + 0.002, 0.03, 0.18)], 0.0035, glyph, sides=4))
         parts.append(ka.stencil("ledger", "LG-1183", 0.035, glyph, (end, 0, 0.14), (1, 0, 0), body))
-        tape = ka.flat_material("MI_Tape_Office_White", "#E6E4DD", 0.6)
+        tape = ka.plastic("MI_Tape_Office_White", "#E6E4DD", rough=(0.45, 0.6), scuff="#8A8578", detail=10.0, edge=0.002)
         parts.append(ka.decal_plate("name_tape", 0.12, 0.025, tape, (end, 0, 0.09), (1, 0, 0), body))
-        parts.append(ka.stencil("name", "D. ORRIN", 0.016, ka.flat_material("MI_Marker_Black", "#141414", 0.7),
+        parts.append(ka.stencil("name", "D. ORRIN", 0.016, ka.ink("MI_Marker_Black", "#141414", "#E6E4DD", wear=0.15),
                                 (end + 0.002, 0, 0.09), (1, 0, 0), body))
         parts.append(patch("patch", body, ka.fabric("MI_Tarp_Blue", "#2F5D8A", 0.8)))
     else:
         parts.append(ka.stencil("crib", "HTR", 0.06, glyph, (end, 0, 0.19), (1, 0, 0), body))
         parts.append(ka.stencil("crib_number", "CRIB 04", 0.03, glyph, (end, 0, 0.12), (1, 0, 0), body))
     name = "SM_Light_ToolBag_" + ("Guild" if guild else "HTR")
-    obj = ka.join(name, parts)
+    obj = ka.join(name, parts, soft=True)
     # The quarter turn: the end panel (X+) goes to east (Y-).
     from mathutils import Matrix
     obj.data.transform(Matrix.Rotation(-math.pi / 2, 4, "Z"))
@@ -148,4 +151,4 @@ def build(variant: str = "guild") -> dict:
                              "SKT_Dog_Top_01": (turned(0, 0, ridge + 0.0035), None),
                              "SKT_Dog_SideE_01": (turned(end - 0.002, 0, 0.17), (0, -1, 0))}.items():
         ka.socket(s, loc, obj, normal)
-    return {"name": name, "meshes": [obj], "size": (W, L, H + 0.15), "res": 1024, "budget": 2000}
+    return {"name": name, "meshes": [obj], "size": (W, L, H + 0.15), "res": 2048, "budget": 2000}

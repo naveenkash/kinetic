@@ -216,6 +216,11 @@ def describe(mesh: unreal.StaticMesh, sockets: dict[str, list[float]], normals: 
     }, problems
 
 
+# Folders of art/out built and imported by their own pipelines (import_characters.py, import_kit.py,
+# import_audio.py).
+OTHER_PIPELINES = {"characters", "kit", "machines", "surfaces", "audio"}
+
+
 def main() -> None:
     # The legacy FBX importer honours FbxImportUI; Interchange would ignore these options.
     unreal.SystemLibrary.execute_console_command(None, "Interchange.FeatureFlags.Import.FBX False")
@@ -231,6 +236,8 @@ def main() -> None:
     report = {}
     problems = []
     for path in sorted(glob.glob(os.path.join(ART_OUT, "*", "*", "report.json"))):
+        if os.path.relpath(path, ART_OUT).split(os.sep)[0] in OTHER_PIPELINES:
+            continue
         with open(path) as f:
             built = json.load(f)
         name = built["name"]
@@ -277,7 +284,9 @@ def main() -> None:
                                      built.get("bounds_m", {}).get(mesh_name))
             report[mesh_name] = facts | {"blender": {"bounds_m": built.get("bounds_m", {}).get(mesh_name),
                                                      "triangles": built["triangles"].get(mesh_name)}}
-            if facts["triangles"] != built["triangles"].get(mesh_name):
+            # Unreal drops degenerate (zero-area) triangles, a few percent of a bevelled mesh.
+            blender_tris = built["triangles"].get(mesh_name) or 0
+            if not 0.97 * blender_tris <= facts["triangles"] <= blender_tris:
                 issues.append(f"{facts['triangles']} tris, Blender's {built['triangles'].get(mesh_name)}")
             problems += [f"{mesh_name}: {p}" for p in issues]
     out = os.path.join(REPO, "game", "Saved", "Kinetic")
