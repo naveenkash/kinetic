@@ -7,7 +7,10 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "Kinetic/Impact.h"
 #include "KineticHarness.h"
+
+#include <vector>
 
 #include "KineticCharacter.generated.h"
 
@@ -32,7 +35,7 @@ class KINETICGAMEPLAY_API AKineticCharacter : public ACharacter
 	GENERATED_BODY()
 
 public:
-	AKineticCharacter();
+	explicit AKineticCharacter(const FObjectInitializer& ObjectInitializer);
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Kinetic")
 	EKineticHarness Harness = EKineticHarness::Rigger;
@@ -70,6 +73,22 @@ public:
 	// The Spool's buttons, for tests and bots.
 	void FirePressed();
 
+	// What the capsule hit since the Spool last asked: the Impact Monitor's contacts for the
+	// step (player-physics 4.1), taken and cleared by UKineticSpoolWorld.
+	std::vector<Kinetic::FContact> TakeContacts();
+
+	// Staggered, flipped or Stalled: no input until the Spool says otherwise.
+	void SetStunned(bool bInStunned) { bStunned = bInStunned; }
+	bool IsStunned() const { return bStunned; }
+
+	// One contact for the Impact Monitor: what was hit, at the velocity that hit it (cm/s), and
+	// the impulse Chaos reported (kg cm/s; zero for a sweep).
+	void RecordContact(const FHitResult& Hit, const FVector& MyVelocity, const FVector& NormalImpulse);
+
+	virtual void Landed(const FHitResult& Hit) override;
+	virtual void NotifyHit(UPrimitiveComponent* MyComp, AActor* Other, UPrimitiveComponent* OtherComp, bool bSelfMoved,
+	                       FVector HitLocation, FVector HitNormal, FVector NormalImpulse, const FHitResult& Hit) override;
+
 	virtual void Tick(float DeltaSeconds) override;
 
 protected:
@@ -97,6 +116,8 @@ private:
 	float ForwardInput = 0.0f;
 	bool bUnderLine = false;
 	bool bHeldStill = false;
+	bool bStunned = false;
+	std::vector<Kinetic::FContact> Contacts;
 	bool bDrawn = false;
 	float NormalFriction = 8.0f, NormalBraking = 2048.0f;
 

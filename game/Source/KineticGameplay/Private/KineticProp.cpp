@@ -10,6 +10,7 @@ AKineticProp::AKineticProp()
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
 	Mesh->SetCollisionProfileName(TEXT("PhysicsActor"));
 	Mesh->SetMobility(EComponentMobility::Movable);
+	Mesh->SetNotifyRigidBodyCollision(true);  // A prop striking a player reports its impulse
 	RootComponent = Mesh;
 }
 

@@ -338,6 +338,117 @@ private:
 };
 }  // namespace
 
+// Hits in the Yard (bible/05 sections 7.1 to 7.5): a fall at over 5 m/s staggers, a fall at
+// over 12 m/s Stalls against the world, and a fall into the Well is a ring-out; a Stalled
+// player is back at Spawn A after the respawn time.
+class FHitsInTheYard : public IAutomationLatentCommand
+{
+public:
+	explicit FHitsInTheYard(FAutomationTestBase* InTest) : Test(InTest) {}
+
+	virtual bool Update() override
+	{
+		UWorld* World = GEditor ? GEditor->PlayWorld.Get() : nullptr;
+		AKineticCharacter* Me = World ? Cast<AKineticCharacter>(UGameplayStatics::GetPlayerPawn(World, 0)) : nullptr;
+		UKineticSpoolWorld* Spool = World ? World->GetSubsystem<UKineticSpoolWorld>() : nullptr;
+		if (!Me || !Spool)
+		{
+			Test->AddError(TEXT("no player or no Spool"));
+			return true;
+		}
+		const double Now = World->GetTimeSeconds();
+		if (Now > 40.0)
+		{
+			Test->AddError(FString::Printf(TEXT("timed out in stage %d"), Stage));
+			return true;
+		}
+		const FKineticSpoolPlayer* P = Spool->PlayerState(Me);
+		// Layout (x, y, feet z) in metres to the capsule's centre in Unreal.
+		const auto Drop = [&](double X, double Y, double FeetZ) {
+			Me->TeleportTo(FVector(X * 100.0, -Y * 100.0, FeetZ * 100.0 + 95.0), Me->GetActorRotation());
+			Me->GetCharacterMovement()->Velocity = FVector::ZeroVector;
+			Me->GetCharacterMovement()->SetMovementMode(MOVE_Falling);
+		};
+		switch (Stage)
+		{
+		case 0:  // A 1.8 m drop onto Marker Flat: 5.9 m/s, over the 5 m/s stagger threshold, under the flip's 8.
+			if (Now < 1.5)
+			{
+				return false;
+			}
+			Drop(-10.0, 10.0, 1.8);
+			Next(Now);
+			return false;
+		case 1:
+			if (Now - StageAt < 1.2)
+			{
+				return false;
+			}
+			Test->TestTrue(TEXT("a 5.9 m/s landing staggers"), P && P->LastOutcome == Kinetic::EOutcome::Stagger &&
+			                                                     P->LastOutcomeAt > StageAt);
+			Test->TestTrue(TEXT("staggered, still standing"), P && P->bStanding);
+			Drop(-10.0, 10.0, 20.0);  // 20 m: about 19.8 m/s, a Stall against the world (12 m/s)
+			Next(Now);
+			return false;
+		case 2:
+			if (Now - StageAt < 2.6)
+			{
+				return false;
+			}
+			Test->TestTrue(TEXT("a 20 m fall Stalls"), P && !P->bStanding);
+			Test->TestTrue(TEXT("against the world"), P && P->StallCause == Kinetic::EStallCause::WorldImpact);
+			Next(Now);
+			return false;
+		case 3:  // Back at Spawn A after the respawn time.
+			if (Now - StageAt < UKineticSpoolWorld::RespawnSeconds + 0.5)
+			{
+				return false;
+			}
+			Test->TestTrue(TEXT("standing again"), P && P->bStanding);
+			Test->TestTrue(TEXT("back on West Mesa"), FVector::Dist2D(Me->GetActorLocation(), FVector(-6800.0, 3900.0, 0.0)) < 600.0);
+			Drop(45.0, 0.0, 1.0);  // Into the Well
+			Next(Now);
+			return false;
+		case 4:
+			if (Now - StageAt < 2.0)
+			{
+				return false;
+			}
+			Test->TestTrue(TEXT("the Well is a ring-out"), P && !P->bStanding && P->StallCause == Kinetic::EStallCause::RingOut);
+			return true;
+		default:
+			return true;
+		}
+	}
+
+private:
+	void Next(double Now)
+	{
+		++Stage;
+		StageAt = Now;
+	}
+
+	FAutomationTestBase* Test;
+	int Stage = 0;
+	double StageAt = 0.0;
+};
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FKineticYardHitsTest, "Kinetic.Yard.Hits",
+                                 EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FKineticYardHitsTest::RunTest(const FString& Parameters)
+{
+	if (!AutomationOpenMap(YardMap))
+	{
+		AddError(TEXT("the Yard grey-box did not open (make yard-greybox)"));
+		return false;
+	}
+	ADD_LATENT_AUTOMATION_COMMAND(FWaitForPlay(this));
+	ADD_LATENT_AUTOMATION_COMMAND(FHitsInTheYard(this));
+	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FKineticYardSpoolTest, "Kinetic.Yard.Spool",
                                  EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 

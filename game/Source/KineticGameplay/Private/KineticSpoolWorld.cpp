@@ -7,6 +7,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/PlayerStart.h"
 #include "Kinetic/Cutter.h"
 #include "Kinetic/HangSolver.h"
 #include "Kinetic/Tables.h"
@@ -25,6 +26,11 @@ namespace
 {
 constexpr double BraceStillSpeed = 0.5;  // m/s, the browser client's
 constexpr double BraceSeconds = 0.3;     // bible/05 section 5.4
+constexpr double StaggerSeconds = 0.5;   // PROPOSED, the browser client's
+constexpr double FlipSeconds = 1.2;
+constexpr double LineStepOverCm = 30.0;  // A Hang line lower than this above the feet is stepped over (PROPOSED)
+constexpr double PlayerRadiusCm = 40.0;
+constexpr double PlayerHalfHeightCm = 95.0;
 
 FVec3 ToCore(const FVector& Cm) { return {Cm.X / 100.0, Cm.Y / 100.0, Cm.Z / 100.0}; }
 FVector FromCore(const FVec3& M) { return FVector(M.X * 100.0, M.Y * 100.0, M.Z * 100.0); }
@@ -59,7 +65,15 @@ void UKineticSpoolWorld::OnWorldBeginPlay(UWorld& InWorld)
 	Renderer = InWorld.SpawnActor<AKineticLineRenderer>(Params);
 }
 
-FKineticSpoolPlayer& UKineticSpoolWorld::StateOf(AKineticCharacter* Player) { return Players.FindOrAdd(Player); }
+FKineticSpoolPlayer& UKineticSpoolWorld::StateOf(AKineticCharacter* Player)
+{
+	FKineticSpoolPlayer& P = Players.FindOrAdd(Player);
+	if (!P.Monitor && Tables())
+	{
+		P.Monitor = MakeShared<Kinetic::FImpactMonitor>(*Tables());
+	}
+	return P;
+}
 
 const FKineticSpoolPlayer* UKineticSpoolWorld::PlayerState(const AKineticCharacter* Player) const
 {
@@ -473,11 +487,16 @@ void UKineticSpoolWorld::UpdateLines()
 	for (int32 I = 0; I < LineList.Num();)
 	{
 		FKineticLine& L = LineList[I];
-		const auto Gone = [](const FKineticLineEnd& E) {
-			return (E.Seat == EKineticSeat::Prop && !E.Prop.IsValid()) ||
-			       ((E.Seat == EKineticSeat::Plate || E.Seat == EKineticSeat::OwnPlate) && !E.Player.IsValid());
+		const auto Down = [this](const TWeakObjectPtr<AKineticCharacter>& Player) {
+			const FKineticSpoolPlayer* P = Player.IsValid() ? Players.Find(Player) : nullptr;
+			return !Player.IsValid() || (P && !P->bStanding);
 		};
-		if ((!L.Owner.IsValid() && !L.bSet) || Gone(L.A) || Gone(L.B))
+		const auto Gone = [&](const FKineticLineEnd& E) {
+			return (E.Seat == EKineticSeat::Prop && !E.Prop.IsValid()) ||
+			       ((E.Seat == EKineticSeat::Plate || E.Seat == EKineticSeat::OwnPlate) && Down(E.Player));
+		};
+		// A Stalled body takes its lines with it; a set line outlives its owner (05 3.6).
+		if ((Down(L.Owner) && !L.bSet) || Gone(L.A) || Gone(L.B))
 		{
 			EndLine(I, EKineticLineEnded::Released);
 			continue;
@@ -552,7 +571,10 @@ void UKineticSpoolWorld::Simulate()
 	TArray<AKineticCharacter*> PlayerBodies;
 	for (TActorIterator<AKineticCharacter> It(World); It; ++It)
 	{
-		PlayerBodies.Add(*It);
+		if (StateOf(*It).bStanding)
+		{
+			PlayerBodies.Add(*It);
+		}
 	}
 	TArray<AKineticProp*> PropBodies;
 	for (TActorIterator<AKineticProp> It(World); It; ++It)
@@ -769,6 +791,7 @@ void UKineticSpoolWorld::Simulate()
 				{
 					Movement->SetMovementMode(MOVE_Falling);
 					P.bBraced = false;
+					P.Monitor->NotifyHandoff();  // Grounded to flight body, once: the settle is not a hit
 				}
 				V = V + Pull[I] * (Dt / H.MassKg);
 				break;
@@ -913,6 +936,194 @@ void UKineticSpoolWorld::Simulate()
 	}
 }
 
+void UKineticSpoolWorld::Stall(AKineticCharacter* Player, Kinetic::EStallCause Cause)
+{
+	FKineticSpoolPlayer& P = StateOf(Player);
+	if (!P.bStanding)
+	{
+		return;
+	}
+	P.bStanding = false;
+	P.StallCause = Cause;
+	P.StalledAt = Clock;
+	P.LastOutcome = Kinetic::EOutcome::Stall;
+	P.LastOutcomeAt = Clock;
+	P.bDrawn = false;
+	P.bBraced = false;
+	UE_LOG(LogKineticSpool, Log, TEXT("%s Stalled (%d)"), *Player->GetName(), static_cast<int>(Cause));
+	// The Hooks lift them out: off the board until they come back.
+	Player->SetStunned(true);
+	Player->SetUnderLine(false, false);
+	Player->GetCharacterMovement()->StopMovementImmediately();
+	Player->GetCharacterMovement()->DisableMovement();
+	Player->SetActorEnableCollision(false);
+	Player->SetActorHiddenInGame(true);
+}
+
+void UKineticSpoolWorld::Respawn(AKineticCharacter* Player)
+{
+	FKineticSpoolPlayer& P = StateOf(Player);
+	FVector At = FVector::ZeroVector;
+	FRotator Facing = FRotator::ZeroRotator;
+	for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
+	{
+		if (It->PlayerStartTag == FName(TEXT("Spawn_A")))
+		{
+			At = It->GetActorLocation();
+			Facing = It->GetActorRotation();
+			break;
+		}
+	}
+	Player->SetActorEnableCollision(true);
+	Player->SetActorHiddenInGame(false);
+	Player->TeleportTo(At, Facing);
+	if (AController* Controller = Player->GetController())
+	{
+		Controller->SetControlRotation(Facing);
+	}
+	Player->GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	Player->SetStunned(false);
+	P.bStanding = true;
+	P.StunnedUntil = -1.0;
+	P.LastHangForce = FVector::ZeroVector;
+	P.Monitor = MakeShared<Kinetic::FImpactMonitor>(*Tables());
+}
+
+void UKineticSpoolWorld::Impacts()
+{
+	const Kinetic::FKineticTables& T = *Tables();
+	for (TActorIterator<AKineticCharacter> It(GetWorld()); It; ++It)
+	{
+		AKineticCharacter* Character = *It;
+		FKineticSpoolPlayer& P = StateOf(Character);
+		std::vector<Kinetic::FContact> Contacts = Character->TakeContacts();
+		if (!P.bStanding)
+		{
+			if (Clock - P.StalledAt >= RespawnSeconds)
+			{
+				Respawn(Character);
+			}
+			continue;
+		}
+		// Ring-out: into the Well's kill volume, or off the edge of the arena (05 7.5).
+		if (Character->GetActorLocation().Z - PlayerHalfHeightCm < KillZCm)
+		{
+			Stall(Character, Kinetic::EStallCause::RingOut);
+			continue;
+		}
+		const Kinetic::EOutcome Outcome = P.Monitor->EndStep(Contacts, Clock, Dt);
+		if (Outcome == Kinetic::EOutcome::Stall)
+		{
+			Kinetic::EStallCause Cause = Kinetic::EStallCause::WorldImpact;
+			for (const Kinetic::FContact& C : Contacts)
+			{
+				Cause = C.Kind == Kinetic::EContactKind::Object      ? Kinetic::EStallCause::ObjectImpact
+				        : C.Kind == Kinetic::EContactKind::Player    ? Kinetic::EStallCause::PlayerImpact
+				        : C.Kind == Kinetic::EContactKind::Kinematic ? Kinetic::EStallCause::KinematicImpact
+				                                                     : Cause;
+			}
+			Stall(Character, Cause);
+			continue;
+		}
+		if (Outcome == Kinetic::EOutcome::Stagger || Outcome == Kinetic::EOutcome::Flip)
+		{
+			P.StunnedUntil = Clock + (Outcome == Kinetic::EOutcome::Flip ? FlipSeconds : StaggerSeconds);
+			P.bBraced = false;
+			P.LastOutcome = Outcome;
+			P.LastOutcomeAt = Clock;
+		}
+		Character->SetStunned(Clock < P.StunnedUntil);
+	}
+}
+
+void UKineticSpoolWorld::HangLineContacts()
+{
+	// Hang and set lines are solid to players (05 3.5): walking into one stops you; over 3 m/s
+	// it staggers you (the line owner's class time); over 6 m/s it flips you over it with your
+	// momentum. Haul and Jack lines are not solid. A line within a step of the feet is stepped
+	// over. (The browser client's rule, on the capsule's axis.)
+	const Kinetic::FKineticTables& T = *Tables();
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(KineticFlipOver), false);
+	for (const FKineticLine& L : LineList)
+	{
+		if (!L.IsLive() || !IsHang(L.State.Mode))
+		{
+			continue;
+		}
+		const FVector A = DogPosition(L.A);
+		const FVector B = DogPosition(L.B);
+		for (TActorIterator<AKineticCharacter> It(GetWorld()); It; ++It)
+		{
+			AKineticCharacter* Character = *It;
+			FKineticSpoolPlayer& P = StateOf(Character);
+			const bool bOnIt = L.A.Player.Get() == Character || L.B.Player.Get() == Character;
+			if (!P.bStanding || bOnIt)
+			{
+				continue;
+			}
+			const FVector C = Character->GetActorLocation();
+			const FVector Low = C - FVector(0, 0, PlayerHalfHeightCm - LineStepOverCm);
+			const FVector High = C + FVector(0, 0, PlayerHalfHeightCm);
+			FVector OnLine, OnBody;
+			FMath::SegmentDistToSegmentSafe(A, B, Low, High, OnLine, OnBody);
+			if (FVector::Dist(OnLine, OnBody) > PlayerRadiusCm)
+			{
+				continue;
+			}
+			// The way out across the line, on the ground.
+			const FVector Across = FVector(B - A).GetSafeNormal2D();
+			FVector Out = FVector(C - OnLine).GetSafeNormal2D();
+			Out = (Out - Across * FVector::DotProduct(Out, Across)).GetSafeNormal();
+			if (Out.IsNearlyZero())
+			{
+				continue;
+			}
+			UCharacterMovementComponent* Movement = Character->GetCharacterMovement();
+			const double Speed = -FVector::DotProduct(Movement->Velocity, Out) / 100.0;  // Into the line, m/s
+			if (Speed <= 0.0)
+			{
+				continue;
+			}
+			// Already staggered or flipped: the line still blocks, but does not hit again.
+			Kinetic::EOutcome Hit = Clock < P.StunnedUntil ? Kinetic::EOutcome::None
+			                                               : Kinetic::Classify(Kinetic::EImpactTable::HangLineHit, Speed,
+			                                                                   Kinetic::ESurface::Hard, T);
+			const FVector Over = C - Out * (2.0 * PlayerRadiusCm + 10.0) + FVector(0, 0, 40.0);
+			Params.ClearIgnoredSourceObjects();
+			Params.AddIgnoredActor(Character);
+			const bool bClear = !GetWorld()->OverlapBlockingTestByChannel(
+			    Over, FQuat::Identity, ECC_Pawn, FCollisionShape::MakeCapsule(PlayerRadiusCm, PlayerHalfHeightCm), Params);
+			if (Hit == Kinetic::EOutcome::Flip && !bClear)
+			{
+				Hit = Kinetic::EOutcome::Stagger;  // No room on the far side: it stops them instead
+			}
+			if (Hit == Kinetic::EOutcome::Flip)
+			{
+				// Over it, landing on the far side with momentum kept.
+				Character->TeleportTo(Over, Character->GetActorRotation());
+				Movement->SetMovementMode(MOVE_Falling);
+				Movement->Velocity.Z = FMath::Max(Movement->Velocity.Z, 300.0);
+				P.StunnedUntil = Clock + FlipSeconds;
+			}
+			else
+			{
+				Movement->Velocity += Out * (Speed * 100.0);
+				Character->SetActorLocation(FVector(OnLine.X, OnLine.Y, C.Z) + Out * (PlayerRadiusCm + 2.0));
+				if (Hit == Kinetic::EOutcome::Stagger && L.Owner.IsValid())
+				{
+					P.StunnedUntil = Clock + T.Harness(KineticHarness::ToCore(L.Owner->Harness)).HangStaggerSeconds;
+				}
+			}
+			if (Hit != Kinetic::EOutcome::None)
+			{
+				P.LastOutcome = Hit;
+				P.LastOutcomeAt = Clock;
+				Character->SetStunned(true);
+			}
+		}
+	}
+}
+
 void UKineticSpoolWorld::Step()
 {
 	if (!Tables())
@@ -922,6 +1133,8 @@ void UKineticSpoolWorld::Step()
 	UpdateDogs();
 	UpdateLines();
 	Simulate();
+	HangLineContacts();
+	Impacts();
 	UpdateLines();
 	Clock += Dt;
 	if (Renderer)

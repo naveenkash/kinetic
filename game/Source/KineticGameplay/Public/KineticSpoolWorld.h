@@ -17,6 +17,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Kinetic/Impact.h"
 #include "Kinetic/LineSolver.h"
 #include "Kinetic/MassRules.h"
 #include "Kinetic/MatchEvents.h"
@@ -101,6 +102,14 @@ struct FKineticSpoolPlayer
 	bool bDrawn = false;
 	double DrawnAt = -1.0;
 	double NextSwingAt = -1.0;
+	// Hits (player-physics 4): the Impact Monitor, and the outcome it last gave.
+	TSharedPtr<Kinetic::FImpactMonitor> Monitor;
+	double StunnedUntil = -1.0;
+	Kinetic::EOutcome LastOutcome = Kinetic::EOutcome::None;
+	double LastOutcomeAt = -1.0;
+	bool bStanding = true;  // False once Stalled, until the Hooks bring them back
+	Kinetic::EStallCause StallCause = Kinetic::EStallCause::WorldImpact;
+	double StalledAt = -1.0;
 };
 
 UCLASS()
@@ -139,6 +148,12 @@ public:
 	// The rules step, public for tests; Tick calls it once per frame.
 	void Step();
 
+	// Takes a player out of the round (05 7.4): the Hooks lift them off, their lines go. In the
+	// walk-the-arena mode they are back at Spawn A after RespawnSeconds.
+	void Stall(AKineticCharacter* Player, Kinetic::EStallCause Cause);
+	static constexpr double RespawnSeconds = 3.0;
+	static constexpr double KillZCm = -600.0;  // The Well's kill volume, and anything off the edge (layout.md)
+
 	virtual void Tick(float DeltaTime) override;
 	virtual TStatId GetStatId() const override;
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
@@ -156,6 +171,9 @@ private:
 	void UpdateDogs();
 	void UpdateLines();
 	void Simulate();
+	void Impacts();
+	void HangLineContacts();
+	void Respawn(AKineticCharacter* Player);
 	Kinetic::FLineEndpoint EndpointOf(const FKineticLineEnd& End, bool bHeld) const;
 
 	TArray<FKineticLine> LineList;

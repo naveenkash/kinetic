@@ -12,6 +12,8 @@ _Status: proposal v0.1, 2026-10-24. Engine: UE 5.8.x. Thresholds and class numbe
 
 Only one of the first two is in the simulation at a time. The other is disabled (collision off, not ticking). The visual ragdoll is driven toward the flight body's pose by Physics Control, with the upper body animated (the "ragdoll-with-pose" from 05 section 5.1). The Physics Control plugin is marked "ready for production use" in 5.8 ([release notes](https://dev.epicgames.com/documentation/unreal-engine/unreal-engine-5-8-release-notes)) and manages spring/damper Controls on skeletal mesh bodies ([API](https://dev.epicgames.com/documentation/unreal-engine/API/Plugins/PhysicsControl/UPhysicsControlComponent)).
 
+**Unreal build, 2026-10-25 (PROPOSED interim).** The separate flight body is not built yet. A line that lifts a player past their foot-hold puts the movement capsule in Falling and changes its velocity by the line's force; the Hang solve sets that velocity. The Impact Monitor judges the capsule's hits the same way. The flight body and its handoff arrive with networked physics, because that is where the two bodies' replication differs.
+
 ### 1.1 Why CMC and not Mover
 
 - Mover is Experimental in 5.8 and Epic says to use caution shipping with it ([docs](https://dev.epicgames.com/documentation/en-us/unreal-engine/mover-in-unreal-engine)). Epic's own 5.8 notes describe work "toward moving Mover out of Experimental status", so it is not there yet.

@@ -12,6 +12,7 @@
 #include "InputModifiers.h"
 #include "Kinetic/Units.h"
 #include "KineticLadder.h"
+#include "KineticMovementComponent.h"
 #include "KineticRulesSubsystem.h"
 #include "KineticSpoolWorld.h"
 
@@ -27,7 +28,8 @@ constexpr float EyeAboveCentreCm = 75.0f;
 float Cm(double Meters) { return static_cast<float>(Kinetic::Units::MetersToCm(Meters)); }
 }  // namespace
 
-AKineticCharacter::AKineticCharacter()
+AKineticCharacter::AKineticCharacter(const FObjectInitializer& ObjectInitializer)
+    : Super(ObjectInitializer.SetDefaultSubobjectClass<UKineticMovementComponent>(ACharacter::CharacterMovementComponentName))
 {
 	PrimaryActorTick.bCanEverTick = true;
 	GetCapsuleComponent()->InitCapsuleSize(CapsuleRadiusCm, CapsuleHalfHeightCm);
@@ -41,6 +43,8 @@ AKineticCharacter::AKineticCharacter()
 	Movement->bRunPhysicsWithNoController = true;  // Tests and bots move it without a player
 	NormalFriction = Movement->GroundFriction;
 	NormalBraking = Movement->BrakingDecelerationWalking;
+	// Props striking a standing player report their impulse (the Impact Monitor's Object hits).
+	GetCapsuleComponent()->SetNotifyRigidBodyCollision(true);
 }
 
 bool AKineticCharacter::ApplyHarness()
@@ -111,10 +115,114 @@ void AKineticCharacter::SetUnderLine(bool bLine, bool bBraced)
 
 void AKineticCharacter::FirePressed() { OnFire(); }
 
+std::vector<Kinetic::FContact> AKineticCharacter::TakeContacts()
+{
+	std::vector<Kinetic::FContact> Out;
+	Out.swap(Contacts);
+	return Out;
+}
+
+namespace
+{
+// The surface modifier an actor's tag names (05 7.3): scrap heaps, laundry and nets x2.0, wood
+// x1.2, deep water x3.0, Stall-gel x4.0; anything else is hard.
+Kinetic::ESurface SurfaceOf(const AActor* Other)
+{
+	if (!Other)
+	{
+		return Kinetic::ESurface::Hard;
+	}
+	if (Other->ActorHasTag(TEXT("Surface.Scrap")))
+	{
+		return Kinetic::ESurface::Scrap;
+	}
+	if (Other->ActorHasTag(TEXT("Surface.Wood")))
+	{
+		return Kinetic::ESurface::Wood;
+	}
+	if (Other->ActorHasTag(TEXT("Surface.DeepWater")))
+	{
+		return Kinetic::ESurface::DeepWater;
+	}
+	if (Other->ActorHasTag(TEXT("Surface.StallGel")))
+	{
+		return Kinetic::ESurface::StallGel;
+	}
+	return Kinetic::ESurface::Hard;
+}
+}  // namespace
+
+void AKineticCharacter::Landed(const FHitResult& Hit)
+{
+	// Called before the landing zeroes the fall: the speed into the floor is still there.
+	RecordContact(Hit, GetCharacterMovement()->Velocity, FVector::ZeroVector);
+	Super::Landed(Hit);
+}
+
+void AKineticCharacter::NotifyHit(UPrimitiveComponent* MyComp, AActor* Other, UPrimitiveComponent* OtherComp, bool bSelfMoved,
+                                  FVector HitLocation, FVector HitNormal, FVector NormalImpulse, const FHitResult& Hit)
+{
+	Super::NotifyHit(MyComp, Other, OtherComp, bSelfMoved, HitLocation, HitNormal, NormalImpulse, Hit);
+	// Movement's own hits are recorded as they happen (Landed, the movement component); what
+	// arrives here unprompted is a body striking the player, with Chaos's impulse.
+	if (!bSelfMoved && OtherComp && OtherComp->IsSimulatingPhysics())
+	{
+		RecordContact(Hit, GetCharacterMovement()->Velocity, NormalImpulse);
+	}
+}
+
+void AKineticCharacter::RecordContact(const FHitResult& Hit, const FVector& MyVelocity, const FVector& NormalImpulse)
+{
+	AActor* Other = Hit.GetActor();
+	UPrimitiveComponent* OtherComp = Hit.GetComponent();
+	if (!Other || !OtherComp || Other == this)
+	{
+		return;
+	}
+	// The way the contact pushes the player, and both velocities at it (m/s).
+	const FVector Push = (GetActorLocation() - FVector(Hit.ImpactPoint)).GetSafeNormal();
+	const FVector Mine = MyVelocity / 100.0;
+	FVector Theirs = FVector::ZeroVector;
+	Kinetic::FContact Contact;
+	Contact.OtherId = static_cast<int>(Other->GetUniqueID());
+	Contact.Surface = SurfaceOf(Other);
+	Contact.Normal = {Push.X, Push.Y, Push.Z};
+	const UKineticRulesSubsystem* Rules = GEngine->GetEngineSubsystem<UKineticRulesSubsystem>();
+	const Kinetic::FKineticTables* T = Rules ? Rules->Tables() : nullptr;
+	if (const AKineticCharacter* Them = Cast<AKineticCharacter>(Other))
+	{
+		Contact.Kind = Kinetic::EContactKind::Player;
+		Theirs = Them->GetCharacterMovement()->Velocity / 100.0;
+		Contact.OtherMassKg = T ? T->Harness(KineticHarness::ToCore(Them->Harness)).MassKg : 100.0;
+	}
+	else if (OtherComp->IsSimulatingPhysics())
+	{
+		Contact.Kind = Kinetic::EContactKind::Object;
+		Theirs = OtherComp->GetPhysicsLinearVelocityAtPoint(Hit.ImpactPoint) / 100.0;
+		Contact.OtherMassKg = OtherComp->GetMass();
+	}
+	else
+	{
+		Contact.Kind = OtherComp->Mobility == EComponentMobility::Movable ? Kinetic::EContactKind::Kinematic
+		                                                                   : Kinetic::EContactKind::Static;
+	}
+	Contact.RelativeSpeed = FMath::Max(0.0, FVector::DotProduct(Theirs - Mine, Push));
+	if (Contact.Kind == Kinetic::EContactKind::Object)
+	{
+		// The solver's impulse when Chaos reports one; a sweep into a prop reports none, so the
+		// exchange of the two bodies' momentum along the normal stands in for it.
+		const double Reported = NormalImpulse.Size() / 100.0;
+		const double MyMass = T ? T->Harness(KineticHarness::ToCore(Harness)).MassKg : 100.0;
+		const double Reduced = MyMass * Contact.OtherMassKg / FMath::Max(1.0, MyMass + Contact.OtherMassKg);
+		Contact.ImpulseNs = Reported > 0.0 ? Reported : Reduced * Contact.RelativeSpeed;
+	}
+	Contacts.push_back(Contact);
+}
+
 void AKineticCharacter::Move(const FVector2D& Axis)
 {
 	ForwardInput = static_cast<float>(Axis.Y);
-	if (IsClimbing() || bUnderLine || bHeldStill)
+	if (IsClimbing() || bUnderLine || bHeldStill || bStunned)
 	{
 		return;  // On a ladder forward is up (UpdateLadder reads it); under a line or braced, no walking
 	}
@@ -321,6 +429,10 @@ void AKineticCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 
 void AKineticCharacter::OnFire()
 {
+	if (bStunned)
+	{
+		return;
+	}
 	if (UKineticSpoolWorld* Spool = GetWorld()->GetSubsystem<UKineticSpoolWorld>())
 	{
 		if (bDrawn)
