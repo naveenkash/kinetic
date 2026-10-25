@@ -247,3 +247,21 @@ Ladder times use 05 section 2.3: 2.0 m/s, Breaker 1.6 m/s.
 | Floor to Rails | 36 m | Cage ladder, 22.5 s | Two Jacks (Floor to mesa, mesa to Rails) | Ladder, 18 s | Ladder, 18 s |
 
 Map rule 3 is met: the Breaker has an honest route to every tier, and the Climber has a one-Slingshot route from each tier to the next (Floor to Stacks anywhere; Stacks to Rails from any mesa top). The Rails sit at 36 m (03-arenas.md agrees) so that this holds with 05's launch speeds.
+
+## Grey-box findings (PROPOSED)
+
+Building the grey-box level (`game/Tools/unreal/build_yard_greybox.py`) from this layout turned up places where its numbers collide. The level resolves them as below. Each resolution is **PROPOSED** until this document adopts it.
+
+- **Grate footbridges.** The script places each grate at the layout's X, or the nearest X along its trench, 2 m at a time, where both landings and both stairs are clear of the mesas, rated sections, placeholders and the Haul corridor (Y -15 to -9). Most of the layout's X values put a landing inside a mesa that stands on the lip: SC2 at the south trench's X -10, the East Mesa along the whole north lip from X +56 to +80. The grates stand at:
+
+| Trench | Layout X | Grey-box X |
+|---|---|---|
+| South (Y -30) | -50, -10, +30, +70 | -50, -2, +40, +76 |
+| Center (Y 0) | -50, -10, +30, +70 | -50, -6, +34, +70 |
+| North (Y +30) | -50, -10, +30, +70 | -50, -14, +28, +54 |
+
+  A stair runs straight away from the trench where it can, and turns along the lip where it cannot. Spawn B's walkable route (zone 11) now crosses the north trench at X +54, not +70.
+- **Portal legs.** The layout puts the legs at (X, ±30), on the trench line ("the portal leg at (-60, -30)", "the trench floor at (-62, -30, -4)"). The legs on the lips would stand inside the West and East Mesas, NC1's ledge, SC2 and the control shack. The grey-box therefore puts each leg against a trench wall, from the trench floor up to a cross-head under the rail walk: Y ±27 to ±28.3 and ±31.7 to ±33. That leaves 28.4 to 31.6 clear for the 3.2 m Hauler. The cage ladder climbs the inner leg's east face from the lip, so it is still taken from the Floor. The leg heads stand beside the walk, over the dock side.
+- **Control shack.** At Y +33 to +43, north of the leg it is bolted to. Its columns at Y +35 and +41 stand inside it.
+- **Scrap heaps.** Three of the manifest's heap positions are inside a mesa or a ledge. The grey-box piles each heap against the mesa at the nearest clear spot: (+10, +18) becomes (+8, +18), (-8, +20) becomes (-14, +20), and (-40, +22) becomes (-42, +22).
+- **Haul trucks.** The cab stands against the end wall, the bed inboard of it, then the ramp: the bed spans X -77.5 to -65.5 (Truck A) and +65.5 to +77.5 (Truck B). At the layout's (±75, -12), a 12 m truck would reach past the wall.

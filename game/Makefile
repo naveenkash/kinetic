@@ -14,6 +14,7 @@
 #   make editor        builds the KineticEditor target
 #   make unreal-test   runs the Kinetic.* automation tests in a headless editor
 #   make import-props  imports the generated props in art/out (art/README.md) into Content
+#   make yard-greybox  builds the Yard grey-box level from the layout docs, with the props
 #
 #   build/diff-recordings A B [tolerance_m]   compares two determinism recordings
 
@@ -39,7 +40,7 @@ BUILD_KEY := $(shell printf '%s' "$(CXX) $(CXXFLAGS) $(SANITIZE) $(LIB_SRC) $(TE
 STAMP := $(BUILD)/flags-$(BUILD_KEY).stamp
 DEPS := $(HEADERS) $(STAMP) Makefile
 
-.PHONY: test test-asan bench check report all-checks clean editor unreal-test import-props
+.PHONY: test test-asan bench check report all-checks clean editor unreal-test import-props yard-greybox
 
 $(BUILD)/kinetic-core-tests: $(LIB_SRC) $(TEST_SRC) $(DEPS) | $(BUILD)
 	$(CXX) $(CXXFLAGS) -I$(TESTS) $(LIB_SRC) $(TEST_SRC) -o $@
@@ -115,3 +116,6 @@ endef
 
 import-props: editor | $(BUILD)
 	$(call run_editor_script,Tools/unreal/import_props.py,import-props)
+
+yard-greybox: editor | $(BUILD)
+	$(call run_editor_script,Tools/unreal/build_yard_greybox.py,yard-greybox)
