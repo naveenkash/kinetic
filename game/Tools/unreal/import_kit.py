@@ -10,7 +10,9 @@ built with Blender). It makes:
   in metres);
 - flat surfaces for what has no tiling set: glass, rubber, timber, and the lamps' glow;
 - every art/out/kit/SM_Yard_*.fbx as a static mesh with Nanite on and no collision (the grey
-  boxes under it keep the collision), each slot given the surface it is named after.
+  boxes under it keep the collision), each slot given the surface it is named after;
+- the same for the moving machinery, art/out/machines/SM_Machine_*.fbx (art/machines), under
+  /Game/Arenas/YRD_Yard/Machines; KineticYardDirector draws them over the boxes it moves.
 build_yard_greybox.py then places the meshes and stops drawing the boxes they cover.
 """
 from __future__ import annotations
@@ -26,6 +28,8 @@ REPO = os.path.normpath(os.path.join(HERE, "..", "..", ".."))
 SURFACES = os.path.join(REPO, "art", "out", "surfaces")
 KIT = os.path.join(REPO, "art", "out", "kit")
 DEST = "/Game/Arenas/YRD_Yard/Kit"
+MACHINES = os.path.join(REPO, "art", "out", "machines")
+MACHINES_DEST = "/Game/Arenas/YRD_Yard/Machines"
 
 assets = unreal.AssetToolsHelpers.get_asset_tools()
 lib = unreal.MaterialEditingLibrary
@@ -181,15 +185,10 @@ def fbx_options() -> unreal.FbxImportUI:
     return ui
 
 
-def main() -> None:
-    mis = surfaces()
-    meshes = sorted(glob.glob(os.path.join(KIT, "SM_Yard_*.fbx")))
-    if not meshes:
-        raise RuntimeError(f"no kit in {KIT} (blender -b -P art/kit/yard_kit.py)")
-    problems = []
-    for fbx in meshes:
+def import_meshes(fbxs: list[str], dest: str, mis: dict, problems: list[str]) -> None:
+    for fbx in fbxs:
         name = os.path.splitext(os.path.basename(fbx))[0]
-        paths = task(fbx, DEST, fbx_options())
+        paths = task(fbx, dest, fbx_options())
         mesh = next((unreal.load_asset(p) for p in paths if p.split(".")[0].endswith(name)), None)
         if not isinstance(mesh, unreal.StaticMesh):
             problems.append(f"{name}: not imported ({paths})")
@@ -205,7 +204,18 @@ def main() -> None:
         settings.set_editor_property("enabled", True)
         mesh.set_editor_property("nanite_settings", settings)
         eal.save_loaded_asset(mesh)
-        unreal.log(f"Kinetic: kit {name}, {len(mesh.get_editor_property('static_materials'))} surfaces")
+        unreal.log(f"Kinetic: {name}, {len(mesh.get_editor_property('static_materials'))} surfaces")
+
+
+def main() -> None:
+    mis = surfaces()
+    meshes = sorted(glob.glob(os.path.join(KIT, "SM_Yard_*.fbx")))
+    if not meshes:
+        raise RuntimeError(f"no kit in {KIT} (blender -b -P art/kit/yard_kit.py)")
+    problems = []
+    import_meshes(meshes, DEST, mis, problems)
+    # The moving machinery (art/machines), which KineticYardDirector puts over its boxes.
+    import_meshes(sorted(glob.glob(os.path.join(MACHINES, "SM_Machine_*.fbx"))), MACHINES_DEST, mis, problems)
     for p in problems:
         unreal.log_error(p)
     if problems:

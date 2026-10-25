@@ -54,6 +54,29 @@ UStaticMeshComponent* AKineticKinematic::AddBox(FName Name, const FVector& Centr
 	return Part;
 }
 
+UStaticMeshComponent* AKineticKinematic::AddLook(UStaticMesh* Mesh, const TArray<FName>& Shown)
+{
+	if (!Mesh)
+	{
+		return nullptr;
+	}
+	Look = NewObject<UStaticMeshComponent>(this, TEXT("Look"));
+	Look->SetMobility(EComponentMobility::Movable);
+	Look->SetStaticMesh(Mesh);
+	Look->SetupAttachment(Root);
+	Look->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Look->SetCanEverAffectNavigation(false);
+	Look->RegisterComponent();
+	for (UStaticMeshComponent* Part : Parts)
+	{
+		if (!Shown.Contains(Part->GetFName()))
+		{
+			Part->SetVisibility(false);
+		}
+	}
+	return Look;
+}
+
 Kinetic::FPose AKineticKinematic::PoseOf(const FTransform& T)
 {
 	Kinetic::FPose P;

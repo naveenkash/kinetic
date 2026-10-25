@@ -36,6 +36,13 @@ const FName RamTag(TEXT("Kinetic.PressRam"));
 
 // The layout's frame (metres, X east, Y north) to Unreal's (cm, Y flipped).
 FVector L(double X, double Y, double Z) { return FVector(X * 100.0, -Y * 100.0, Z * 100.0); }
+
+// A machine's drawn mesh (art/machines, make import-kit), or null when it is not imported.
+UStaticMesh* Machine(const TCHAR* Name)
+{
+	return LoadObject<UStaticMesh>(nullptr, *FString::Printf(TEXT("/Game/Arenas/YRD_Yard/Machines/SM_Machine_%s.SM_Machine_%s"), Name, Name),
+	                               nullptr, LOAD_NoWarn | LOAD_Quiet);
+}
 FVec3 Core(const FVector& Cm) { return {Cm.X / 100.0, Cm.Y / 100.0, Cm.Z / 100.0}; }
 FVector Cm(const FVec3& M) { return FVector(M.X * 100.0, M.Y * 100.0, M.Z * 100.0); }
 double Wrap(double T, double Period) { return T - Period * FMath::Floor(T / Period); }
@@ -120,6 +127,7 @@ void AKineticYardDirector::BeginPlay()
 		K->AddBox(TEXT("Chassis"), FVector(-700.0, 0.0, -175.0), FVector(1400.0, 320.0, 350.0), Chassis);
 		K->AddBox(TEXT("Load"), FVector(-700.0, 0.0, 170.0), FVector(1200.0, 500.0, 340.0), Plate);
 		K->AddBox(TEXT("Headlamp"), FVector(-5.0, 0.0, -60.0), FVector(10.0, 160.0, 40.0), Lamp, false);
+		K->AddLook(Machine(TEXT("Hauler")), {TEXT("Headlamp")});
 		K->Park(L(Trenches[I].bEastward ? -95.0 : 95.0, Trenches[I].YM, -10.0));
 		Trains[I] = K;
 	}
@@ -127,15 +135,18 @@ void AKineticYardDirector::BeginPlay()
 	Bridge = Spawn(TEXT("Gantry_Bridge"));
 	Bridge->AddBox(TEXT("Beam"), FVector(0.0, 0.0, 3525.0), FVector(150.0, 6180.0, 150.0), FLinearColor(0.85f, 0.55f, 0.1f));
 	Bridge->AddBox(TEXT("Cab"), FVector(0.0, -2850.0, 3800.0), FVector(300.0, 300.0, 400.0), FLinearColor(0.3f, 0.32f, 0.35f));
+	Bridge->AddLook(Machine(TEXT("GantryBridge")));
 	Magnet = Spawn(TEXT("Gantry_Magnet"));
 	Magnet->AddBox(TEXT("Magnet"), FVector(0.0, 0.0, 30.0), FVector(240.0, 240.0, 60.0), FLinearColor(0.25f, 0.25f, 0.27f));
 	Cable = Magnet->AddBox(TEXT("Cable"), FVector(0.0, 0.0, 300.0), FVector(6.0, 6.0, 500.0), FLinearColor(0.1f, 0.1f, 0.1f), false);
 	Cable->SetCollisionEnabled(ECollisionEnabled::QueryOnly);  // Doggable, not a wall
+	Magnet->AddLook(Machine(TEXT("GantryMagnet")), {TEXT("Cable")});
 	// The Lockout curtains, parked out past the end walls.
 	for (int32 Side = 0; Side < 2; ++Side)
 	{
 		AKineticKinematic* K = Spawn(Side == 0 ? TEXT("Lockout_West") : TEXT("Lockout_East"));
 		K->AddBox(TEXT("Curtain"), FVector(0.0, 0.0, 1400.0), FVector(100.0, 9000.0, 3600.0), FLinearColor(0.12f, 0.12f, 0.14f));
+		K->AddLook(Machine(TEXT("Lockout")));
 		K->bHitsPlayers = false;  // It pushes and crushes instead
 		K->Park(L(Side == 0 ? -CurtainParkX : CurtainParkX, 0.0, 0.0));
 		Curtains[Side] = K;
@@ -825,6 +836,7 @@ void AKineticYardDirector::BuildRated()
 		R.Rest = L(C.X, C.Y, 1.35);
 		R.Body = Make(R.Rest);
 		R.Body->AddBox(TEXT("Section"), FVector::ZeroVector, FVector(1200.0, 600.0, 270.0), RatedColour);
+		R.Body->AddLook(Machine(TEXT("HullSection")));
 		R.Body->SetAffectsNavigation(true);
 		double Best = Inf;
 		for (int32 I = 0; I < 3; ++I)
@@ -852,6 +864,7 @@ void AKineticYardDirector::BuildRated()
 	Shack->AddBox(TEXT("WallW"), FVector(-390, 0, 185), FVector(20, 1000, 330), Structure);
 	Shack->AddBox(TEXT("WallE"), FVector(390, 0, 185), FVector(20, 1000, 330), Structure);
 	Shack->AddBox(TEXT("SillS"), FVector(0, 490, 65), FVector(800, 20, 90), Structure);  // Windows south
+	Shack->AddLook(Machine(TEXT("Shack")));
 	Shack->SetAffectsNavigation(true);
 	Shack->Tags.Add(TEXT("Kinetic.Anchor"));
 	for (const double Y : {35.0, 41.0})
@@ -861,6 +874,7 @@ void AKineticYardDirector::BuildRated()
 		R.Rest = L(-62.0, Y, 5.15);
 		R.Body = Make(R.Rest);
 		R.Body->AddBox(TEXT("Column"), FVector::ZeroVector, FVector(60.0, 60.0, 1030.0), RatedColour);
+		R.Body->AddLook(Machine(TEXT("Column")));
 		R.Body->SetAffectsNavigation(true);
 		Rated.Add(R);
 	}
@@ -871,6 +885,7 @@ void AKineticYardDirector::BuildRated()
 	W.Body = Make(W.Rest);
 	W.Body->AddBox(TEXT("Block"), FVector::ZeroVector, FVector(200.0, 200.0, 300.0), RatedColour);
 	W.Body->AddBox(TEXT("Cable"), FVector(0.0, 0.0, 300.0), FVector(10.0, 10.0, 300.0), FLinearColor(0.1f, 0.1f, 0.1f), false);
+	W.Body->AddLook(Machine(TEXT("Counterweight")), {TEXT("Cable")});
 	Rated.Add(W);
 }
 

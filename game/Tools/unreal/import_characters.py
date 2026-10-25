@@ -123,6 +123,10 @@ def import_texture(png: str, folder: str, kind: str) -> unreal.Texture2D:
     if kind == "ORM":
         texture.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_MASKS)
         texture.set_editor_property("srgb", False)
+    elif kind == "Normal":  # Blender bakes OpenGL (Y up); Unreal reads DirectX
+        texture.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_NORMALMAP)
+        texture.set_editor_property("srgb", False)
+        texture.set_editor_property("flip_green_channel", True)
     eal.save_loaded_asset(texture)
     return texture
 

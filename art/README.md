@@ -75,7 +75,13 @@ The Yard is drawn by a visual kit over the grey-box level, and the grey boxes st
    - The rest are the press and the Well, ladders and cages, the grate bridges, the trucks and other placeholders as objects, the scrap heaps, and clutter.
    - `art/kit/kitlib.py` holds the shapes. Faces are UV'd in metres, so a surface repeats at its true size.
    - `art/kit/covered.json` lists the boxes the kit draws over. The press ram and the plank bridges move or break, so they are not covered.
-3. **Unreal.** `make -C game import-kit` imports the surfaces into `M_KineticSurface` instances and the kit as Nanite meshes. Then `make -C game yard-greybox` places the kit and stops drawing the covered boxes.
+3. **The machines.** `art/machines/yard_machines.py` builds the moving machinery, `art/out/machines/SM_Machine_<Name>.fbx`, each in the frame of the kinematic that carries it:
+   - the Hauler: fish-belly underframe, bogies, cab, chevrons, and a chained hull section;
+   - the Gantry's bridge and magnet, and the Lockout curtain;
+   - the control shack, and the rated hull section, column and counterweight.
+4. **Unreal.** `make -C game import-kit` imports the surfaces into `M_KineticSurface` instances, and the kit and machines as Nanite meshes.
+   - Then `make -C game yard-greybox` places the kit and stops drawing the covered boxes.
+   - At play, `KineticYardDirector` draws each machine over its boxes, which keep colliding.
 
 ```bash
 blender -b --factory-startup -P art/surfaces/build_surfaces.py -- --res 1024
@@ -85,8 +91,13 @@ blender -b --factory-startup -P art/surfaces/build_surfaces.py -- --res 1024
 blender -b --factory-startup -P art/kit/yard_kit.py
 ```
 
+```bash
+blender -b --factory-startup -P art/machines/yard_machines.py
+```
+
 The level's night lighting is set in `build_yard_greybox.py`:
-- the sodium cloud deck is a dim emissive sky dome, which a real-time sky light captures as the fill;
+- the sky is Unreal's sky atmosphere under a volumetric cloud deck, shaped by a faint moon and tinted by the town's sodium glow from under the horizon, and a real-time sky light captures it as the fill;
+- height fog with volumetric scattering gives the floods their shafts;
 - the mast, shack, press and pit-stand floods are spotlights in candela;
 - a cage lamp hangs over each spawn;
 - exposure is manual, tuned on `make -C game shots`;
