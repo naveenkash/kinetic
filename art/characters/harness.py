@@ -69,32 +69,42 @@ for side, s in (("l", 1.0), ("r", -1.0)):
 # length and radius, and the livery: (hex, roughness, metallic) per material slot.
 CLASSES = {
     "Climber": dict(
-        shoulders=0.48, bulk=0.85, chest=(0.26, 0.22), back=(0.24, 0.30), shoulder=(0.14, 0.12), oval=True,
-        spool_at=0.9, spool=(0.09, 0.035), helmet=False, lean=0.0, frame="ribbons", run_speed=7.5,
+        shoulders=0.48, bulk=0.85, limb=0.92, chest=(0.26, 0.22), back=(0.24, 0.30), shoulder=(0.14, 0.12), oval=True,
+        plate_style="mirror", spool_at=0.88, spool=(0.09, 0.03), headgear="wrap", frame="ribbons", wraps=True, lean=0.0,
+        boot_top=0.14, steel_toe=False, strap_width=0.03, tape=("#C9CDD2", "#F4F1EA"), helmet_colour="#F4F1EA",
+        skin="#C69C7E", number="31.4", lease="SPONSORED", run_speed=7.5,
         colours={"Plate": ("#D8DADC", 0.08, 1.0), "Frame": ("#9BA0A4", 0.4, 1.0), "Strap": ("#F4F1EA", 0.95, 0.0),
                  "Body": ("#E9E4D8", 0.9, 0.0), "Boot": ("#E9E4D8", 0.8, 0.0), "Spool": ("#C9CDD2", 0.35, 1.0),
-                 "Accent": ("#A9C7E8", 0.5, 0.0)}),
+                 "Accent": ("#C9CDD2", 0.4, 1.0)}),
     "Scrapper": dict(
         shoulders=0.54, bulk=0.95, chest=(0.28, 0.24), back=(0.30, 0.28), shoulder=(0.15, 0.13), shoulder_r=(0.13, 0.11),
-        spool_at=0.55, spool=(0.14, 0.045), helmet=True, lean=6.0, frame="half", clutter=True, run_speed=7.0,
-        colours={"Plate": ("#8C8F92", 0.6, 0.9), "Frame": ("#C8862B", 0.6, 0.3), "Strap": ("#7A3B22", 0.9, 0.0),
-                 "Body": ("#3DA38C", 0.85, 0.0), "Boot": ("#4A3A2C", 0.7, 0.0), "Spool": ("#A67C3B", 0.4, 1.0),
+        plate_style="salvage", spool_at=0.55, spool=(0.16, 0.045), capacitor=True, headgear="salvage", frame="half",
+        clutter=True, lean=6.0, boot_top=0.22, laces=True, strap_width=0.045, tape=("#E8C23A", "#3DA38C"),
+        helmet_colour="#3DA38C", skin="#8D5A3B", number="K-77", lease="KESSL 2201", run_speed=7.0,
+        colours={"Plate": ("#7E8A86", 0.6, 0.9), "Frame": ("#C8862B", 0.6, 0.3), "Strap": ("#7A3B22", 0.9, 0.0),
+                 "Body": ("#3A4A45", 0.85, 0.0), "Boot": ("#4A3A2C", 0.7, 0.0), "Spool": ("#A67C3B", 0.4, 1.0),
                  "Accent": ("#E8C23A", 0.6, 0.0)}),
     "Rigger": dict(
-        shoulders=0.62, bulk=1.0, chest=(0.30, 0.26), back=(0.32, 0.30), shoulder=(0.16, 0.14),
-        spool_at=0.55, spool=(0.16, 0.05), helmet=True, lean=0.0, frame="rails", run_speed=6.2,
-        colours={"Plate": ("#8C8578", 0.6, 0.9), "Frame": ("#C8862B", 0.6, 0.3), "Strap": ("#B9A98A", 0.9, 0.0),
-                 "Body": ("#141211", 0.85, 0.0), "Boot": ("#4A3A2C", 0.7, 0.0), "Spool": ("#A67C3B", 0.35, 1.0),
+        shoulders=0.62, bulk=1.0, chest=(0.30, 0.26), back=(0.32, 0.30), shoulder=(0.16, 0.14), plate_style="lip",
+        spool_at=0.55, spool=(0.16, 0.05), headgear="square", frame="rails", lean=0.0, boot_top=0.2, laces=True,
+        strap_width=0.05, tape=("#C8862B", "#141211"), helmet_colour="#C8862B", skin="#A8785A", number="L-0412",
+        lease="CLEAR", run_speed=6.2,
+        colours={"Plate": ("#7E786C", 0.6, 0.9), "Frame": ("#C8862B", 0.6, 0.3), "Strap": ("#B9A98A", 0.9, 0.0),
+                 "Body": ("#2A2622", 0.85, 0.0), "Boot": ("#4A3A2C", 0.7, 0.0), "Spool": ("#A67C3B", 0.35, 1.0),
                  "Accent": ("#A67C3B", 0.35, 1.0)}),
     "Doubler": dict(
-        shoulders=0.62, bulk=1.0, chest=(0.30, 0.26), back=(0.32, 0.30), shoulder=(0.16, 0.14),
-        spool_at=0.5, spool=(0.24, 0.055), twin=True, helmet=True, lean=0.0, frame="short", run_speed=6.2,
-        colours={"Plate": ("#0E0E10", 0.5, 0.9), "Frame": ("#0E0E10", 0.5, 0.6), "Strap": ("#39FF14", 0.4, 0.0),
-                 "Body": ("#0E0E10", 0.85, 0.0), "Boot": ("#0E0E10", 0.6, 0.0), "Spool": ("#4A2E1E", 0.45, 1.0),
-                 "Accent": ("#FF2BD6", 0.4, 0.0)}),
+        shoulders=0.62, bulk=1.0, chest=(0.30, 0.26), back=(0.32, 0.30), shoulder=(0.16, 0.14), plate_style="lip",
+        spool_at=0.5, spool=(0.28, 0.055), twin=True, headgear="hood", frame="short", neon=True, lean=0.0, boot_top=0.24,
+        laces=True, strap_width=0.045, tape=("#39FF14", "#FF2BD6"), helmet_colour="#0E0E10", skin="#B98A6A",
+        number="RED 9", lease="", run_speed=6.2,
+        colours={"Plate": ("#16161A", 0.5, 0.9), "Frame": ("#16161A", 0.5, 0.6), "Strap": ("#1A1A1E", 0.6, 0.0),
+                 "Body": ("#0E0E10", 0.85, 0.0), "Boot": ("#0E0E10", 0.6, 0.0), "Spool": ("#6A5A4A", 0.45, 1.0),
+                 "Accent": ("#FFE600", 0.4, 0.0)}),
     "Breaker": dict(
-        shoulders=0.82, bulk=1.3, chest=(0.36, 0.30), back=(0.40, 0.36), shoulder=(0.22, 0.18), rake=15.0,
-        spool_at=0.15, spool=(0.18, 0.075), helmet=True, lean=5.0, frame="shell", run_speed=5.0,
+        shoulders=0.82, bulk=1.3, limb=1.1, chest=(0.36, 0.30), back=(0.40, 0.36), shoulder=(0.22, 0.18), rake=15.0,
+        plate_style="chamfer", spool_at=0.12, spool=(0.22, 0.07), gauntlet=True, headgear="visor", frame="shell",
+        lean=5.0, boot_top=0.5, shin_shell=True, strap_width=0.07, tape=("#FF5A1F", "#2B2E31"), helmet_colour="#FF5A1F",
+        skin="#7A4E36", number="HTR 118", lease="KESSL 9930", run_speed=5.0,
         colours={"Plate": ("#5A5E62", 0.45, 0.85), "Frame": ("#2B2E31", 0.7, 0.2), "Strap": ("#FF5A1F", 0.85, 0.0),
                  "Body": ("#2B2E31", 0.85, 0.0), "Boot": ("#2B2E31", 0.6, 0.0), "Spool": ("#5A5E62", 0.45, 0.85),
                  "Accent": ("#FF5A1F", 0.5, 0.0)}),
@@ -107,68 +117,41 @@ def bone_frame(name: str):
     return head, tail
 
 
-def part(objects: list, bone: str, obj) -> None:
-    """Rigid skinning: every vertex of the part follows one bone."""
-    group = obj.vertex_groups.new(name=bone)
-    group.add(list(range(len(obj.data.vertices))), 1.0, "REPLACE")
-    objects.append(obj)
-
-
-def limb(objects, mats, bone: str, radius: float, slot: str, sides: int = 8, inset=(0.0, 0.0)):
-    """A cylinder along a bone, from its head to its tail (shortened at either end by inset)."""
-    head, tail = bone_frame(bone)
-    axis = tail - head
-    length = axis.length - inset[0] - inset[1]
-    centre = head + axis.normalized() * (inset[0] + length / 2)
-    obj = ka.cylinder(f"{bone}_limb", radius, length, (0, 0, 0), segments=sides)
-    obj.data.materials.append(mats[slot])
-    obj.matrix_world = Matrix.Translation(centre) @ axis.to_track_quat("Z", "Y").to_matrix().to_4x4()
-    bpy.context.view_layer.update()
-    obj.data.transform(obj.matrix_world)
-    obj.matrix_world = Matrix.Identity(4)
-    part(objects, bone, obj)
-
-
-def block(objects, mats, bone: str, size, centre, slot: str, rotation=None):
-    obj = ka.box(f"{bone}_{slot}_{len(objects)}", size, (0, 0, 0))
-    obj.data.materials.append(mats[slot])
-    m = Matrix.Translation(Vector(centre))
-    if rotation is not None:
-        m = m @ rotation
-    obj.data.transform(m)
-    part(objects, bone, obj)
-    return obj
-
-
-def plate(objects, mats, bone: str, size, centre, normal: Vector, slot: str = "Plate", oval: bool = False, rake: float = 0.0,
-          outer_y: float | None = None):
-    """A Catch Plate: the plate and its 1 cm team-tint rim band, facing along normal. With
-    outer_y, it is moved across so its outermost edge, rim included, is there: the silhouette's
-    shoulder width is the spec's exactly."""
-    w, h = size
-    rot = normal.to_track_quat("X", "Y" if abs(normal.z) > 0.9 else "Z").to_matrix().to_4x4()
-    if rake:
-        rot = rot @ Matrix.Rotation(math.radians(rake), 4, "X")
-    if outer_y is not None:
-        corners = [rot.to_3x3() @ Vector((x, y, z)) for x in (-0.019, 0.019) for y in (-w / 2 - 0.01, w / 2 + 0.01)
-                   for z in (-h / 2 - 0.01, h / 2 + 0.01)]
-        reach = max(c.y for c in corners) if outer_y > 0 else min(c.y for c in corners)
-        centre = (centre[0], outer_y - reach, centre[2])
-    if oval:
-        obj = ka.cylinder(f"{bone}_oval", 0.5, 1.0, (0, 0, 0), axis="X", segments=12)
-        obj.data.transform(Matrix.Diagonal((0.02, w, h, 1.0)))
-        obj.data.materials.append(mats[slot])
-        obj.data.transform(Matrix.Translation(Vector(centre)) @ rot)
-        part(objects, bone, obj)
-    else:
-        block(objects, mats, bone, (0.025, w, h), centre, slot, rot)
-    # The rim band: four 1 cm bars just proud of the plate's edge, in team tint.
-    for bar, at in (((0.03, w + 0.02, 0.01), (0.004, 0.0, h / 2 + 0.005)), ((0.03, w + 0.02, 0.01), (0.004, 0.0, -h / 2 - 0.005)),
-                    ((0.03, 0.01, h + 0.02), (0.004, w / 2 + 0.005, 0.0)), ((0.03, 0.01, h + 0.02), (0.004, -w / 2 - 0.005, 0.0))):
-        obj = ka.box(f"{bone}_rim_{len(objects)}", bar, (0, 0, 0))
-        obj.data.materials.append(mats[TEAM_SLOT])
-        obj.data.transform(Matrix.Translation(Vector(centre)) @ rot @ Matrix.Translation(Vector(at)))
-        part(objects, bone, obj)
+def materials(cls: str, spec: dict) -> dict:
+    """The class's livery as procedural materials (the faction palettes in characters/README.md):
+    worn paint, canvas and leather, brass, mirror steel and anodised aluminium, skin. They are
+    baked to textures before export."""
+    c = spec["colours"]
+    wear = lambda paint, chips=0.35: ka.Wear(paint=paint, chips=chips, rust_streaks=0.08, scrape_height=0.0,
+                                             streak_band=(1.0, 1.9), roof_dirt=None, lower_grime="#2B2622")
+    style = spec["plate_style"]
+    plate = {
+        "mirror": lambda: ka.flat_material(f"M_{cls}_Plate", c["Plate"][0], 0.08, 1.0),
+        "chamfer": lambda: ka.flat_material(f"M_{cls}_Plate", c["Plate"][0], 0.45, 0.85),
+    }.get(style, lambda: ka.painted_steel(f"M_{cls}_Plate", wear(c["Plate"][0], 0.55 if style == "salvage" else 0.35)))()
+    m = {
+        "Plate": plate,
+        "Frame": ka.painted_steel(f"M_{cls}_Frame", wear(c["Frame"][0], 0.5)),
+        "Strap": ka.fabric(f"M_{cls}_Strap", c["Strap"][0]),
+        "Body": ka.fabric(f"M_{cls}_Body", c["Body"][0]),
+        "Boot": ka.flat_material(f"M_{cls}_Boot", c["Boot"][0], 0.65),
+        "Sole": ka.flat_material(f"M_{cls}_Sole", "#1A1A1A", 0.9),
+        "Spool": ka.flat_material(f"M_{cls}_Spool", c["Spool"][0], c["Spool"][1], c["Spool"][2]),
+        "Accent": ka.flat_material(f"M_{cls}_Accent", c["Accent"][0], c["Accent"][1], c["Accent"][2]),
+        "Steel": ka.flat_material(f"M_{cls}_Steel", "#9EA3A6", 0.35, 1.0),
+        "Stamp": ka.flat_material(f"M_{cls}_Stamp", "#B8B4AC", 0.4, 1.0),
+        "Ceramic": ka.flat_material(f"M_{cls}_Ceramic", "#E8E6E0", 0.3),
+        "Tape": ka.flat_material(f"M_{cls}_Tape", spec["tape"][0], 0.6),
+        "TapeB": ka.flat_material(f"M_{cls}_TapeB", spec["tape"][1], 0.6),
+        "Seal": ka.flat_material(f"M_{cls}_Seal", "#F2F2F0", 0.5),
+        "Helmet": ka.painted_steel(f"M_{cls}_Helmet", wear(spec["helmet_colour"], 0.3)),
+        "Visor": ka.flat_material(f"M_{cls}_Visor", "#101418", 0.05, 0.5),
+        "Gel": ka.flat_material(f"M_{cls}_Gel", "#E8D9B0", 0.1),
+        "Skin": ka.flat_material(f"M_{cls}_Skin", spec["skin"], 0.55),
+        "Dark": ka.flat_material(f"M_{cls}_Dark", "#0B0B0C", 0.2),
+        TEAM_SLOT: ka.emissive(f"M_{cls}_{TEAM_SLOT}", "#E69F00", 6.0),
+    }
+    return m
 
 
 def build_skeleton() -> bpy.types.Object:
@@ -188,95 +171,99 @@ def build_skeleton() -> bpy.types.Object:
     return rig
 
 
-def build_mesh(name: str, spec: dict, mats: dict):
-    objects: list = []
-    k = spec["bulk"]
-    # The body under the harness: pelvis, the torso in three, neck and head.
-    block(objects, mats, "pelvis", (0.22 * k, 0.32 * k, 0.2), (0, 0, 0.98), "Body")
-    block(objects, mats, "spine_01", (0.2 * k, 0.30 * k, 0.14), (0, 0, 1.12), "Body")
-    block(objects, mats, "spine_02", (0.22 * k, 0.33 * k, 0.15), (0, 0, 1.25), "Body")
-    block(objects, mats, "spine_03", (0.24 * k, 0.36 * k, 0.16), (0, 0, 1.39), "Body")
-    limb(objects, mats, "neck_01", 0.05 * min(k, 1.15), "Body")
-    block(objects, mats, "head", (0.2, 0.17, 0.23), (0.01, 0, 1.67), "Body")
-    if spec["helmet"]:
-        block(objects, mats, "head", (0.23, 0.2, 0.09), (0.0, 0, 1.79), "Frame")
-        block(objects, mats, "head", (0.03, 0.18, 0.05), (0.11, 0, 1.71), "Accent")  # Visor band
-    else:
-        block(objects, mats, "head", (0.21, 0.18, 0.06), (0.0, 0, 1.74), "Strap")  # A wrap
-    # Arms and legs.
-    for side, s in (("l", 1.0), ("r", -1.0)):
-        limb(objects, mats, f"clavicle_{side}", 0.045 * k, "Body", inset=(0.02, 0.0))
-        limb(objects, mats, f"upperarm_{side}", 0.052 * k, "Body")
-        limb(objects, mats, f"lowerarm_{side}", 0.045 * k, "Strap")
-        block(objects, mats, f"hand_{side}", (0.08, 0.04, 0.15), (0.0, 0.255 * s, 0.8), "Strap")
-        limb(objects, mats, f"thigh_{side}", 0.075 * k, "Body")
-        limb(objects, mats, f"calf_{side}", 0.06 * k, "Body", inset=(0.0, 0.05))
-        boot_top = 0.5 if spec.get("rake") else 0.22  # The Breaker's knee-high boots
-        block(objects, mats, f"calf_{side}", (0.13, 0.12, boot_top - 0.08), (0.0, 0.1 * s, 0.08 + (boot_top - 0.08) / 2), "Boot")
-        block(objects, mats, f"foot_{side}", (0.26, 0.11, 0.08), (0.06, 0.1 * s, 0.04), "Boot")
-    # Straps: the chest cross and the waist belt.
-    block(objects, mats, "spine_02", (0.24 * k + 0.02, 0.34 * k + 0.02, 0.05), (0, 0, 1.2), "Strap")
-    block(objects, mats, "pelvis", (0.23 * k + 0.02, 0.33 * k + 0.02, 0.06), (0, 0, 1.04), "Strap")
-    # The four Catch Plates (never covered), on the chest, the back, and the shoulders.
-    chest_x = 0.12 * k + 0.0125
-    plate(objects, mats, "spine_03", spec["chest"], (chest_x, 0, 1.36), Vector((1, 0, 0)))
-    back_z = 1.32 if spec.get("clutter") else 1.37  # The Scrapper's sits low
-    plate(objects, mats, "spine_03", spec["back"], (-chest_x, 0, back_z), Vector((-1, 0, 0)), oval=False)
+def weight_body(body, rig) -> None:
+    """Bone-heat weights for the body (it bends at every joint); the root does not deform."""
+    rig.data.bones["root"].use_deform = False
+    bpy.ops.object.select_all(action="DESELECT")
+    body.select_set(True)
+    rig.select_set(True)
+    bpy.context.view_layer.objects.active = rig
+    bpy.ops.object.parent_set(type="ARMATURE_AUTO")
+    # Keep the groups, drop the parenting: the joined mesh is parented once, at the end.
+    for m in list(body.modifiers):
+        body.modifiers.remove(m)
+    body.parent = None
+
+
+def build_mesh(name: str, spec: dict, mats: dict, rig):
+    import harness_parts as hp
+
+    parts = hp.Parts(mats)
+    figure = hp.body(parts, spec)
+    weight_body(figure, rig)
+    hp.head(parts)
+    # Where the torso's surface is, measured, so the plates sit on it.
+    band = [v.co for v in figure.data.vertices if 1.3 < v.co.z < 1.4 and abs(v.co.y) < 0.06]
+    chest_x = max(c.x for c in band) + 0.011  # The plate's back face on the chest
+    back_x = min(c.x for c in band) - 0.011
+    shoulder_z = max(v.co.z for v in figure.data.vertices if 0.12 < abs(v.co.y) < 0.2 and v.co.z < 1.55) + 0.012
+    style = spec["plate_style"]
+    hp.catch_plate(parts, "spine_03", spec["chest"], (chest_x, 0, 1.35), (1, 0, 0), style, number=spec.get("number"))
+    hp.catch_plate(parts, "spine_03", spec["back"], (back_x, 0, 1.32 if spec.get("clutter") else 1.36), (-1, 0, 0), style)
     half = spec["shoulders"] / 2
     for side, s in (("l", 1.0), ("r", -1.0)):
         size = spec["shoulder"] if side == "l" or "shoulder_r" not in spec else spec["shoulder_r"]
         normal = Vector((0, 0.35 * s, 1)).normalized()
-        plate(objects, mats, f"clavicle_{side}", size, (0, 0, 1.5), normal, oval=spec.get("oval", False),
-              rake=spec.get("rake", 0.0) * s, outer_y=half * s)
-    # The spine frame and its gel reservoirs (the Rigger's rails, the Doubler's cut-down frame).
-    frame = spec["frame"]
-    if frame in ("rails", "short", "half"):
-        length = {"rails": 0.6, "short": 0.45, "half": 0.6}[frame]
-        rails = (0.07,) if frame == "half" else (-0.07, 0.07)
-        for y in rails:
-            block(objects, mats, "spine_02", (0.025, 0.025, length), (-chest_x - 0.03, y, 1.08 + length / 2), "Frame")
-        for z in (1.12, 1.3, 1.48)[: 2 if frame == "short" else 3]:
-            block(objects, mats, "spine_02", (0.025, 0.16, 0.025), (-chest_x - 0.03, 0, z), "Frame")
-        for y in rails:
-            gel = ka.cylinder("gel", 0.035, 0.22, (0, 0, 0), segments=10)
-            gel.data.materials.append(mats["Accent"])
-            gel.data.transform(Matrix.Translation((-chest_x - 0.06, y * 1.6, 1.12)))
-            part(objects, "spine_02", gel)
-    elif frame == "shell":
-        block(objects, mats, "spine_02", (0.04, 0.4 * k, 0.4), (-chest_x - 0.01, 0, 1.25), "Frame")  # The ribbed shell
-    # The Spool on the right forearm, at its class place.
-    head, tail = bone_frame("lowerarm_r")
-    axis = (tail - head).normalized()
-    at = head + (tail - head) * spec["spool_at"]
-    length, radius = spec["spool"]
-    drums = (0.0, 0.07) if spec.get("twin") else (0.0,)
-    for off in drums:
-        drum = ka.cylinder("spool", radius, length, (0, 0, 0), segments=12)
-        drum.data.materials.append(mats["Spool"])
-        drum.data.transform(Matrix.Translation(at + Vector((0.035 * (1 if off else 0), 0, 0)) - axis * off) @
-                            axis.to_track_quat("Z", "Y").to_matrix().to_4x4())
-        part(objects, "lowerarm_r", drum)
-    ring = ka.cylinder("spool_rim", radius + 0.006, 0.012, (0, 0, 0), segments=12)
-    ring.data.materials.append(mats[TEAM_SLOT])
-    ring.data.transform(Matrix.Translation(at + axis * (length / 2)) @ axis.to_track_quat("Z", "Y").to_matrix().to_4x4())
-    part(objects, "lowerarm_r", ring)
-    if spec.get("twin"):  # The snap guard, a flared bell at the elbow
-        bell = ka.cylinder("bell", 0.07, 0.05, (0, 0, 0), segments=12)
-        bell.data.materials.append(mats["Spool"])
-        bell.data.transform(Matrix.Translation(head + axis * 0.03) @ axis.to_track_quat("Z", "Y").to_matrix().to_4x4())
-        part(objects, "lowerarm_r", bell)
-    # The Scrapper's clutter, low on the left hip: pouches and a coil of chain.
+        hp.catch_plate(parts, f"clavicle_{side}", size, (0, 0, shoulder_z), tuple(normal), "mirror" if spec.get("oval") else style,
+                       rake=spec.get("rake", 0.0) * s, outer_y=half * s, bolts=0 if spec.get("oval") else 2)
+    hp.straps(parts, spec, chest_x - 0.012)
+    hp.spine_frame(parts, spec, back_x + 0.012)
+    hp.spool(parts, spec, bone_frame)
+    hp.cutter(parts)
+    hp.boots(parts, spec)
+    hp.headgear(parts, spec)
+    # The telemetry pack under the back plate with its Office seal, and the lease plate.
+    pack = hp.bevelled_box("Telemetry", (0.04, 0.14, 0.1), width=0.006)
+    hp.place(pack, Matrix.Translation((back_x - 0.02, 0.0, 1.2)))
+    parts.add(pack, "spine_02", "Frame" if spec["frame"] == "shell" else "Dark")
+    seal = hp.cylinder("TelemetrySeal", 0.015, 0.004, segments=16)
+    hp.place(seal, hp.frame((back_x - 0.042, 0.0, 1.2), (-1, 0, 0)))
+    parts.add(seal, "spine_02", "Seal")
+    lease = hp.bevelled_box("Lease", (0.004, 0.06, 0.03), width=0.0015)
+    hp.place(lease, Matrix.Translation((chest_x + 0.014, 0.1, 1.25)))
+    parts.add(lease, "spine_03", "Accent")
+    tag = hp.stamp("LeaseText", spec.get("lease", "CLEAR"), 0.012)
+    hp.place(tag, Matrix.Translation((chest_x + 0.017, 0.1, 1.25)))
+    parts.add(tag, "spine_03", "Stamp")
+    # The shoulder lamp in team tint.
+    lamp = hp.bevelled_box("ShoulderLamp", (0.04, 0.035, 0.03), width=0.006)
+    hp.place(lamp, Matrix.Translation((0.06, half * 0.62, 1.56)))
+    parts.add(lamp, "clavicle_l", TEAM_SLOT)
+    extras(parts, spec, chest_x, back_x)
+    return ka.join(name, [figure] + parts.rigid)
+
+
+def extras(parts, spec: dict, chest_x: float, back_x: float) -> None:
+    """Each class's own: the Scrapper's hip clutter, the Doubler's neon tape, the Climber's wraps."""
+    import harness_parts as hp
+
     if spec.get("clutter"):
-        for i, (dx, dz) in enumerate(((0.06, 0.98), (-0.04, 0.96), (0.0, 0.9))):
-            block(objects, mats, "pelvis", (0.09, 0.07, 0.1), (dx, 0.2, dz), "Strap" if i else "Accent")
-        coil = ka.cylinder("coil", 0.08, 0.05, (0, 0, 0), axis="Y", segments=12)
-        coil.data.materials.append(mats["Frame"])
-        coil.data.transform(Matrix.Translation((-0.06, 0.22, 0.92)))
-        part(objects, "pelvis", coil)
-    # The team-tint shoulder lamp.
-    block(objects, mats, "clavicle_l", (0.04, 0.04, 0.03), (0.05, half * 0.7, 1.55), TEAM_SLOT)
-    mesh = ka.join(name, objects)
-    return mesh
+        for i, (dx, dz) in enumerate(((0.06, 0.98), (-0.05, 0.96), (0.005, 0.9))):
+            pouch = hp.bevelled_box("Pouch", (0.085, 0.07, 0.1), width=0.015, segments=2)
+            hp.place(pouch, Matrix.Translation((dx, 0.2, dz)))
+            parts.add(pouch, "pelvis", "Strap" if i else "Accent")
+            flap = hp.bevelled_box("Flap", (0.09, 0.075, 0.03), width=0.008)
+            hp.place(flap, Matrix.Translation((dx, 0.2, dz + 0.05)))
+            parts.add(flap, "pelvis", "Body")
+        for i in range(8):  # A coil of chain, link by link
+            a = 2 * math.pi * i / 8
+            link = ka.ring("Link", 0.012, 0.004, (0, 0, 0), axis="Y" if i % 2 else "X", segments=10, sides=6, stretch=0.012)
+            hp.place(link, Matrix.Translation((-0.06 + 0.055 * math.cos(a), 0.225, 0.92 + 0.055 * math.sin(a))))
+            parts.add(link, "pelvis", "Steel")
+        wrench = hp.bevelled_box("Wrench", (0.02, 0.012, 0.2), width=0.004)
+        hp.place(wrench, Matrix.Translation((0.08, 0.19, 0.88)) @ Matrix.Rotation(math.radians(12), 4, "X"))
+        parts.add(wrench, "pelvis", "Steel")
+    if spec.get("neon"):
+        for s in (1.0, -1.0):  # The X of neon tape across the back
+            pts = [(back_x - 0.005, 0.15 * s, 1.45), (back_x - 0.012, 0.0, 1.27), (back_x - 0.005, -0.14 * s, 1.08)]
+            parts.add(hp.strap_path("Neon", pts, 0.025, 0.003, outward=lambda p: Vector((-1, 0, 0))), "spine_02", "Tape")
+    if spec.get("wraps"):
+        for side, s in (("l", 1.0), ("r", -1.0)):
+            for z in (0.92, 0.97, 1.02):
+                wx, wy = parts.fit(0.004, 0.245 * s, z, pad=0.003, reach=0.08)
+                wrap = hp.strap_path("Wrap", hp.ellipse(0.004, 0.245 * s, z, wx, wy, 18), 0.03, 0.004,
+                                     outward=lambda p, c=0.245 * s: Vector((p.x - 0.004, p.y - c, 0)), closed=True)
+                parts.add(wrap, f"lowerarm_{side}", "Strap")
 
 
 # Animation ------------------------------------------------------------------------------------
@@ -383,28 +370,41 @@ def export(path: str, rig, mesh) -> None:
                              bake_anim_force_startend_keying=True, bake_anim_simplify_factor=0.0, path_mode="AUTO")
 
 
-def build(cls: str, out_root: str, preview_only: bool) -> dict:
+def build(cls: str, out_root: str, preview_only: bool, res: int = 2048) -> dict:
     spec = CLASSES[cls]
     ka.reset_scene()
     bpy.context.scene.render.fps = FPS
-    mats = {slot: ka.flat_material(f"M_{cls}_{slot}", *values) for slot, values in spec["colours"].items()}
-    tint = "#E69F00"  # Amber in the preview; Unreal sets each crew's tint
-    mats[TEAM_SLOT] = ka.emissive(f"M_{cls}_{TEAM_SLOT}", tint, 6.0)
+    mats = materials(cls, spec)
     rig = build_skeleton()
     name = f"SK_Harness_{cls}"
-    mesh = build_mesh(name, spec, mats)
+    mesh = build_mesh(name, spec, mats, rig)
     ka.triangulate(mesh)
+    out = os.path.join(out_root, cls)
+    os.makedirs(out, exist_ok=True)
+    # Bake the livery to textures: one set for everything but the team-tint parts, which keep a
+    # flat slot of their own so the game can colour them per crew.
+    team = [p.index for p in mesh.data.polygons if mesh.data.materials[p.material_index].name.endswith(TEAM_SLOT)]
+    ka.smart_uv(mesh, margin=0.003)
+    tint = mats[TEAM_SLOT]
+    stand_in = ka.flat_material(f"M_{cls}_TeamBake", "#E69F00", 0.3)
+    for slot in mesh.material_slots:
+        if slot.material == tint:
+            slot.material = stand_in  # Baked as plain amber; it is not seen
+    maps = ka.bake(mesh, out, f"T_{cls}", resolution=res, samples=16)
+    baked = ka.baked_material(f"M_{cls}_Harness", maps)
+    mesh.data.materials.clear()
+    mesh.data.materials.append(baked)
+    mesh.data.materials.append(tint)
+    for p in mesh.data.polygons:
+        p.material_index = 1 if p.index in set(team) else 0
     mesh.parent = rig
     modifier = mesh.modifiers.new("Armature", "ARMATURE")
     modifier.object = rig
-    out = os.path.join(out_root, cls)
-    os.makedirs(out, exist_ok=True)
     clips = takes(rig, spec)
     rig.animation_data.action = bpy.data.actions["Idle"]
     bpy.context.scene.frame_set(0)
     if not preview_only:
         export(os.path.join(out, f"{name}.fbx"), rig, mesh)
-    # The silhouette, measured: the widest point across the shoulders, in the rest pose.
     ys = [v.co.y for v in mesh.data.vertices if v.co.z > 1.3]
     report = {
         "name": name,
@@ -413,18 +413,16 @@ def build(cls: str, out_root: str, preview_only: bool) -> dict:
         "height_m": round(max(v.co.z for v in mesh.data.vertices), 3),
         "shoulder_width_m": round(max(ys) - min(ys), 3),
         "shoulder_width_spec_m": spec["shoulders"],
-        "materials": {slot.removeprefix(f"M_{cls}_"): {"color": spec["colours"].get(slot.removeprefix(f"M_{cls}_"), (tint, 0.5, 0.0))[0],
-                                                       "roughness": spec["colours"].get(slot.removeprefix(f"M_{cls}_"), (tint, 0.5, 0.0))[1],
-                                                       "metallic": spec["colours"].get(slot.removeprefix(f"M_{cls}_"), (tint, 0.5, 0.0))[2],
-                                                       "team_tint": slot.endswith(TEAM_SLOT)}
-                      for slot in [m.name for m in mesh.data.materials]},
+        # Slot 0 reads the baked maps; slot 1 is the team tint (Unreal: M_KineticHarness).
+        "textures": {k: os.path.basename(v) for k, v in maps.items() if k in ("BaseColor", "ORM", "Emissive")},
+        "slots": [f"M_{cls}_Harness", f"M_{cls}_{TEAM_SLOT}"],
         "bones": [b[0] for b in BONES],
         "takes": clips,
         "run_speed_ms": spec["run_speed"],  # The Run take's stride matches this speed at play rate 1 (PROPOSED)
     }
     with open(os.path.join(out, "report.json"), "w") as f:
         json.dump(report, f, indent=2)
-    ka.preview(os.path.join(out, f"{name}_preview.png"), (1.0, 1.0, 1.9), samples=32, resolution=(800, 1000))
+    ka.preview(os.path.join(out, f"{name}_preview.png"), (1.0, 1.0, 1.9), samples=48, resolution=(900, 1200))
     return report
 
 
@@ -433,9 +431,11 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--class", dest="cls", default=None, choices=list(CLASSES))
     parser.add_argument("--out", default=os.path.join(HERE, "..", "out", "characters"))
     parser.add_argument("--preview-only", action="store_true")
+    parser.add_argument("--res", type=int, default=2048, help="texture size")
     args = parser.parse_args(argv)
+    sys.path.insert(0, HERE)
     for cls in [args.cls] if args.cls else list(CLASSES):
-        r = build(cls, os.path.abspath(args.out), args.preview_only)
+        r = build(cls, os.path.abspath(args.out), args.preview_only, args.res)
         print(f"{r['name']}: {r['triangles']} triangles, {r['height_m']} m tall, shoulders {r['shoulder_width_m']} m "
               f"(spec {r['shoulder_width_spec_m']}), {len(r['takes'])} takes")
     return 0

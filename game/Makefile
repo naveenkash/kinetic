@@ -18,6 +18,7 @@
 #   make yard-greybox  builds the Yard grey-box level from the layout docs, with the props
 #   make import-audio  generates the tells' sound cues (art/audio) and imports them
 #   make import-characters  imports the harness characters (art/characters, built with Blender)
+#   make shots         renders views of the Yard (crews, mesas, the Gantry) to Saved/Kinetic/Shots
 #
 #   build/diff-recordings A B [tolerance_m]   compares two determinism recordings
 
@@ -45,7 +46,7 @@ DEPS := $(HEADERS) $(STAMP) Makefile
 
 UNREAL_TESTS ?= Kinetic
 
-.PHONY: test test-asan bench check report all-checks clean editor unreal-test import-props yard-greybox import-audio import-characters
+.PHONY: test test-asan bench check report all-checks clean editor unreal-test import-props yard-greybox import-audio import-characters shots
 
 $(BUILD)/kinetic-core-tests: $(LIB_SRC) $(TEST_SRC) $(DEPS) | $(BUILD)
 	$(CXX) $(CXXFLAGS) -I$(TESTS) $(LIB_SRC) $(TEST_SRC) -o $@
@@ -124,6 +125,14 @@ import-props: editor | $(BUILD)
 
 yard-greybox: editor | $(BUILD)
 	$(call run_editor_script,Tools/unreal/build_yard_greybox.py,yard-greybox)
+
+UE_RENDER = "$(UE_ROOT)/Engine/Binaries/Mac/UnrealEditor-Cmd" "$(UPROJECT)" -unattended -nosplash -nopause -NoSound -nocrashreports -RenderOffscreen -ResX=1600 -ResY=900
+
+shots: editor | $(BUILD)
+	@rm -f $(BUILD)/shots.log
+	$(UE_RENDER) -ExecCmds="Automation RunTests Kinetic.Shots; Quit" -abslog="$(abspath $(BUILD))/shots.log" > /dev/null 2>&1 || true
+	@grep "Kinetic.Shots\|shot " $(BUILD)/shots.log | grep -v "Queued" | tail -8
+	@ls Saved/Kinetic/Shots
 
 import-characters: editor | $(BUILD)
 	$(call run_editor_script,Tools/unreal/import_characters.py,import-characters)

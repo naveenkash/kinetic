@@ -59,3 +59,14 @@ The output goes to `art/out/<asset>/<mesh>/`, which is not committed: run the sc
 | `props/floodlight_stand.py` | The tripod floodlight, with variants `office`, `htr` and `guild` (docs/objects/props-light/floodlight-stand.md) |
 
 Requires Blender 5.2 (`brew install --cask blender`).
+
+## Characters
+
+`art/characters/harness.py` builds the five harness classes (docs/characters/harnesses) on one shared skeleton with Unreal Mannequin bone names:
+
+```bash
+blender -b --factory-startup -P art/characters/harness.py -- [--class Rigger] [--res 2048]
+```
+
+Each is a skin-modifier body weighted to the skeleton (with hands and a face), the class's harness from `harness_parts.py` (Catch Plates at their class sizes with lips, chamfers or mirror faces, bolts and stamped numbers, body-fitted straps and buckles, the spine frame and gel reservoirs, the Spool with its mode ring, Dogs and line exit, the Cutter, boots, headgear, the class's extras), and six takes (Idle, Run, Climb, Fall, Brace, Stagger). The livery is baked to 2K textures; the team-tint parts keep a slot of their own. `make -C game import-characters` imports them. These are the stand-ins until MetaHuman supplies the faces and bodies (PROPOSED: the harness stays code-built and is fitted onto them).
+

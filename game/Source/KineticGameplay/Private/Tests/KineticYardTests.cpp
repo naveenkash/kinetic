@@ -3,7 +3,10 @@
 // Spool and hits on the mesa; and a Scrap match of six bots. Needs the level built (make
 // yard-greybox) and the props imported (make import-props). The one-character tests play the
 // walk-the-arena mode (kinetic.Mode Walk).
+#include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
+#include "UnrealClient.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Engine/Engine.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
@@ -991,6 +994,234 @@ bool FKineticYardRatedTest::RunTest(const FString& Parameters)
 	}
 	ADD_LATENT_AUTOMATION_COMMAND(FWaitForPlay(this));
 	ADD_LATENT_AUTOMATION_COMMAND(FRatedInTheYard(this));
+	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
+	return true;
+}
+
+
+// The generated figure on the player (art/characters, make import-characters): it loads for the
+// class, faces the actor's forward with its left side on the actor's left, and plays the take
+// for what the character is doing: Idle standing, Run moving, Fall in the air, Brace braced.
+class FFigureInTheYard : public IAutomationLatentCommand
+{
+public:
+	explicit FFigureInTheYard(FAutomationTestBase* InTest) : Test(InTest) {}
+
+	virtual bool Update() override
+	{
+		UWorld* World = GEditor ? GEditor->PlayWorld.Get() : nullptr;
+		AKineticCharacter* Me = World ? Cast<AKineticCharacter>(UGameplayStatics::GetPlayerPawn(World, 0)) : nullptr;
+		UKineticSpoolWorld* Spool = World ? World->GetSubsystem<UKineticSpoolWorld>() : nullptr;
+		if (!Me || !Spool)
+		{
+			return Fail(TEXT("no player"));
+		}
+		const double Now = World->GetTimeSeconds();
+		if (Now > 20.0)
+		{
+			return Fail(*FString::Printf(TEXT("timed out in stage %d"), Stage));
+		}
+		using ETake = AKineticCharacter::EFigureTake;
+		switch (Stage)
+		{
+		case 0:
+			if (Now < 1.5)
+			{
+				return false;
+			}
+			if (!Me->HasFigure())
+			{
+				return Fail(TEXT("no figure for the class (make import-characters)"));
+			}
+			{
+				// In the actor's frame: toes ahead of the heel, the left leg on the left (-Y).
+				const FTransform Actor = Me->GetActorTransform();
+				const FVector Toe = Actor.InverseTransformPosition(Me->GetMesh()->GetBoneLocation(TEXT("ball_l")));
+				const FVector Heel = Actor.InverseTransformPosition(Me->GetMesh()->GetBoneLocation(TEXT("foot_l")));
+				const FVector Left = Actor.InverseTransformPosition(Me->GetMesh()->GetBoneLocation(TEXT("thigh_l")));
+				Test->TestTrue(TEXT("the figure faces forward"), Toe.X > Heel.X);
+				Test->TestTrue(TEXT("its left leg is on the left"), Left.Y < 0.0);
+				Test->TestTrue(TEXT("its feet are at the capsule's foot"), FMath::Abs(Heel.Z + 95.0) < 15.0);
+			}
+			Test->TestEqual(TEXT("idle standing"), static_cast<int>(Me->FigureTake()), static_cast<int>(ETake::Idle));
+			Next(Now);
+			return false;
+		case 1:  // Running.
+			Cast<APlayerController>(Me->GetController())->SetControlRotation(FRotator(0.0, 180.0, 0.0));
+			Me->Move(FVector2D(0.0, 1.0));
+			if (Now - StageAt < 0.8)
+			{
+				return false;
+			}
+			Test->TestEqual(TEXT("run while moving"), static_cast<int>(Me->FigureTake()), static_cast<int>(ETake::Run));
+			Me->Jump();
+			Next(Now);
+			return false;
+		case 2:  // In the air.
+			if (Now - StageAt < 0.2)
+			{
+				return false;
+			}
+			Test->TestEqual(TEXT("fall in the air"), static_cast<int>(Me->FigureTake()), static_cast<int>(ETake::Fall));
+			Me->StopJumping();
+			Next(Now);
+			return false;
+		case 3:  // Braced (a Rigger braces).
+			if (Now - StageAt < 1.5)
+			{
+				return false;
+			}
+			Spool->SetBrace(Me, true);
+			Me->Crouch();
+			if (Now - StageAt < 2.2)
+			{
+				return false;
+			}
+			Test->TestEqual(TEXT("brace when braced"), static_cast<int>(Me->FigureTake()), static_cast<int>(ETake::Brace));
+			return true;
+		default:
+			return true;
+		}
+	}
+
+private:
+	bool Fail(const TCHAR* Why)
+	{
+		Test->AddError(Why);
+		return true;
+	}
+	void Next(double Now)
+	{
+		++Stage;
+		StageAt = Now;
+	}
+
+	FAutomationTestBase* Test;
+	int Stage = 0;
+	double StageAt = 0.0;
+};
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FKineticYardFigureTest, "Kinetic.Yard.Figure",
+                                 EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FKineticYardFigureTest::RunTest(const FString& Parameters)
+{
+	PlayMode(TEXT("Walk"), false);
+	if (!AutomationOpenMap(YardMap))
+	{
+		AddError(TEXT("the Yard grey-box did not open (make yard-greybox)"));
+		return false;
+	}
+	ADD_LATENT_AUTOMATION_COMMAND(FWaitForPlay(this));
+	ADD_LATENT_AUTOMATION_COMMAND(FFigureInTheYard(this));
+	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
+	return true;
+}
+
+
+// Views of the Yard for a look at it (not a check): with rendering on (an editor run without
+// -nullrhi), a Scrap match of six bots is held at its reset while a camera visits the crews at
+// their spawns, West Mesa from the Haul Lane, and Marker Flat under the Gantry; each view is
+// saved to Saved/Kinetic/Shots/. With no rendering it does nothing.
+class FShotsOfTheYard : public IAutomationLatentCommand
+{
+public:
+	explicit FShotsOfTheYard(FAutomationTestBase* InTest) : Test(InTest) {}
+
+	virtual bool Update() override
+	{
+		UWorld* World = GEditor ? GEditor->PlayWorld.Get() : nullptr;
+		APlayerController* Player = World ? World->GetFirstPlayerController() : nullptr;
+		if (!World || !Player)
+		{
+			return Next < 0;
+		}
+		const double Now = World->GetTimeSeconds();
+		struct FView
+		{
+			const TCHAR* Name;
+			FVector From, To;  // Layout metres
+		};
+		static const FView Views[] = {
+		    {TEXT("Crew_WestMesa"), FVector(-62.0, -36.5, 10.0), FVector(-68.0, -39.0, 9.0)},
+		    {TEXT("Crew_EastMesa"), FVector(62.0, 36.5, 10.0), FVector(68.0, 39.0, 9.0)},
+		    {TEXT("WestMesa_HaulLane"), FVector(-45.0, -20.0, 3.0), FVector(-68.0, -39.0, 6.0)},
+		    {TEXT("MarkerFlat_Gantry"), FVector(-30.0, 2.0, 12.0), FVector(10.0, 14.0, 6.0)},
+		    {TEXT("Trench_South"), FVector(-70.0, -27.5, 3.0), FVector(0.0, -30.0, -2.0)},
+		    {TEXT("Press_Pit"), FVector(30.0, -12.0, 8.0), FVector(45.0, 0.0, -4.0)},
+		};
+		const auto At = [](const FVector& M) { return FVector(M.X * 100.0, -M.Y * 100.0, M.Z * 100.0); };
+		if (Now < 2.0)
+		{
+			return false;
+		}
+		if (const AKineticGameMode* Mode = World->GetAuthGameMode<AKineticGameMode>(); Mode && Mode->Scrap() && !bHeld)
+		{
+			Kinetic::FScrapRules Rules;
+			Rules.ResetSeconds = 600.0;  // Hold the crews at their spawns for the pictures
+			Mode->Scrap()->SetRules(Rules);
+			Mode->Scrap()->StartMatch();
+			bHeld = true;
+		}
+		if (Next >= static_cast<int32>(UE_ARRAY_COUNT(Views)))
+		{
+			return Now - LastAt > 1.5;
+		}
+		if (Now - LastAt < 2.0)
+		{
+			return false;  // Let the frame settle, and the last shot land
+		}
+		const FView& V = Views[Next];
+		if (!Camera)
+		{
+			Camera = World->SpawnActor<ACameraActor>();
+		}
+		Camera->SetActorLocationAndRotation(At(V.From), (At(V.To) - At(V.From)).Rotation());
+		Camera->GetCameraComponent()->SetFieldOfView(70.0f);
+		Camera->GetCameraComponent()->SetConstraintAspectRatio(false);  // Fill the frame
+		Player->SetViewTarget(Camera);
+		if (bAimed)
+		{
+			const FString File = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Kinetic/Shots") / V.Name) + TEXT(".png");
+			FScreenshotRequest::RequestScreenshot(File, false, false);
+			Test->AddInfo(FString::Printf(TEXT("shot %s"), *File));
+			++Next;
+			bAimed = false;
+		}
+		else
+		{
+			bAimed = true;
+		}
+		LastAt = Now;
+		return false;
+	}
+
+private:
+	FAutomationTestBase* Test;
+	int32 Next = 0;
+	double LastAt = 0.0;
+	bool bHeld = false, bAimed = false;
+	ACameraActor* Camera = nullptr;
+};
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FKineticYardShotsTest, "Kinetic.Shots.Yard",
+                                 EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FKineticYardShotsTest::RunTest(const FString& Parameters)
+{
+	if (!FApp::CanEverRender())
+	{
+		AddInfo(TEXT("no rendering (-nullrhi): no shots"));
+		return true;
+	}
+	PlayMode(TEXT("Scrap"), true);
+	if (!AutomationOpenMap(YardMap))
+	{
+		AddError(TEXT("the Yard grey-box did not open (make yard-greybox)"));
+		return false;
+	}
+	ADD_LATENT_AUTOMATION_COMMAND(FWaitForPlay(this));
+	ADD_LATENT_AUTOMATION_COMMAND(FShotsOfTheYard(this));
 	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
 	return true;
 }

@@ -19,6 +19,9 @@
 #include "KineticMovementComponent.h"
 #include "KineticRulesSubsystem.h"
 #include "KineticSpoolWorld.h"
+#include "Animation/AnimSequence.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Engine/SkeletalMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -62,6 +65,11 @@ AKineticCharacter::AKineticCharacter(const FObjectInitializer& ObjectInitializer
 		return C;
 	};
 	Body = Part(TEXT("Body"), Cylinder.Object, FVector::ZeroVector, FVector(0.8, 0.8, 1.9));
+	// The figure: the feet at the capsule's foot, facing the actor's forward (art/characters).
+	GetMesh()->SetRelativeLocation(FVector(0.0, 0.0, -CapsuleHalfHeightCm));
+	GetMesh()->SetOwnerNoSee(true);
+	GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	GetMesh()->SetCanEverAffectNavigation(false);
 	Visor = Part(TEXT("Visor"), Cube.Object, FVector(36.0, 0.0, EyeAboveCentreCm - 5.0), FVector(0.12, 0.5, 0.14));
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
 	Movement->NavAgentProps.bCanCrouch = true;
@@ -96,6 +104,7 @@ bool AKineticCharacter::ApplyHarness()
 	const double Gravity = FMath::Abs(Movement->GetGravityZ());
 	Movement->JumpZVelocity = static_cast<float>(FMath::Sqrt(2.0 * Gravity * Kinetic::Units::MetersToCm(Row.JumpHeight)));
 	// A ledge the class can mantle is never a step it walks up: steps stay at the engine's 45 cm.
+	LoadFigure();  // The class's figure and takes
 	return true;
 }
 
@@ -103,6 +112,77 @@ void AKineticCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 	ApplyHarness();
+}
+
+void AKineticCharacter::LoadFigure()
+{
+	const FString Class = KineticHarness::Name(Harness);
+	const FString Folder = FString::Printf(TEXT("/Game/Characters/%s"), *Class);
+	USkeletalMesh* Figure = LoadObject<USkeletalMesh>(nullptr, *FString::Printf(TEXT("%s/SK_Harness_%s.SK_Harness_%s"), *Folder, *Class, *Class),
+	                                                  nullptr, LOAD_NoWarn | LOAD_Quiet);
+	static const TCHAR* Names[] = {TEXT("Idle"), TEXT("Run"), TEXT("Climb"), TEXT("Fall"), TEXT("Brace"), TEXT("Stagger")};
+	bFigure = Figure != nullptr;
+	for (int32 I = 0; I < static_cast<int32>(EFigureTake::Count); ++I)
+	{
+		Takes[I] = bFigure ? LoadObject<UAnimSequence>(nullptr, *FString::Printf(TEXT("%s/AS_%s_%s.AS_%s_%s"), *Folder, *Class, Names[I], *Class, Names[I]),
+		                                               nullptr, LOAD_NoWarn | LOAD_Quiet)
+		                   : nullptr;
+		bFigure &= Takes[I] != nullptr;
+	}
+	GetMesh()->SetSkeletalMesh(bFigure ? Figure : nullptr);
+	GetMesh()->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+	Body->SetVisibility(!bFigure);
+	Visor->SetVisibility(!bFigure);
+	Take = EFigureTake::Count;
+	SetCrew(Crew);
+}
+
+void AKineticCharacter::UpdateFigure()
+{
+	if (!bFigure)
+	{
+		return;
+	}
+	// The take for what the character is doing now.
+	const UCharacterMovementComponent* Movement = GetCharacterMovement();
+	const UWorld* World = GetWorld();
+	const double Now = World ? World->GetTimeSeconds() : 0.0;
+	if (bStunned && StaggerUntil < Now)
+	{
+		StaggerUntil = Now + 0.6;  // One stagger take per hit
+	}
+	const double Speed = FVector(Movement->Velocity.X, Movement->Velocity.Y, 0.0).Size();
+	EFigureTake Want = EFigureTake::Idle;
+	if (IsClimbing())
+	{
+		Want = EFigureTake::Climb;
+	}
+	else if (Now < StaggerUntil)
+	{
+		Want = EFigureTake::Stagger;
+	}
+	else if (Movement->IsFalling())
+	{
+		Want = EFigureTake::Fall;
+	}
+	else if (bHeldStill || bIsCrouched)
+	{
+		Want = EFigureTake::Brace;
+	}
+	else if (Speed > 60.0)
+	{
+		Want = EFigureTake::Run;
+	}
+	if (Want != Take)
+	{
+		Take = Want;
+		GetMesh()->PlayAnimation(Takes[static_cast<int32>(Take)], Take != EFigureTake::Stagger);
+	}
+	// The run's stride is authored at the class's run speed; the climb at its ladder speed.
+	const float Rate = Take == EFigureTake::Run ? static_cast<float>(Speed / FMath::Max(1.0f, Cm(RunSpeedM)))
+	                   : Take == EFigureTake::Climb ? FMath::Abs(static_cast<float>(Movement->Velocity.Z) / FMath::Max(1.0f, Cm(LadderSpeedM)))
+	                                                : 1.0f;
+	GetMesh()->SetPlayRate(FMath::Clamp(Rate, 0.0f, 2.0f));
 }
 
 FLinearColor AKineticCharacter::TeamTint(int32 InCrew)
@@ -117,6 +197,14 @@ void AKineticCharacter::SetCrew(int32 InCrew)
 	if (UMaterialInstanceDynamic* M = Body->CreateDynamicMaterialInstance(0))
 	{
 		M->SetVectorParameterValue(TEXT("Color"), TeamTint(Crew));
+	}
+	// The figure's team-tint slot (plate rim bands, the mode ring, the shoulder lamp).
+	for (int32 I = 0; bFigure && I < GetMesh()->GetNumMaterials(); ++I)
+	{
+		if (UMaterialInstanceDynamic* M = GetMesh()->CreateDynamicMaterialInstance(I))
+		{
+			M->SetVectorParameterValue(TEXT("TeamTint"), TeamTint(Crew));
+		}
 	}
 	if (UMaterialInstanceDynamic* M = Visor->CreateDynamicMaterialInstance(0))
 	{
@@ -356,6 +444,7 @@ void AKineticCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	UpdateLadder(DeltaSeconds);
+	UpdateFigure();
 }
 
 void AKineticCharacter::UpdateLadder(float DeltaSeconds)

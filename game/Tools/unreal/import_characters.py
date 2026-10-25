@@ -8,9 +8,10 @@
   (SK_Harness_Skeleton, made by the first import: the specs' one skeleton for every class);
 - each take becomes an animation sequence, AS_<Class>_<Take> (Idle, Run, Climb, Fall, Brace,
   Stagger), which AKineticCharacter plays;
-- each material slot gets an instance of M_KineticHarness with the slot's colour, roughness and
-  metal from the report, and the team-tint slot (the plate rim bands, the Spool's rim ring, the
-  shoulder lamp) takes its colour from the TeamTint parameter, which the game sets per crew.
+- the baked textures (BaseColor, ORM, Emissive) are imported beside the mesh, and the harness slot
+  gets an instance of M_KineticProp (import_props.py's master, enabled for skinned meshes) reading
+  them; the team-tint slot (the plate rim bands, the Spool's mode ring, the shoulder lamp) gets an
+  instance of M_KineticHarness, coloured by its TeamTint parameter, which the game sets per crew.
 
 It checks the import: every bone of the report on the skeleton, every take imported, and the
 figure facing +X (its toes ahead of its heels) with its left side on -Y, as an Unreal character
@@ -107,6 +108,45 @@ def instance(master, name: str, folder: str, spec: dict) -> unreal.MaterialInsta
     return mi
 
 
+PROP_MASTER = "/Game/Core/Materials/M_KineticProp"
+
+
+def import_texture(png: str, folder: str, kind: str) -> unreal.Texture2D:
+    task = unreal.AssetImportTask()
+    task.set_editor_property("filename", png)
+    task.set_editor_property("destination_path", folder)
+    task.set_editor_property("automated", True)
+    task.set_editor_property("replace_existing", True)
+    task.set_editor_property("save", True)
+    assets.import_asset_tasks([task])
+    texture = unreal.load_asset(list(task.get_editor_property("imported_object_paths"))[0])
+    if kind == "ORM":
+        texture.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_MASKS)
+        texture.set_editor_property("srgb", False)
+    eal.save_loaded_asset(texture)
+    return texture
+
+
+def textured_instance(name: str, folder: str, textures: dict) -> unreal.MaterialInstanceConstant:
+    master = unreal.load_asset(PROP_MASTER)
+    if master is None:
+        raise RuntimeError(f"{PROP_MASTER} is missing (make import-props)")
+    if not master.get_editor_property("used_with_skeletal_mesh"):
+        master.set_editor_property("used_with_skeletal_mesh", True)
+        lib.recompile_material(master)
+        eal.save_loaded_asset(master)
+    path = f"{folder}/{name}"
+    mi = unreal.load_asset(path) if eal.does_asset_exist(path) else assets.create_asset(
+        name, folder, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+    lib.set_material_instance_parent(mi, master)
+    for kind, texture in textures.items():
+        lib.set_material_instance_texture_parameter_value(mi, kind, texture)
+    if "Emissive" in textures:
+        lib.set_material_instance_scalar_parameter_value(mi, "EmissiveStrength", 4.0)
+    eal.save_loaded_asset(mi)
+    return mi
+
+
 def import_fbx(fbx: str, folder: str, skeleton) -> list[str]:
     ui = unreal.FbxImportUI()
     ui.set_editor_property("import_mesh", True)
@@ -188,18 +228,18 @@ def main() -> None:
         for t in report["takes"]:
             if t["name"] not in takes:
                 problems.append(f"{cls}: take {t['name']} not imported")
-        # Materials per slot.
+        # The baked harness slot and the team-tint slot.
+        textures = {kind: import_texture(os.path.join(os.path.dirname(report_path), png), folder, kind)
+                    for kind, png in report["textures"].items()}
+        harness = textured_instance(f"MI_{cls}_Harness", folder, textures)
+        team = instance(master, f"MI_{cls}_TeamTint", folder, {"color": "#E69F00", "roughness": 0.3, "metallic": 0.0,
+                                                              "team_tint": True})
         materials = mesh.get_editor_property("materials")
         slots = []
         for m in materials:
             slot = str(m.get_editor_property("material_slot_name"))
-            key = slot.split(f"M_{cls}_")[-1]
-            spec = report["materials"].get(key)
-            if spec is None:
-                problems.append(f"{cls}: slot {slot} has no colour in the report")
-                continue
-            m.set_editor_property("material_interface", instance(master, f"MI_{cls}_{key}", folder, spec))
-            slots.append(key)
+            m.set_editor_property("material_interface", team if slot.endswith("TeamTint") else harness)
+            slots.append(slot)
         mesh.set_editor_property("materials", materials)
         eal.save_loaded_asset(mesh)
         # Bones, and which way it faces.

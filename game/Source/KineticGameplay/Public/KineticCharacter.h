@@ -24,6 +24,7 @@ enum class ELineModeInput : uint8
 	Jack,
 	Hang
 };
+class UAnimSequence;
 class UCameraComponent;
 class UStaticMeshComponent;
 class UInputAction;
@@ -51,8 +52,10 @@ public:
 	void SetCrew(int32 InCrew);
 	static FLinearColor TeamTint(int32 Crew);
 
-	// The grey-box body other players see (the owner does not): a 1.9 m column in the crew's
-	// colour, with a visor on the facing side.
+	// What other players see of the character (the owner does not): the class's generated
+	// figure (art/characters, /Game/Characters/<Class>) on the character's skeletal mesh,
+	// playing its takes from the character's state; without those assets, a grey-box column in the
+	// crew's colour with a visor on the facing side.
 	UPROPERTY(VisibleAnywhere, Category = "Kinetic")
 	TObjectPtr<UStaticMeshComponent> Body;
 	UPROPERTY(VisibleAnywhere, Category = "Kinetic")
@@ -124,6 +127,11 @@ public:
 
 	virtual void Tick(float DeltaSeconds) override;
 
+	// The figure's takes, in the order of Takes (Idle, Run, Climb, Fall, Brace, Stagger).
+	enum class EFigureTake : uint8 { Idle, Run, Climb, Fall, Brace, Stagger, Count };
+	bool HasFigure() const { return bFigure; }
+	EFigureTake FigureTake() const { return Take; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
@@ -142,6 +150,8 @@ private:
 	void OnRelease();
 	void OnDraw(const FInputActionValue& Value);
 	void UpdateLadder(float DeltaSeconds);
+	void LoadFigure();
+	void UpdateFigure();
 	bool FloorUnderFeet() const;
 	void NoteInput();
 	void BuildInput();
@@ -154,6 +164,11 @@ private:
 	bool bStunned = false;
 	bool bMovementAllowed = true;
 	bool bTakesLadders = true;
+	bool bFigure = false;
+	EFigureTake Take = EFigureTake::Count;
+	double StaggerUntil = 0.0;
+	UPROPERTY()
+	TObjectPtr<UAnimSequence> Takes[static_cast<int32>(EFigureTake::Count)];
 	uint32 Inputs = 0;
 	std::vector<Kinetic::FContact> Contacts;
 	bool bDrawn = false;

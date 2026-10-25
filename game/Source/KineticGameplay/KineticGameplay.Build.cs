@@ -9,6 +9,8 @@ public class KineticGameplay : ModuleRules
 	public KineticGameplay(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+		// Each source keeps its own unit: their small file-local helpers (ToCore, Dt) share names.
+		bUseUnity = false;
 		// KineticCore reports a bad table by throwing; the subsystem catches it.
 		bEnableExceptions = true;
 		PublicDependencyModuleNames.AddRange(new[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "AIModule", "NavigationSystem", "KineticCore" });
