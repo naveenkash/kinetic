@@ -114,9 +114,72 @@ void AKineticCharacter::BeginPlay()
 	ApplyHarness();
 }
 
+bool AKineticCharacter::LoadMetaHuman(const FString& Class)
+{
+	// Built by build_metahumans.py, its takes by retarget_metahumans.py, its gear by
+	// art/characters (fitted to the body, on its skeleton). All of it, or the harness figure.
+	const auto Load = [](const FString& Path) {
+		const FString Name = FPaths::GetBaseFilename(Path);
+		return LoadObject<USkeletalMesh>(nullptr, *FString::Printf(TEXT("%s.%s"), *Path, *Name), nullptr, LOAD_NoWarn | LOAD_Quiet);
+	};
+	const FString Built = FString::Printf(TEXT("/Game/MetaHumans/MH_%s/MH_%s"), *Class, *Class);
+	const FString Folder = FString::Printf(TEXT("/Game/Characters/MetaHumans/%s"), *Class);
+	USkeletalMesh* BodyMesh = Load(FString::Printf(TEXT("%s/Body/SKM_MH_%s_BodyMesh"), *Built, *Class));
+	USkeletalMesh* FaceMesh = Load(FString::Printf(TEXT("%s/Face/SKM_MH_%s_FaceMesh"), *Built, *Class));
+	USkeletalMesh* GearMesh = Load(FString::Printf(TEXT("%s/SK_MHGear_%s"), *Folder, *Class));
+	if (!BodyMesh || !FaceMesh || !GearMesh)
+	{
+		return false;
+	}
+	static const TCHAR* Names[] = {TEXT("Idle"), TEXT("Run"), TEXT("Climb"), TEXT("Fall"), TEXT("Brace"), TEXT("Stagger")};
+	TObjectPtr<UAnimSequence> MetaTakes[static_cast<int32>(EFigureTake::Count)];
+	for (int32 I = 0; I < static_cast<int32>(EFigureTake::Count); ++I)
+	{
+		MetaTakes[I] = LoadObject<UAnimSequence>(nullptr, *FString::Printf(TEXT("%s/AS_%s_%s_MH.AS_%s_%s_MH"), *Folder, *Class, Names[I], *Class, Names[I]),
+		                                         nullptr, LOAD_NoWarn | LOAD_Quiet);
+		if (!MetaTakes[I])
+		{
+			return false;
+		}
+	}
+	for (int32 I = 0; I < static_cast<int32>(EFigureTake::Count); ++I)
+	{
+		Takes[I] = MetaTakes[I];
+	}
+	GetMesh()->SetSkeletalMesh(BodyMesh);
+	GetMesh()->SetRelativeRotation(FRotator(0.0, -90.0, 0.0));  // A MetaHuman faces +Y; the character faces +X
+	const auto Follower = [this](TObjectPtr<USkeletalMeshComponent>& Part, const TCHAR* Name, USkeletalMesh* Mesh) {
+		if (!Part)
+		{
+			Part = NewObject<USkeletalMeshComponent>(this, Name);
+			Part->SetupAttachment(GetMesh());
+			Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			Part->SetCanEverAffectNavigation(false);
+			Part->SetOwnerNoSee(true);
+			Part->RegisterComponent();
+		}
+		Part->SetSkeletalMesh(Mesh);
+		Part->SetLeaderPoseComponent(GetMesh());
+	};
+	Follower(Face, TEXT("Face"), FaceMesh);
+	Follower(Gear, TEXT("Gear"), GearMesh);
+	return true;
+}
+
 void AKineticCharacter::LoadFigure()
 {
 	const FString Class = KineticHarness::Name(Harness);
+	bMetaHuman = LoadMetaHuman(Class);
+	if (bMetaHuman)
+	{
+		bFigure = true;
+		GetMesh()->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+		Body->SetVisibility(false);
+		Visor->SetVisibility(false);
+		Take = EFigureTake::Count;
+		SetCrew(Crew);
+		return;
+	}
 	const FString Folder = FString::Printf(TEXT("/Game/Characters/%s"), *Class);
 	USkeletalMesh* Figure = LoadObject<USkeletalMesh>(nullptr, *FString::Printf(TEXT("%s/SK_Harness_%s.SK_Harness_%s"), *Folder, *Class, *Class),
 	                                                  nullptr, LOAD_NoWarn | LOAD_Quiet);
@@ -130,6 +193,14 @@ void AKineticCharacter::LoadFigure()
 		bFigure &= Takes[I] != nullptr;
 	}
 	GetMesh()->SetSkeletalMesh(bFigure ? Figure : nullptr);
+	GetMesh()->SetRelativeRotation(FRotator::ZeroRotator);  // The harness figure faces +X itself
+	for (USkeletalMeshComponent* Part : {Face.Get(), Gear.Get()})
+	{
+		if (Part)
+		{
+			Part->SetSkeletalMesh(nullptr);
+		}
+	}
 	GetMesh()->SetAnimationMode(EAnimationMode::AnimationSingleNode);
 	Body->SetVisibility(!bFigure);
 	Visor->SetVisibility(!bFigure);
@@ -198,10 +269,12 @@ void AKineticCharacter::SetCrew(int32 InCrew)
 	{
 		M->SetVectorParameterValue(TEXT("Color"), TeamTint(Crew));
 	}
-	// The figure's team-tint slot (plate rim bands, the mode ring, the shoulder lamp).
-	for (int32 I = 0; bFigure && I < GetMesh()->GetNumMaterials(); ++I)
+	// The figure's team-tint slot (plate rim bands, the mode ring, the shoulder lamp): on the
+	// harness figure, or on a MetaHuman's gear.
+	USkeletalMeshComponent* Tinted = bMetaHuman ? Gear.Get() : GetMesh();
+	for (int32 I = 0; bFigure && Tinted && I < Tinted->GetNumMaterials(); ++I)
 	{
-		if (UMaterialInstanceDynamic* M = GetMesh()->CreateDynamicMaterialInstance(I))
+		if (UMaterialInstanceDynamic* M = Tinted->CreateDynamicMaterialInstance(I))
 		{
 			M->SetVectorParameterValue(TEXT("TeamTint"), TeamTint(Crew));
 		}

@@ -707,7 +707,7 @@ def spot(label: str, at, aim, kelvin: float, candela: float, cone: float, radius
     light.set_folder_path("Lighting")
 
 
-def sky() -> None:
+def sky_night() -> None:
     """The night sky, physically: Unreal's sky atmosphere under a real volumetric cloud deck, 3 to
     9 km up and broken. A faint moon behind it shapes the clouds; the sodium glow of the town over
     the horizon tints them and the horizon from below (a low orange directional light just under
@@ -780,13 +780,69 @@ def sky() -> None:
     fog.set_folder_path("Lighting")
 
 
+def sky_day() -> None:
+    """Daylight (PROPOSED: the user's call, 2026-10-25; lighting-and-mood.md is a night shift):
+    mid-morning sun from the south-east through broken cumulus, the sky atmosphere, a live sky
+    light for the fill, and a light coastal haze."""
+    atmosphere = actors.spawn_actor_from_class(unreal.SkyAtmosphere, unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0))
+    atmosphere.set_actor_label("Sky_Atmosphere")
+    atmosphere.set_folder_path("Lighting")
+    sun = actors.spawn_actor_from_class(unreal.DirectionalLight, unreal.Vector(0, 0, 5000),
+                                        unreal.Rotator(roll=0, pitch=-SUN_ELEVATION, yaw=SUN_YAW))
+    l = sun.light_component
+    l.set_editor_property("intensity", SUN_LUX)
+    l.set_editor_property("use_temperature", True)
+    l.set_editor_property("temperature", 5600.0)
+    l.set_editor_property("atmosphere_sun_light", True)
+    l.set_editor_property("atmosphere_sun_light_index", 0)
+    l.set_editor_property("cast_cloud_shadows", True)
+    l.set_editor_property("cast_shadows", True)
+    sun.set_actor_label("Sky_Sun")
+    sun.set_folder_path("Lighting")
+    clouds = actors.spawn_actor_from_class(unreal.VolumetricCloud, unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0))
+    c = clouds.get_component_by_class(unreal.VolumetricCloudComponent)
+    c.set_editor_property("layer_bottom_altitude", 2.0)
+    c.set_editor_property("layer_height", 6.0)
+    c.set_editor_property("material", unreal.load_asset("/Engine/EngineSky/VolumetricClouds/m_SimpleVolumetricCloud_Inst"))
+    clouds.set_actor_label("Sky_Cumulus")
+    clouds.set_folder_path("Lighting")
+    sky_light = actors.spawn_actor_from_class(unreal.SkyLight, unreal.Vector(0, 0, 3000), unreal.Rotator(0, 0, 0))
+    sky_light.light_component.set_editor_property("real_time_capture", True)
+    sky_light.light_component.set_editor_property("intensity", 1.0)
+    sky_light.set_actor_label("Sky_Light")
+    sky_light.set_folder_path("Lighting")
+    fog = actors.spawn_actor_from_class(unreal.ExponentialHeightFog, unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0))
+    f = fog.component
+    f.set_editor_property("fog_density", 0.004)
+    f.set_editor_property("fog_height_falloff", 0.3)
+    f.set_editor_property("fog_inscattering_luminance", unreal.LinearColor(0.45, 0.55, 0.7, 1.0))
+    fog.set_actor_label("Sky_Haze")
+    fog.set_folder_path("Lighting")
+
+
 def lighting(b: Builder) -> None:
-    """Night shift, 02:40, overcast (lighting-and-mood.md): no sun or moon; the key is the four
-    corner masts' floods and the shack's roof floods, pooled; the fill is the sodium cloud deck
-    (sky(), which the sky light captures) and the trench lamps (KineticYardDirector). Exposure
-    is fixed, so a live line stays the brightest thing in frame."""
+    """By day (the default) the sun and sky light it, and only the press's work lights burn, down
+    in the pit. KINETIC_YARD_TIME=night builds the night shift (lighting-and-mood.md): 02:40,
+    overcast, the key the four corner masts' floods and the shack's roof floods, pooled; the fill
+    the sodium cloud deck and the trench lamps (KineticYardDirector). Either way exposure is
+    fixed, so a live line stays the brightest thing it can be."""
+    night = os.environ.get("KINETIC_YARD_TIME", "day") == "night"
     emissive_material("M_Yard_Lamp", unlit=False)
-    sky()
+    if night:
+        sky_night()
+    else:
+        sky_day()
+    # The press: frame work lights into the pit, and the east lip's stands.
+    for k, (x, y) in enumerate(((38.5, -7.5), (38.5, 7.5), (44.5, -7.5), (44.5, 7.5))):
+        spot(f"WorkLight_Press_{k}", (x, y, 11.5), (45, 0, -10), 4000, 25000 if night else 60000, 30.0, 30.0)
+    if night:
+        floods()
+    exposure(NIGHT_EXPOSURE if night else DAY_EXPOSURE)
+    spawns()
+
+
+def floods() -> None:
+    """The night shift's floods (lighting-and-mood.md)."""
     # The corner masts: three 30-degree pools each, inboard and down.
     for x in (-52, 52):
         for y in (-40, 40):
@@ -798,24 +854,28 @@ def lighting(b: Builder) -> None:
     # The spawn mesas' cage lamps over the Drop points (PROPOSED: the crews drop there in the dark).
     for label, (x, y) in (("A", (-68, -39)), ("B", (68, 39))):
         spot(f"CageLamp_Spawn{label}", (x, y, 14.0), (x, y, 8.0), 4000, FLOOD_CD * 0.015, 45.0, 20.0)
-    # The press: frame work lights into the pit, and the east lip's stands.
-    for k, (x, y) in enumerate(((38.5, -7.5), (38.5, 7.5), (44.5, -7.5), (44.5, 7.5))):
-        spot(f"WorkLight_Press_{k}", (x, y, 11.5), (45, 0, -10), 4000, 25000, 30.0, 30.0)
     for y in (-6.4, 6.4):
         spot(f"Flood_PitStand_{y}", (52.7, y, 1.9), (44, 0, -8), 5600, 30000, 22.0, 30.0)
-    # The fixed exposure: the floods' pools read, the Floor between them is dark (map rule 8).
+
+
+def exposure(bias: float) -> None:
+    """The fixed exposure (map rule 8): at night the floods' pools read and the Floor between
+    them is dark; by day the sunlit Yard sits mid-grey."""
     pp = actors.spawn_actor_from_class(unreal.PostProcessVolume, unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0))
     pp.set_editor_property("unbound", True)
     settings = pp.get_editor_property("settings")
     settings.set_editor_property("override_auto_exposure_method", True)
     settings.set_editor_property("auto_exposure_method", unreal.AutoExposureMethod.AEM_MANUAL)
     settings.set_editor_property("override_auto_exposure_bias", True)
-    settings.set_editor_property("auto_exposure_bias", YARD_EXPOSURE)
+    settings.set_editor_property("auto_exposure_bias", bias)
     settings.set_editor_property("override_auto_exposure_apply_physical_camera_exposure", True)
     settings.set_editor_property("auto_exposure_apply_physical_camera_exposure", False)
     pp.set_editor_property("settings", settings)
     pp.set_actor_label("PostProcess_Yard")
     pp.set_folder_path("Lighting")
+
+
+def spawns() -> None:
     # Spawns (layout: Spawn A at (-68, -39, 8), Spawn B at (+68, +39, 8)), facing the Yard.
     for label, (x, y, z), yaw in (("Spawn_A", (-68, -39, 8), 30), ("Spawn_B", (68, 39, 8), 210)):
         start = actors.spawn_actor_from_class(unreal.PlayerStart, to_unreal(x, y, z + 1.0),
@@ -824,7 +884,11 @@ def lighting(b: Builder) -> None:
         start.set_editor_property("player_start_tag", label)
 
 
-YARD_EXPOSURE = -1.5  # EV: manual exposure is x8 at 0 EV; tuned on make shots
+DAY_EXPOSURE = -0.5   # EV: manual exposure is x8 at 0 EV; tuned on make shots
+NIGHT_EXPOSURE = -1.5
+SUN_LUX = 10.0        # Unreal's daylight convention for the sun
+SUN_ELEVATION = 42.0  # Mid-morning
+SUN_YAW = -125.0      # From the south-east
 MOON_LUX = 2.0        # Moonlight through the gaps (lux)
 TOWN_GLOW_LUX = 6.0   # The town's sodium glow under the horizon (lux), lighting the cloud deck
 CLOUD_COVERAGE = 0.15  # Over the engine's -0.2: a heavy, broken deck (more is more cover)

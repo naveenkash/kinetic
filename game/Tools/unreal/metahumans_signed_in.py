@@ -18,4 +18,6 @@ import build_metahumans  # noqa: E402
 
 importlib.reload(build_metahumans)
 failed = build_metahumans.build_all()
+# The builds are left in memory: save them (and the common assets they share) to disk.
+unreal.EditorAssetLibrary.save_directory(build_metahumans.BUILD, only_if_is_dirty=True, recursive=True)
 unreal.log(f"Kinetic: MetaHumans done, {5 - failed} of 5 built" if not failed else f"Kinetic: MetaHumans: {failed} of 5 failed")

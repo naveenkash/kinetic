@@ -132,6 +132,9 @@ public:
 	// The figure's takes, in the order of Takes (Idle, Run, Climb, Fall, Brace, Stagger).
 	enum class EFigureTake : uint8 { Idle, Run, Climb, Fall, Brace, Stagger, Count };
 	bool HasFigure() const { return bFigure; }
+	// The figure is the class's MetaHuman (its body, its face and its fitted gear) rather than
+	// the harness figure.
+	bool HasMetaHuman() const { return bMetaHuman; }
 	EFigureTake FigureTake() const { return Take; }
 
 protected:
@@ -168,11 +171,18 @@ private:
 	bool bMovementAllowed = true;
 	bool bTakesLadders = true;
 	bool bFigure = false;
+	bool bMetaHuman = false;
+	bool LoadMetaHuman(const FString& Class);
 	EFigureTake Take = EFigureTake::Count;
 	double StaggerUntil = 0.0;
 	double GroundedAt = -1.0;  // The last tick on the ground (a ladder catches a step off its top)
 	UPROPERTY()
 	TObjectPtr<UAnimSequence> Takes[static_cast<int32>(EFigureTake::Count)];
+	// A MetaHuman's face and gear, following the body (GetMesh()) by bone name.
+	UPROPERTY()
+	TObjectPtr<USkeletalMeshComponent> Face;
+	UPROPERTY()
+	TObjectPtr<USkeletalMeshComponent> Gear;
 	uint32 Inputs = 0;
 	std::vector<Kinetic::FContact> Contacts;
 	bool bDrawn = false;
