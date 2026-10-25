@@ -27,6 +27,7 @@ import unreal
 LEVEL = "/Game/Arenas/YRD_Yard/L_YRD_Greybox"
 REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
 KIT = "/Game/Arenas/YRD_Yard/Kit"
+PORT = "/Game/Arenas/YRD_Yard/Port"
 MATERIALS = "/Game/Arenas/YRD_Yard/Greybox"
 CUBE = "/Engine/BasicShapes/Cube"
 LADDER = unreal.load_class(None, "/Script/KineticGameplay.KineticLadder")
@@ -926,6 +927,46 @@ def kit(b: Builder) -> None:
     unreal.log(f"Kinetic: Yard kit: {len(meshes)} meshes, {hidden} grey boxes covered")
 
 
+def port() -> None:
+    """The port round the Yard (art/port, make import-port): the world meshes at the origin, in
+    the layout's frame, and the repeated ones (containers, cranes, light towers, bollards)
+    instanced from art/out/port/instances.json. Backdrop: no collision."""
+    meshes = [a for a in eal.list_assets(PORT, recursive=False) if a.split("/")[-1].split(".")[0].startswith("SM_Port_")] \
+        if eal.does_directory_exist(PORT) else []
+    if not meshes:
+        unreal.log("Kinetic: no port imported (make import-port): nothing outside the walls")
+        return
+    placements = os.path.join(REPO, "art", "out", "port", "instances.json")
+    listed = json.load(open(placements))["instances"] if os.path.exists(placements) else []
+    by_type: dict[str, list] = {}
+    for inst in listed:
+        by_type.setdefault(inst["type"], []).append(inst)
+    loaded = {a.split("/")[-1].split(".")[0]: a.split(".")[0] for a in meshes}
+    world = 0
+    for name, path in sorted(loaded.items()):
+        if name in by_type:
+            continue
+        actor = actors.spawn_actor_from_class(unreal.StaticMeshActor, unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0))
+        actor.static_mesh_component.set_static_mesh(unreal.load_asset(path))
+        actor.static_mesh_component.set_collision_enabled(unreal.CollisionEnabled.NO_COLLISION)
+        actor.static_mesh_component.set_editor_property("can_ever_affect_navigation", False)
+        actor.set_actor_label(name)
+        actor.set_folder_path("Port")
+        world += 1
+    holder = actors.spawn_actor_from_class(unreal.KineticInstances, unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0))
+    holder.set_actor_label("Port_Instances")
+    holder.set_folder_path("Port")
+    for name, insts in sorted(by_type.items()):
+        if name not in loaded:
+            unreal.log_warning(f"Kinetic: port instance type {name} not imported")
+            continue
+        transforms = [unreal.Transform(to_unreal(*i["location"]), unreal.Rotator(roll=0, pitch=0, yaw=-i["yaw"]),
+                                       unreal.Vector(i.get("scale", 1.0), i.get("scale", 1.0), i.get("scale", 1.0)))
+                      for i in insts]
+        holder.add_instances(unreal.load_asset(loaded[name]), transforms)
+    unreal.log(f"Kinetic: port: {world} meshes, {holder.instance_count()} instances of {len(by_type)} types")
+
+
 def navigation() -> None:
     """The navmesh's bounds: the whole arena, the Well's floor to above the gantry. The navmesh
     itself is built when play starts (Config/DefaultEngine.ini: dynamic generation); the ladders
@@ -970,6 +1011,7 @@ def main() -> None:
         with open(path, "w") as f:
             json.dump(b.layout, f, indent=1)
     kit(b)
+    port()
     game_mode()
     if not levels.save_current_level():
         raise RuntimeError(f"could not save {LEVEL}")

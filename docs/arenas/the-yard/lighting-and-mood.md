@@ -3,6 +3,8 @@
 _Arena: The Yard (Collar Four Breaking Yard). File purpose: time of day, sky, key and fill, practicals per zone, atmosphere, palette, map rule 8 compliance, post-process, sound bed, lighting changes after Shift Change, and three beauty shots._
 _Sources: docs/bible/03-arenas.md, docs/bible/05-core-mechanics.md. Anything not in those files is marked **PROPOSED**._
 
+**PROPOSED (2026-10-25, the user's call):** the Yard now plays in daylight by default, a mid-morning sun from the south-east through broken cumulus, with the port and the town round it. The night shift below is still built with `KINETIC_YARD_TIME=night` (game/Tools/unreal/build_yard_greybox.py).
+
 ## Time, weather, sky
 
 - **Time:** night shift, 02:40 local. No moon.

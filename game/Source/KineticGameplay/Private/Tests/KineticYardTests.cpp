@@ -1209,6 +1209,8 @@ public:
 		    {TEXT("Trench_South"), FVector(-70.0, -27.5, 3.0), FVector(0.0, -30.0, -2.0)},
 		    {TEXT("Press_Pit"), FVector(30.0, -12.0, 8.0), FVector(45.0, 0.0, -4.0)},
 		    {TEXT("Sky_FromTheFlat"), FVector(-20.0, 0.0, 2.0), FVector(40.0, 30.0, 30.0)},
+		    {TEXT("Port_FromEastMesa"), FVector(70.0, 36.0, 10.0), FVector(20.0, 200.0, 5.0)},
+		    {TEXT("Port_ZoomedOut"), FVector(-220.0, -260.0, 140.0), FVector(0.0, 60.0, 0.0)},
 		};
 		const auto At = [](const FVector& M) { return FVector(M.X * 100.0, -M.Y * 100.0, M.Z * 100.0); };
 		if (Now < 2.0)

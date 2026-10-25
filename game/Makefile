@@ -19,6 +19,7 @@
 #   make import-audio  generates the tells' sound cues (art/audio) and imports them
 #   make import-characters  imports the harness characters (art/characters, built with Blender)
 #   make import-kit    imports the arena kit and its surfaces (art/kit, art/surfaces, built with Blender)
+#   make import-port   imports the port round the Yard (art/port), after import-kit
 #   make metahumans    creates and shapes the five class MetaHumans (building them needs a sign-in)
 #   make export-metahumans  exports the built MetaHumans' bodies and faces for art/characters to fit
 #   make retarget-metahumans  retargets the classes' takes onto their MetaHumans
@@ -50,7 +51,7 @@ DEPS := $(HEADERS) $(STAMP) Makefile
 
 UNREAL_TESTS ?= Kinetic
 
-.PHONY: test test-asan bench check report all-checks clean editor unreal-test import-props yard-greybox import-audio import-characters shots metahumans export-metahumans retarget-metahumans import-kit
+.PHONY: test test-asan bench check report all-checks clean editor unreal-test import-props yard-greybox import-audio import-characters shots metahumans export-metahumans retarget-metahumans import-kit import-port
 
 $(BUILD)/kinetic-core-tests: $(LIB_SRC) $(TEST_SRC) $(DEPS) | $(BUILD)
 	$(CXX) $(CXXFLAGS) -I$(TESTS) $(LIB_SRC) $(TEST_SRC) -o $@
@@ -140,6 +141,9 @@ shots: editor | $(BUILD)
 
 import-kit: editor | $(BUILD)
 	$(call run_editor_script,Tools/unreal/import_kit.py,import-kit)
+
+import-port: editor | $(BUILD)
+	$(call run_editor_script,Tools/unreal/import_port.py,import-port)
 
 metahumans: editor | $(BUILD)
 	$(call run_editor_script,Tools/unreal/build_metahumans.py,metahumans)

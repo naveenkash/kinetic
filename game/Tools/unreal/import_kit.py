@@ -238,4 +238,5 @@ def run() -> None:
         os._exit(status)
 
 
-run()
+if __name__ == "__main__":
+    run()

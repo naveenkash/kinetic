@@ -79,7 +79,12 @@ The Yard is drawn by a visual kit over the grey-box level, and the grey boxes st
    - the Hauler: fish-belly underframe, bogies, cab, chevrons, and a chained hull section;
    - the Gantry's bridge and magnet, and the Lockout curtain;
    - the control shack, and the rated hull section, column and counterweight.
-4. **Unreal.** `make -C game import-kit` imports the surfaces into `M_KineticSurface` instances, and the kit and machines as Nanite meshes.
+4. **The port.** `art/port/port_world.py` builds the port round the Yard, `art/out/port/`:
+   - the apron, the rail tunnels and cuttings that carry the trenches out, the quay, the water and breakwaters;
+   - a container ship and a half-cut bulk carrier, ship-to-shore and yard cranes, warehouses, a tank farm, and the town on the hills;
+   - repeated objects (about 12,000 containers, cranes, light towers and bollards) as one mesh per type plus `instances.json`;
+   - a tiling wave normal for the water. `make -C game import-port` imports it, after the kit.
+5. **Unreal.** `make -C game import-kit` imports the surfaces into `M_KineticSurface` instances, and the kit and machines as Nanite meshes.
    - Then `make -C game yard-greybox` places the kit and stops drawing the covered boxes.
    - At play, `KineticYardDirector` draws each machine over its boxes, which keep colliding.
 
@@ -95,7 +100,11 @@ blender -b --factory-startup -P art/kit/yard_kit.py
 blender -b --factory-startup -P art/machines/yard_machines.py
 ```
 
-The level's night lighting is set in `build_yard_greybox.py`:
+```bash
+blender -b --factory-startup -P art/port/port_world.py
+```
+
+The level's lighting is set in `build_yard_greybox.py`. It builds in daylight by default: a mid-morning sun through broken cumulus under the sky atmosphere. `KINETIC_YARD_TIME=night` builds the night shift instead:
 - the sky is Unreal's sky atmosphere under a volumetric cloud deck, shaped by a faint moon and tinted by the town's sodium glow from under the horizon, and a real-time sky light captures it as the fill;
 - height fog with volumetric scattering gives the floods their shafts;
 - the mast, shack, press and pit-stand floods are spotlights in candela;
