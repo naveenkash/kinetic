@@ -12,6 +12,7 @@
 #include "Kinetic/HangSolver.h"
 #include "Kinetic/Tables.h"
 #include "KineticCharacter.h"
+#include "KineticKinematic.h"
 #include "KineticLadder.h"
 #include "KineticLineRenderer.h"
 #include "KineticProp.h"
@@ -104,6 +105,8 @@ FVector UKineticSpoolWorld::EndPosition(const FKineticLineEnd& End) const
 	{
 	case EKineticSeat::Static: return End.Point;
 	case EKineticSeat::Prop: return End.Prop.IsValid() ? End.Prop->Mesh->GetCenterOfMass() : End.Point;
+	case EKineticSeat::Kinematic:
+		return End.Kinematic.IsValid() ? End.Kinematic->GetActorTransform().TransformPosition(End.Point) : End.Point;
 	case EKineticSeat::Plate:
 	case EKineticSeat::OwnPlate: return End.Player.IsValid() ? PlatePosition(End.Player.Get(), End.Plate) : End.Point;
 	case EKineticSeat::None: break;
@@ -118,6 +121,7 @@ FVector UKineticSpoolWorld::BodyPosition(const FKineticLineEnd& End) const
 	case EKineticSeat::Prop: return End.Prop.IsValid() ? End.Prop->Mesh->GetCenterOfMass() : End.Point;
 	case EKineticSeat::Plate:
 	case EKineticSeat::OwnPlate: return End.Player.IsValid() ? End.Player->GetActorLocation() : End.Point;
+	case EKineticSeat::Kinematic: return EndPosition(End);
 	default: return End.Point;
 	}
 }
@@ -233,6 +237,54 @@ double UKineticSpoolWorld::CutterWarmup(const AKineticCharacter* Player) const
 	const Kinetic::FKineticTables* T = Tables();
 	return T && Player ? Kinetic::CutterWarmupSeconds(Kinetic::ECutterVariant::Standard, KineticHarness::ToCore(Player->Harness), *T)
 	                   : 0.5;
+}
+
+int32 UKineticSpoolWorld::SeverLines(const AKineticKinematic& Kinematic)
+{
+	if (!Kinematic.HasSeverBox() || !Kinematic.IsActive())
+	{
+		return 0;
+	}
+	const Kinetic::FPose From = Kinematic.PoseBefore();
+	const Kinetic::FPose To = Kinematic.PoseNow();
+	int32 Severed = 0;
+	for (int32 I = LineList.Num(); I-- > 0;)
+	{
+		const FKineticLine& L = LineList[I];
+		const auto OnIt = [&Kinematic](const FKineticLineEnd& E) {
+			return E.Seat == EKineticSeat::Kinematic && E.Kinematic.Get() == &Kinematic;
+		};
+		if (!L.IsLive() || OnIt(L.A) || OnIt(L.B))
+		{
+			continue;  // A line with a Dog in it is carried, not cut (the Caboose)
+		}
+		// Four samples per step (kinematics 1.3).
+		if (Kinetic::SweptSever(Kinematic.SeverBox(), From, To, 4, ToCore(DogPosition(L.A)), ToCore(DogPosition(L.B))))
+		{
+			EndLine(I, EKineticLineEnded::Severed);
+			++Severed;
+		}
+	}
+	return Severed;
+}
+
+void UKineticSpoolWorld::Hit(AKineticCharacter* Player, Kinetic::EOutcome Outcome, Kinetic::EStallCause Cause)
+{
+	if (!Player || !IsStanding(Player) || Outcome == Kinetic::EOutcome::None)
+	{
+		return;
+	}
+	if (Outcome == Kinetic::EOutcome::Stall)
+	{
+		Stall(Player, Cause);
+		return;
+	}
+	FKineticSpoolPlayer& P = StateOf(Player);
+	P.StunnedUntil = FMath::Max(P.StunnedUntil, Clock + (Outcome == Kinetic::EOutcome::Flip ? FlipSeconds : StaggerSeconds));
+	P.bBraced = false;
+	P.LastOutcome = Outcome;
+	P.LastOutcomeAt = Clock;
+	Player->SetStunned(true);
 }
 
 void UKineticSpoolWorld::ClearLines()
@@ -496,10 +548,17 @@ TOptional<FKineticLineEnd> UKineticSpoolWorld::SweepDog(const AKineticCharacter*
 			End.Prop = Prop;
 			End.Point = Prop->GetActorTransform().InverseTransformPosition(H.ImpactPoint);
 		}
+		else if (AKineticKinematic* Kinematic = Cast<AKineticKinematic>(Actor))
+		{
+			End.Seat = EKineticSeat::Kinematic;  // A Hauler, the Gantry: the Dog rides with it
+			End.Kinematic = Kinematic;
+			End.Point = Kinematic->GetActorTransform().InverseTransformPosition(H.ImpactPoint);
+		}
 		else
 		{
 			End.Seat = EKineticSeat::Static;
 			End.Point = H.ImpactPoint;
+			End.Actor = Actor;
 		}
 		return End;
 	}
@@ -570,7 +629,8 @@ void UKineticSpoolWorld::UpdateLines()
 			return !Player.IsValid() || (P && !P->bStanding);
 		};
 		const auto Gone = [&](const FKineticLineEnd& E) {
-			return (E.Seat == EKineticSeat::Prop && !E.Prop.IsValid()) ||
+			return (E.Seat == EKineticSeat::Prop && (!E.Prop.IsValid() || E.Prop->IsSpent())) ||
+			       (E.Seat == EKineticSeat::Kinematic && (!E.Kinematic.IsValid() || !E.Kinematic->IsActive())) ||
 			       ((E.Seat == EKineticSeat::Plate || E.Seat == EKineticSeat::OwnPlate) && Down(E.Player));
 		};
 		// A Stalled body takes its lines with it; a set line outlives its owner (05 3.6).
@@ -612,6 +672,11 @@ Kinetic::FLineEndpoint UKineticSpoolWorld::EndpointOf(const FKineticLineEnd& End
 	case EKineticSeat::Static:
 		E.Seat = Kinetic::ESeat::Static;
 		E.Position = ToCore(End.Point);
+		break;
+	case EKineticSeat::Kinematic:
+		E.Seat = Kinetic::ESeat::Kinematic;  // Moves on its schedule, never under a line
+		E.Position = ToCore(EndPosition(End));
+		E.Velocity = End.Kinematic.IsValid() ? ToCore(End.Kinematic->Velocity()) : FVec3{};
 		break;
 	case EKineticSeat::Prop:
 	{
@@ -657,7 +722,10 @@ void UKineticSpoolWorld::Simulate()
 	TArray<AKineticProp*> PropBodies;
 	for (TActorIterator<AKineticProp> It(World); It; ++It)
 	{
-		PropBodies.Add(*It);
+		if (!It->IsSpent())  // A volatile that went off is gone until the reset
+		{
+			PropBodies.Add(*It);
+		}
 	}
 	const int32 NP = PlayerBodies.Num();
 	const int32 NB = NP + PropBodies.Num();
@@ -934,7 +1002,9 @@ void UKineticSpoolWorld::Simulate()
 			{
 				return B;
 			}
-			Solve.push_back({ToCore(E.Point), {}, 0.0, std::nullopt});  // A static Dog
+			// A static Dog, or one riding a kinematic: a point that moves with it.
+			const FVec3 V = E.Seat == EKineticSeat::Kinematic && E.Kinematic.IsValid() ? ToCore(E.Kinematic->Velocity()) : FVec3{};
+			Solve.push_back({ToCore(DogPosition(E)), V, 0.0, std::nullopt});
 			return static_cast<int32>(Solve.size()) - 1;
 		};
 		Kinetic::FHangLine Hang;

@@ -3,6 +3,7 @@
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "KineticCharacter.h"
 #include "KineticSpoolWorld.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
@@ -43,15 +44,19 @@ void AKineticLineRenderer::Draw(const UKineticSpoolWorld& Spool)
 {
 	if (ModeMaterials.Num() == 0 && Cylinder)
 	{
-		// Slack, Haul, Jack, Hang, Set (Kinetic::ELineMode order).
-		const FLinearColor Colours[] = {FLinearColor(0.35f, 0.35f, 0.35f), FLinearColor(1.0f, 0.45f, 0.08f),
-		                                FLinearColor(0.1f, 0.8f, 1.0f), FLinearColor(1.0f, 0.85f, 0.15f),
-		                                FLinearColor(0.95f, 0.95f, 0.95f)};
-		for (const FLinearColor& Colour : Colours)
+		// The owner's team tint (characters/README.md: line glow is team-locked), dim while slack,
+		// full under Haul or Jack; set lines are Bone. Per crew: Slack, Haul, Jack, Hang, Set.
+		const float Strength[] = {0.35f, 1.0f, 1.0f, 0.8f, 1.0f};
+		for (int32 Crew = 0; Crew < 2; ++Crew)
 		{
-			UMaterialInstanceDynamic* Mid = UMaterialInstanceDynamic::Create(Cylinder->GetMaterial(0), this);
-			Mid->SetVectorParameterValue(TEXT("Color"), Colour);
-			ModeMaterials.Add(Mid);
+			for (int32 Mode = 0; Mode < 5; ++Mode)
+			{
+				const FLinearColor Colour = Mode == 4 ? FLinearColor::FromSRGBColor(FColor(0xE8, 0xE6, 0xE0))
+				                                      : AKineticCharacter::TeamTint(Crew) * Strength[Mode];
+				UMaterialInstanceDynamic* Mid = UMaterialInstanceDynamic::Create(Cylinder->GetMaterial(0), this);
+				Mid->SetVectorParameterValue(TEXT("Color"), Colour);
+				ModeMaterials.Add(Mid);
+			}
 		}
 	}
 	int32 Lines = 0, Dogs = 0;
@@ -68,10 +73,11 @@ void AKineticLineRenderer::Draw(const UKineticSpoolWorld& Spool)
 			UStaticMeshComponent* Seg = Piece(LinePieces, Lines++, Cylinder);
 			Seg->SetWorldLocationAndRotation((A + B) * 0.5, FRotationMatrix::MakeFromZ(Span / Length).Rotator());
 			Seg->SetWorldScale3D(FVector(LineRadiusCm / 50.0, LineRadiusCm / 50.0, Length / 100.0));
-			const int32 Mode = Line.IsLive() ? static_cast<int32>(Line.State.Mode) : 0;
-			if (ModeMaterials.IsValidIndex(Mode))
+			const int32 Mode = Line.bSet ? 4 : Line.IsLive() ? static_cast<int32>(Line.State.Mode) : 0;
+			const int32 Crew = Line.Owner.IsValid() ? FMath::Clamp(Line.Owner->Crew, 0, 1) : 0;
+			if (ModeMaterials.IsValidIndex(Crew * 5 + Mode))
 			{
-				Seg->SetMaterial(0, ModeMaterials[Mode]);
+				Seg->SetMaterial(0, ModeMaterials[Crew * 5 + Mode]);
 			}
 		}
 		for (const TOptional<FKineticDog>* Dog : {&Line.FlyingA, &Line.FlyingB})

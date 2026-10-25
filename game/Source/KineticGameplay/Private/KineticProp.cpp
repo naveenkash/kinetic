@@ -40,8 +40,19 @@ void AKineticProp::BeginPlay()
 	ApplyBody();
 }
 
+void AKineticProp::Spend()
+{
+	bSpent = true;
+	Mesh->SetSimulatePhysics(false);
+	SetActorHiddenInGame(true);
+	SetActorEnableCollision(false);
+}
+
 void AKineticProp::ResetToAuthored()
 {
+	bSpent = false;
+	SetActorHiddenInGame(false);
+	SetActorEnableCollision(true);
 	Mesh->SetSimulatePhysics(false);
 	SetActorTransform(Authored, false, nullptr, ETeleportType::ResetPhysics);
 	bBrokenFree = false;

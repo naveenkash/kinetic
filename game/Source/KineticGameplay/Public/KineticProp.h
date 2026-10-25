@@ -13,6 +13,17 @@
 
 class UStaticMeshComponent;
 
+// What blows (Kinetic::EVolatile, after None).
+UENUM(BlueprintType)
+enum class EKineticVolatile : uint8
+{
+	None,
+	Propane,
+	FuelDrum,
+	DemoCharge,
+	GasManifold
+};
+
 // Kinetic::EPlacement, in the same order.
 UENUM(BlueprintType)
 enum class EKineticPlacement : uint8
@@ -61,12 +72,20 @@ public:
 	void ApplyBody();
 
 	// Back where the level put it, at rest and in its placement (a round's reset, game-modes 2).
+	// A spent volatile is replaced.
 	void ResetToAuthored();
+
+	// A volatile (05 6.4): what it is, and once it has gone off it is spent (gone until the reset).
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Kinetic")
+	EKineticVolatile Volatile = EKineticVolatile::None;
+	void Spend();
+	bool IsSpent() const { return bSpent; }
 
 protected:
 	virtual void BeginPlay() override;
 
 private:
 	bool bBrokenFree = false;
+	bool bSpent = false;
 	FTransform Authored;
 };

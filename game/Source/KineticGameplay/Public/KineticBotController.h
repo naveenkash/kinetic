@@ -13,8 +13,8 @@
 // - After a rig it waits 1.0 to 2.0 s before the next.
 // - Anchors are the scenery the level tags Kinetic.Anchor (Stacks, walls, structures, the
 //   placeholders): the point of each nearest the target enemy, and nearest the bot (a wall
-//   behind it, for a Slingshot). The grey-box has no doorways or Haulers yet, so no
-//   Clotheslines or Cabooses.
+//   behind it, for a Slingshot). The Haulers come from the Yard director once their klaxon
+//   sounds (a Caboose). The Yard has no doorways, so no Clotheslines there.
 #pragma once
 
 #include "AIController.h"

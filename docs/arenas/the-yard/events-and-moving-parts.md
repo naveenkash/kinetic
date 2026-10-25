@@ -179,3 +179,15 @@ Per 05 section 9.2, at round end:
 6. Set lines are cleared. Volatiles are replaced.
 
 Within a round nothing resets. A plank bridge swept at e 14 is gone until the next round. The Shift Change plate stays. The shack stays down.
+
+## 8. In the engine (PROPOSED where noted)
+
+`AKineticYardDirector` (game/Source/KineticGameplay) runs this document. Where it departs from it:
+
+- **Clock.** The match's mid-match event (FScrapMatch: 1:15 remaining on a clock that includes the 6 s Drop) is Shift Change's payload, the siren 5 s before it; every Shift Change time above is taken relative to that moment rather than to e 80. The Gantry's phase at "live" is set so that it is 22 s into its loaded traverse at the payload, as section 2 asks.
+- **Picks.** Each pick takes a fresh 2,800 kg plate; the Pick Stack tops are not separate bodies yet, so they cannot be Avalanched off before the Gantry comes.
+- **After Shift Change** the Gantry cycles the East Pick Stack every 35 s for 60 s, then every 60 s (section 3's times are not all consistent with one another).
+- **The Plow.** A committed hull section slides to its lip over 4 s, then lies across the trench on both lips; the next train in that trench carries it 3 m ahead of its nose until the plenum.
+- **Lockout.** The corner masts' lights are not built yet, so the curtains do not darken them; the round replays at T+90 (FScrapRules), so the final close to ±1 m is never reached in Scrap.
+- **Not yet built:** the press counterweight's hit at up to 9 m/s is judged on the kinematic table (a Stall at 9 m/s, a flip below); the billet stack topple, the Hauler's 2 s stop in the end plenum and the Interlock.
+

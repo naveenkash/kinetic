@@ -29,6 +29,7 @@
 #include "KineticSpoolWorld.generated.h"
 
 class AKineticCharacter;
+class AKineticKinematic;
 class AKineticLineRenderer;
 class AKineticProp;
 
@@ -42,6 +43,7 @@ enum class EKineticSeat : uint8
 	None,
 	Static,    // The world: a point
 	Prop,      // An AKineticProp
+	Kinematic, // An AKineticKinematic: rides with it
 	Plate,     // Another player's Catch Plate
 	OwnPlate,  // The owner's own (a self-dog)
 };
@@ -49,8 +51,10 @@ enum class EKineticSeat : uint8
 struct FKineticLineEnd
 {
 	EKineticSeat Seat = EKineticSeat::None;
-	FVector Point = FVector::ZeroVector;  // Static: the world point; Prop: where it seated, prop-local (cm)
+	FVector Point = FVector::ZeroVector;  // Static: the world point; Prop, Kinematic: where it seated, local (cm)
 	TWeakObjectPtr<AKineticProp> Prop;
+	TWeakObjectPtr<AKineticKinematic> Kinematic;
+	TWeakObjectPtr<AActor> Actor;  // What a Static Dog seated in (a manifold's casing, a wall)
 	TWeakObjectPtr<AKineticCharacter> Player;
 	Kinetic::EPlate Plate = Kinetic::EPlate::None;
 };
@@ -69,7 +73,8 @@ enum class EKineticLineEnded : uint8
 	DogsMet,
 	Expired,
 	Missed,
-	RanOut
+	RanOut,
+	Severed  // A kinematic passed through it (05 3.5)
 };
 
 struct FKineticLine
@@ -172,6 +177,13 @@ public:
 	void ClearLines();
 	// Puts a rigger back on their feet at a spawn: shown, colliding, no hits or lines carried over.
 	void PlaceStanding(AKineticCharacter* Player, const FVector& At, const FRotator& Facing);
+
+	// The hazards' controls. Severs every line the kinematic's last move passed through (but
+	// not one with a Dog in it). Returns how many.
+	int32 SeverLines(const AKineticKinematic& Kinematic);
+	// A hit from outside the Impact Monitor's contacts (a blast, a fire patch, a crush): a
+	// stagger or flip stuns, a Stall takes the player out.
+	void Hit(AKineticCharacter* Player, Kinetic::EOutcome Outcome, Kinetic::EStallCause Cause);
 
 	// A player's Catch Plate, in the world (cm).
 	static FVector PlatePosition(const AKineticCharacter* Player, Kinetic::EPlate Plate);

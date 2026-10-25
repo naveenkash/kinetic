@@ -10,6 +10,7 @@
 #include "KineticCharacter.h"
 #include "KineticHarness.h"
 #include "KineticLadder.h"
+#include "KineticYardDirector.h"
 #include "KineticRulesSubsystem.h"
 #include "NavigationPath.h"
 #include "NavigationSystem.h"
@@ -184,6 +185,11 @@ Kinetic::FBotView AKineticBotController::ViewOf(const AKineticCharacter& Me, con
 			V.Anchors.push_back({ToCore(P), OverAnEdge(Enemy, P, Enemy.Z - HalfHeightCm)});
 		}
 		V.Anchors.push_back({ToCore(PointOn(Box, At)), false});
+	}
+	// The trains whose klaxon has sounded (the Caboose).
+	for (TActorIterator<AKineticYardDirector> It(GetWorld()); It; ++It)
+	{
+		V.Haulers = It->HaulersForBots();
 	}
 	return V;
 }

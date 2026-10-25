@@ -39,6 +39,11 @@ public:
 	// Where a climber holds on at a height: against the wall, outside it.
 	FVector ClimbAt(double Z) const;
 
+	// A ladder cage shed by a charge (the Yard's north leg) is gone until the reset: no holds,
+	// no path.
+	void SetUsable(bool bInUsable);
+	bool IsUsable() const { return bUsable; }
+
 	virtual void GetNavigationData(FNavigationRelevantData& Data) const override;
 	virtual FBox GetNavigationBounds() const override;
 	virtual bool IsNavigationRelevant() const override { return true; }
@@ -47,4 +52,5 @@ public:
 
 private:
 	FNavigationLink Link() const;
+	bool bUsable = true;
 };

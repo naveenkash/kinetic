@@ -6,6 +6,7 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerStart.h"
 #include "KineticCharacter.h"
+#include "KineticHazardWorld.h"
 #include "KineticProp.h"
 #include "KineticSpoolWorld.h"
 
@@ -45,9 +46,6 @@ const TCHAR* CauseText(Kinetic::EStallCause Cause)
 	}
 	return TEXT("stall");
 }
-
-// The crews' colours: the player's crew blue, the other orange.
-const FLinearColor CrewColour[2] = {FLinearColor(0.10f, 0.35f, 0.90f), FLinearColor(0.95f, 0.45f, 0.08f)};
 
 constexpr double CrewSpacingCm = 250.0;
 }  // namespace
@@ -107,7 +105,7 @@ void FKineticScrap::SpawnRiggers()
 		    AKineticCharacter::StaticClass(), At, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
 		Rigger->Harness = KineticHarness::FromCore(Roster[Slot].Harness);
 		Rigger->FinishSpawning(At);
-		Rigger->SetCrewColour(CrewColour[TeamOf(Slot)]);
+		Rigger->SetCrew(TeamOf(Slot));
 		FActorSpawnParameters Params;
 		Params.ObjectFlags |= RF_Transient;
 		AKineticBotController* Brain = World.SpawnActor<AKineticBotController>(Params);
@@ -201,6 +199,12 @@ void FKineticScrap::ResetArena()
 {
 	UKineticSpoolWorld* S = Spool();
 	S->ClearLines();
+	ResetAt = TheMatch->Time();
+	SirenAt = MidMatchAt = SuddenDeathAt = -1.0;
+	if (UKineticHazardWorld* Hazards = World.GetSubsystem<UKineticHazardWorld>())
+	{
+		Hazards->ResetRound();
+	}
 	for (TActorIterator<AKineticProp> It(&World); It; ++It)
 	{
 		It->ResetToAuthored();
@@ -224,6 +228,20 @@ void FKineticScrap::ResetArena()
 		}
 	}
 	++Resets;
+}
+
+FKineticRoundTimes FKineticScrap::RoundTimes() const
+{
+	FKineticRoundTimes T;
+	T.Now = TheMatch ? TheMatch->Time() : 0.0;
+	T.ResetAt = ResetAt;
+	T.LiveAt = ResetAt + Settings.Rules.ResetSeconds + Settings.Rules.DropSeconds;
+	T.SirenAt = SirenAt;
+	T.MidMatchAt = MidMatchAt;
+	T.PlannedMidMatchAt = ResetAt + Settings.Rules.ResetSeconds + Settings.Rules.RoundSeconds - Settings.Rules.EventRemaining;
+	T.SuddenDeathAt = SuddenDeathAt;
+	T.Resets = Resets;
+	return T;
 }
 
 void FKineticScrap::Tick()
@@ -269,6 +287,15 @@ void FKineticScrap::Tick()
 			                                : FString::Printf(TEXT("Match: crew %c."), F.Team == 0 ? TEXT('A') : TEXT('B')));
 			MatchOverAt = TheMatch->Time();
 			++Finished;
+			break;
+		case Kinetic::EFlow::Siren:
+			SirenAt = TheMatch->Time();
+			break;
+		case Kinetic::EFlow::MidMatchEvent:
+			MidMatchAt = TheMatch->Time();
+			break;
+		case Kinetic::EFlow::ShrinkArena:
+			SuddenDeathAt = TheMatch->Time();
 			break;
 		case Kinetic::EFlow::Backfill:
 			Say(FString::Printf(TEXT("A bot takes over %s."), *Who(F.Player)));

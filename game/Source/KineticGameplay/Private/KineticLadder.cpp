@@ -2,6 +2,7 @@
 
 #include "AI/Navigation/NavigationRelevantData.h"
 #include "AI/NavigationModifier.h"
+#include "AI/NavigationSystemBase.h"
 #include "Components/BoxComponent.h"
 #include "NavigationSystemTypes.h"
 
@@ -61,9 +62,23 @@ FNavigationLink AKineticLadder::Link() const
 	return L;
 }
 
+void AKineticLadder::SetUsable(bool bInUsable)
+{
+	if (bInUsable == bUsable)
+	{
+		return;
+	}
+	bUsable = bInUsable;
+	Volume->SetCollisionEnabled(bUsable ? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision);
+	FNavigationSystem::UpdateActorData(*this);
+}
+
 void AKineticLadder::GetNavigationData(FNavigationRelevantData& Data) const
 {
-	NavigationHelper::ProcessNavLinkAndAppend(&Data.Modifiers, this, TArray<FNavigationLink>{Link()});
+	if (bUsable)
+	{
+		NavigationHelper::ProcessNavLinkAndAppend(&Data.Modifiers, this, TArray<FNavigationLink>{Link()});
+	}
 }
 
 FBox AKineticLadder::GetNavigationBounds() const
@@ -76,6 +91,9 @@ FBox AKineticLadder::GetNavigationBounds() const
 
 bool AKineticLadder::GetNavigationLinksArray(TArray<FNavigationLink>& OutLink, TArray<FNavigationSegmentLink>& OutSegments) const
 {
-	OutLink.Add(Link());
-	return true;
+	if (bUsable)
+	{
+		OutLink.Add(Link());
+	}
+	return bUsable;
 }

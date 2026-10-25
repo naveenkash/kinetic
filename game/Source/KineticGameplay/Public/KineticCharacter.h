@@ -44,13 +44,19 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = "Kinetic")
 	TObjectPtr<UCameraComponent> Camera;
 
+	// The crew (0 or 1; 0 in the walk-the-arena mode): its team tint (characters/README.md,
+	// Amber and Sky) is on the body and the lines.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Kinetic")
+	int32 Crew = 0;
+	void SetCrew(int32 InCrew);
+	static FLinearColor TeamTint(int32 Crew);
+
 	// The grey-box body other players see (the owner does not): a 1.9 m column in the crew's
 	// colour, with a visor on the facing side.
 	UPROPERTY(VisibleAnywhere, Category = "Kinetic")
 	TObjectPtr<UStaticMeshComponent> Body;
 	UPROPERTY(VisibleAnywhere, Category = "Kinetic")
 	TObjectPtr<UStaticMeshComponent> Visor;
-	void SetCrewColour(const FLinearColor& Colour);
 
 	// Sets the movement from the class's table row. Called at BeginPlay; call again after
 	// changing Harness at run time. False (and logged) if the tables did not load.
@@ -109,6 +115,8 @@ public:
 	// One contact for the Impact Monitor: what was hit, at the velocity that hit it (cm/s), and
 	// the impulse Chaos reported (kg cm/s; zero for a sweep).
 	void RecordContact(const FHitResult& Hit, const FVector& MyVelocity, const FVector& NormalImpulse);
+	// A contact made by something else (a kinematic running into the player).
+	void AddContact(const Kinetic::FContact& Contact) { Contacts.push_back(Contact); }
 
 	virtual void Landed(const FHitResult& Hit) override;
 	virtual void NotifyHit(UPrimitiveComponent* MyComp, AActor* Other, UPrimitiveComponent* OtherComp, bool bSelfMoved,

@@ -28,6 +28,7 @@ MATERIALS = "/Game/Arenas/YRD_Yard/Greybox"
 CUBE = "/Engine/BasicShapes/Cube"
 LADDER = unreal.load_class(None, "/Script/KineticGameplay.KineticLadder")
 PROP = unreal.load_class(None, "/Script/KineticGameplay.KineticProp")
+DIRECTOR = unreal.load_class(None, "/Script/KineticGameplay.KineticYardDirector")
 
 # Each generated prop's mass (its spec) and how the manifest places it.
 PROP_BODIES = {
@@ -44,7 +45,11 @@ PROP_BODIES = {
     "SM_Light_PaintCan_Office": (5.0, "LOOSE"),
     "SM_Light_Bucket_Water": (10.0, "LOOSE"),
     "SM_Light_FloodlightStand_Office": (22.0, "LOOSE"),
+    "SM_Heavy_Container20_HTR": (2000.0, "LOOSE"),     # Heavy: no single line moves it
 }
+
+# What blows (05 6.4; DT_Volatiles).
+VOLATILES = {"SM_Volatile_FuelDrum": "FUEL_DRUM", "SM_Volatile_PropaneCylinder": "PROPANE"}
 
 # Scenery a bot may Haul an enemy into (AKineticBotController): tagged Kinetic.Anchor.
 ANCHOR_ROLES = {"mesa", "ledge", "structure", "placeholder", "rated"}
@@ -157,6 +162,10 @@ class Builder:
         self.solids.append(("clearance", (min(clear[0], clear[1]), max(clear[0], clear[1]),
                                           min(clear[2], clear[3]), max(clear[2], clear[3]), z0, z0 + 2.0)))
 
+    def reserve(self, role: str, x0: float, x1: float, y0: float, y1: float, z0: float, z1: float) -> None:
+        """Room taken by something built at play time (a kinematic), so nothing is built in it."""
+        self.solids.append((role, (min(x0, x1), max(x0, x1), min(y0, y1), max(y0, y1), min(z0, z1), max(z0, z1))))
+
     def blocked(self, x0, x1, y0, y1, z0, z1, ignore=("floor", "trench", "ladder")) -> bool:
         """Whether a box would overlap anything built so far (beyond the floors), or the Haul
         corridor, which the layout keeps clear end to end."""
@@ -169,6 +178,25 @@ class Builder:
             if x0 < a1 - 1e-6 and a0 < x1 - 1e-6 and y0 < b1 - 1e-6 and b0 < y1 - 1e-6 and z0 < c1 - 1e-6 and c0 < z1 - 1e-6:
                 return True
         return False
+
+    def volatile_box(self, label: str, kind: str, centre, size, mass: float, yaw_deg: float):
+        """A volatile with no generated asset yet: a grey cube at its spec size, as a fixed
+        AKineticProp (it does not move, it goes off)."""
+        x, y, z = centre
+        actor = actors.spawn_actor_from_class(PROP, to_unreal(x, y, z), unreal.Rotator(0, 0, -yaw_deg))
+        mesh = actor.get_component_by_class(unreal.StaticMeshComponent)
+        mesh.set_static_mesh(self.cube)
+        mesh.set_material(0, self.materials["placeholder"])
+        actor.set_actor_scale3d(unreal.Vector(*size))
+        actor.set_editor_property("mass_kg", mass)
+        actor.set_editor_property("fixed_scenery", True)
+        actor.set_editor_property("volatile", getattr(unreal.KineticVolatile, kind))
+        actor.set_actor_label(f"PH_{label}")
+        actor.set_folder_path("Placeholders")
+        self.count += 1
+        self.solids.append(("placeholder", (x - size[0] / 2, x + size[0] / 2, y - size[1] / 2, y + size[1] / 2,
+                                            z - size[2] / 2, z + size[2] / 2)))
+        return actor
 
     def prop(self, name: str, label: str, x: float, y: float, z: float, yaw_deg: float = 0.0,
              pitch_deg: float = 0.0):
@@ -186,6 +214,8 @@ class Builder:
         mass, placement = PROP_BODIES[name]
         actor.set_editor_property("mass_kg", mass)
         actor.set_editor_property("placement", getattr(unreal.KineticPlacement, placement))
+        if name in VOLATILES:
+            actor.set_editor_property("volatile", getattr(unreal.KineticVolatile, VOLATILES[name]))
         actor.set_actor_label(label)
         actor.set_folder_path("Props")
         self.count += 1
@@ -293,7 +323,9 @@ def crossings(b: Builder) -> None:
                 for st in steps:
                     b.box("Grate_Step", "bridge", *st)
         for x in (-30, 10):
-            b.box("PlankBridge", "bridge", x - 0.45, x + 0.45, yc - 3.25, yc + 3.25, -0.05, 0)
+            plank = b.box("PlankBridge", "bridge", x - 0.45, x + 0.45, yc - 3.25, yc + 3.25, -0.05, 0)
+            # The first train through the trench sweeps it; a Breaker landing on it breaks it.
+            plank.set_editor_property("tags", [unreal.Name("Kinetic.PlankBridge")])
 
 
 # Mesa footprints (x0, x1, y0, y1, top) and their stepped ledges (x0, x1, top), layout zones 7-11.
@@ -344,20 +376,14 @@ def stacks(b: Builder) -> None:
             b.ladder(f"{name}_StepRungs", inner - 0.05, inner + 0.05, ym + 1.0, ym + 1.6, ltop, top, step_into)
     # West Mesa's 1.2 m parapet on its north edge (PROPOSED in the layout).
     b.box("WestMesa_Parapet", "mesa", -80, -56, -33.3, -33, 8, 9.2)
-    # Rated hull sections on the Floor, 12 m by 6 m by 2.7 m.
-    for name, (x0, x1, y0, y1) in {"R1": (-76, -64, 13, 19), "R2": (30, 42, 19, 25),
-                                   "R3": (-76, -64, -9, -3), "R4": (62, 74, -25, -19)}.items():
-        b.box(f"Rated_{name}", "rated", x0, x1, y0, y1, 0, 2.7)
-    # The control shack: 8 m by 10 m, floor 10.5, roof 14, on two rated columns and against the
-    # west portal's north leg.
+    # The rated loads (the hull sections R1 to R4, the control shack on its two columns) move on
+    # their commit timelines, so the Yard director builds them as kinematics; their room is
+    # kept here so later pieces are routed round them.
+    for x0, x1, y0, y1 in ((-76, -64, 13, 19), (30, 42, 19, 25), (-76, -64, -9, -3), (62, 74, -25, -19)):
+        b.reserve("rated", x0, x1, y0, y1, 0, 2.7)
     for y in (35, 41):
-        b.box("Rated_ShackColumn", "rated", -62.3, -61.7, y - 0.3, y + 0.3, 0, 10.3)
-    b.box("Shack_Floor", "structure", -66, -58, 33, 43, 10.3, 10.5)
-    b.box("Shack_Roof", "structure", -66, -58, 33, 43, 13.8, 14)
-    b.box("Shack_WallN", "structure", -66, -58, 42.8, 43, 10.5, 13.8)
-    b.box("Shack_WallW", "structure", -66, -65.8, 33, 43, 10.5, 13.8)
-    b.box("Shack_WallE", "structure", -58.2, -58, 33, 43, 10.5, 13.8)
-    b.box("Shack_WallS_Sill", "structure", -66, -58, 33, 33.2, 10.5, 11.4)  # Windows south
+        b.reserve("rated", -62.3, -61.7, y - 0.3, y + 0.3, 0, 10.3)
+    b.reserve("structure", -66, -58, 33, 43, 10.3, 14)
 
 
 def press(b: Builder) -> None:
@@ -371,10 +397,12 @@ def press(b: Builder) -> None:
     # The counterweight, rated, hanging at (45, +9) with its underside at 6 m, its cable from an
     # arm off the frame's north beam.
     b.box("Press_CounterweightArm", "structure", 44.5, 45.5, 8, 9.5, 12, 13)
-    b.box("Rated_Counterweight", "rated", 44, 46, 8, 10, 6, 9)
-    b.box("Counterweight_Cable", "structure", 44.95, 45.05, 8.95, 9.05, 9, 12)
+    b.reserve("rated", 44, 46, 8, 10, 6, 9)  # The counterweight and its cable: the director's
     # The ram at the bottom of its stroke, a centimetre proud of the pit floor.
-    b.box("Press_Ram", "structure", 38.5, 51.5, -6.5, 6.5, -10.5, -9.99)
+    ram = b.box("Press_Ram", "structure", 38.5, 51.5, -6.5, 6.5, -10.5, -9.99)
+    # It cycles (KineticYardDirector): movable, and tagged for the director to find.
+    ram.static_mesh_component.set_editor_property("mobility", unreal.ComponentMobility.MOVABLE)
+    ram.set_editor_property("tags", [unreal.Name("Kinetic.PressRam")])
     # 1.1 m pipe rails on the north and south lips (PROPOSED); the east lip is open.
     for y in (-7.1, 7.1):
         b.box("PitLipRail", "structure", 38, 52, y - 0.03, y + 0.03, 1.04, 1.1)
@@ -410,10 +438,7 @@ def rails(b: Builder) -> None:
         b.box("RailWalk_Handrail", "rails", -80, 80, out - 0.03, out + 0.03, 36.94, 37)
         head = yc - s * 0.75
         b.box("GantryRail", "structure", -80, 80, head - 0.15, head + 0.15, 35.6, 36)
-    # The Gantry bridge beam at X +45 (its position at "live" in Scrap), out to the rail heads,
-    # and the cab.
-    b.box("Gantry_Beam", "structure", 44.25, 45.75, -30.9, 30.9, 34.5, 36)
-    b.box("Gantry_Cab", "structure", 43.5, 46.5, 27, 30, 36, 40)
+    # The Gantry (bridge beam, cab, magnet) is a kinematic the Yard director makes and moves.
     # Floodlight masts with their 24 m platforms.
     for x in (-52, 52):
         for y in (-40, 40):
@@ -451,7 +476,12 @@ def placeholders(b: Builder) -> None:
         b.box("PH_BilletStack", "placeholder", x - 1.2, x + 1.2, y - 0.6, y + 0.6, 0, 3.6, folder)
     for x in (-6, 6):
         b.box("PH_WeldingCart", "placeholder", x - 0.55, x + 0.55, -14.3, -13.7, 0, 1.5, folder)
-    b.box("PH_GasManifold", "placeholder", 19, 21, 21.7, 22.3, 0, 1.6, folder)
+    # The gas manifold: a volatile (a Jack over 600 N vents a 6 m jet toward the marker).
+    b.volatile_box("GasManifold", "GAS_MANIFOLD", (20, 22, 0.8), (2.0, 0.6, 1.6), 400.0,
+                   math.degrees(math.atan2(12 - 22, 0 - 20)))
+    # The north leg's demolition charges (events-and-moving-parts 4): either sheds its ladder cage.
+    for y in (28.45, 31.55):
+        b.volatile_box("DemoCharge", "DEMO_CHARGE", (20, y, 3.0), (0.3, 0.2, 0.3), 5.0, 0.0)
     # Scrap heaps, 4 m across and 1.2 m high (South Dock, Marker Flat, North Dock), and the two
     # on the 5.4 m ledges of NC1 and SC4: cover and a x2.0 landing.
     heaps = [(-30, -40), (0, -40), (30, -40), (-10, 6), (8, 6), (10, 18), (-8, 20), (-40, 22), (-20, 40), (20, 40)]
@@ -538,8 +568,43 @@ def props(b: Builder) -> None:
     for x in (-52, 52):
         for y in (-40, 40):
             b.prop("SM_Light_FloodlightStand_Office", "FloodlightStand", x + 1.2, y + 1.2, 24, 0)
+    containers(b)
     if b.missing:
         raise RuntimeError(f"not imported (make import-props): {sorted(set(b.missing))}")
+
+
+def containers(b: Builder) -> None:
+    """HTR containers in the Stacks, between the cut hull sections (shipping-container.md: the
+    Yard's billet and parts containers). The layout gives no positions, so each stands at the
+    clear spot nearest a point beside a rated hull section, end-on to it (PROPOSED)."""
+    for label, (x, y) in (("R1", (-70, 22)), ("R2", (36, 15)), ("R3", (-70, 0)), ("R4", (68, -15))):
+        candidates = [(x + 0.5 * i, y + 0.5 * j) for i in range(-12, 13) for j in range(-12, 13)]
+        candidates.sort(key=lambda c: (c[0] - x) ** 2 + (c[1] - y) ** 2)
+        spot = next((c for c in candidates if not b.blocked(c[0] - 3.1, c[0] + 3.1, c[1] - 1.3, c[1] + 1.3, 0, 2.6)), None)
+        if spot is None:
+            unreal.log_warning(f"Kinetic: no clear spot for the container by {label}")
+            continue
+        body = b.prop("SM_Heavy_Container20_HTR", f"Container_{label}", spot[0], spot[1], 0.0, 0.0)
+        if body is None:
+            continue
+        b.solids.append(("placeholder", (spot[0] - 3.1, spot[0] + 3.1, spot[1] - 1.3, spot[1] + 1.3, 0, 2.6)))
+        # The doors, shut, on the body's hinge sockets (they come with it if it moves).
+        mesh = body.get_component_by_class(unreal.StaticMeshComponent)
+        for side in ("L", "R"):
+            door_name = f"SM_Heavy_Container20_HTR_Door_{side}"
+            door_path = f"/Game/Objects/Heavy/SM_Heavy_Container20_HTR/{door_name}"  # With its body (import_props.py)
+            door_mesh = unreal.load_asset(door_path) if eal.does_asset_exist(door_path) else None
+            if door_mesh is None:
+                b.missing.append(door_name)
+                continue
+            door = actors.spawn_actor_from_class(unreal.StaticMeshActor, body.get_actor_location(), unreal.Rotator(0, 0, 0))
+            door.static_mesh_component.set_editor_property("mobility", unreal.ComponentMobility.MOVABLE)
+            door.static_mesh_component.set_static_mesh(door_mesh)
+            door.static_mesh_component.set_collision_enabled(unreal.CollisionEnabled.NO_COLLISION)
+            door.attach_to_component(mesh, f"ATTACH_{door_name}", unreal.AttachmentRule.SNAP_TO_TARGET,
+                                     unreal.AttachmentRule.SNAP_TO_TARGET, unreal.AttachmentRule.KEEP_WORLD, False)
+            door.set_actor_label(f"Container_{label}_Door_{side}")
+            door.set_folder_path("Props")
 
 
 def game_mode() -> None:
@@ -603,6 +668,8 @@ def main() -> None:
     props(b)
     lighting(b)
     navigation()
+    director = actors.spawn_actor_from_class(DIRECTOR, unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0))
+    director.set_actor_label("Yard_Director")
     game_mode()
     if not levels.save_current_level():
         raise RuntimeError(f"could not save {LEVEL}")

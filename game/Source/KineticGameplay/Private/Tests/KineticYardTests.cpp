@@ -14,7 +14,10 @@
 #include "KineticBotController.h"
 #include "KineticCharacter.h"
 #include "KineticGameMode.h"
+#include "KineticHazardWorld.h"
+#include "KineticKinematic.h"
 #include "KineticProp.h"
+#include "KineticYardDirector.h"
 #include "KineticRulesSubsystem.h"
 #include "KineticSpoolWorld.h"
 #include "Misc/AutomationTest.h"
@@ -626,6 +629,368 @@ bool FKineticYardScrapTest::RunTest(const FString& Parameters)
 	}
 	ADD_LATENT_AUTOMATION_COMMAND(FWaitForPlay(this));
 	ADD_LATENT_AUTOMATION_COMMAND(FScrapInTheYard(this));
+	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
+	return true;
+}
+
+
+// The Yard's moving parts and hazards in the walk-the-arena mode (e is play time; Shift Change at
+// e 69, the default Scrap rules' mid-match event): a set line across the south trench is severed
+// by the e 10 train; the player standing in the trench ahead of it is Stalled by it (a
+// kinematic); the train sweeps the trench's plank bridges; a propane cylinder dropped from 6 m
+// beside the player arms on the impact and its blast Stalls them; Shift Change releases the
+// Gantry's plate over Marker Flat, where it lands as scenery, and re-phases the Haulers.
+class FEventsInTheYard : public IAutomationLatentCommand
+{
+public:
+	explicit FEventsInTheYard(FAutomationTestBase* InTest) : Test(InTest) {}
+
+	virtual bool Update() override
+	{
+		UWorld* World = GEditor ? GEditor->PlayWorld.Get() : nullptr;
+		AKineticCharacter* Me = World ? Cast<AKineticCharacter>(UGameplayStatics::GetPlayerPawn(World, 0)) : nullptr;
+		UKineticSpoolWorld* Spool = World ? World->GetSubsystem<UKineticSpoolWorld>() : nullptr;
+		UKineticHazardWorld* Hazards = World ? World->GetSubsystem<UKineticHazardWorld>() : nullptr;
+		AKineticYardDirector* Yard = nullptr;
+		for (TActorIterator<AKineticYardDirector> It(World); It; ++It)
+		{
+			Yard = *It;
+		}
+		if (!Me || !Spool || !Hazards || !Yard)
+		{
+			return Fail(TEXT("no player, Spool, hazards or Yard director (make yard-greybox)"));
+		}
+		const double E = Yard->Elapsed();
+		if (E > 85.0)
+		{
+			return Fail(*FString::Printf(TEXT("timed out in stage %d at e %.1f"), Stage, E));
+		}
+		for (const FKineticSpoolEvent& Ev : Spool->TakeEvents())
+		{
+			bSevered |= Ev.Kind == EKineticSpoolEventKind::LineEnded && Ev.Why == EKineticLineEnded::Severed;
+		}
+		// Layout metres to Unreal (Y flipped).
+		const auto At = [](double X, double Y, double Z) { return FVector(X * 100.0, -Y * 100.0, Z * 100.0); };
+		APlayerController* Player = Cast<APlayerController>(Me->GetController());
+		const auto Aim = [&](const FVector& Point) {
+			Player->SetControlRotation((Point - Me->Camera->GetComponentLocation()).Rotation());
+		};
+		const FKineticSpoolPlayer* State = Spool->PlayerState(Me);
+		switch (Stage)
+		{
+		case 0:  // On the south trench's north lip; before the first train nothing runs.
+			if (E < 1.0)
+			{
+				return false;
+			}
+			Test->TestFalse(TEXT("no Hauler before e 10"), Yard->IsHaulerRunning(0) || Yard->IsHaulerRunning(1));
+			Me->TeleportTo(At(-54.0, -25.5, 0.0) + FVector(0, 0, 100), FRotator::ZeroRotator);
+			Spool->SelectMode(Me, Kinetic::ELineMode::Hang);
+			Next(E);
+			return false;
+		case 1:  // A Hang across the trench, lip to lip, released into a set line.
+			if (E - StageAt < 0.5)
+			{
+				return false;
+			}
+			if (!bFiredA)
+			{
+				Aim(At(-54.0, -34.5, 0.0));
+				Spool->FireDog(Me);
+				bFiredA = true;
+				return false;
+			}
+			if (!bFiredB && E - StageAt > 1.0)
+			{
+				Aim(At(-54.0, -26.6, 0.0));
+				Spool->FireDog(Me);
+				bFiredB = true;
+				return false;
+			}
+			if (E - StageAt > 1.6)
+			{
+				const FKineticLine* L = Spool->ActiveLine(Me);
+				Test->TestTrue(TEXT("a Hang across the south trench"), L && L->IsLive() && L->State.Mode == Kinetic::ELineMode::Hang);
+				Spool->Release(Me);
+				Test->TestTrue(TEXT("released into a set line"), Spool->Lines().Num() == 1 && Spool->Lines()[0].bSet);
+				// Into the trench, 34 m ahead of where the train comes in.
+				Me->TeleportTo(At(-46.0, -30.0, -4.0) + FVector(0, 0, 100), FRotator::ZeroRotator);
+				Next(E);
+			}
+			return false;
+		case 2:  // The e 10 train: the set line severed, the player hit and Stalled.
+			if (State && !State->bStanding)
+			{
+				Test->TestTrue(TEXT("the South Hauler is running"), Yard->IsHaulerRunning(0));
+				Test->TestTrue(TEXT("the train severed the set line across the trench"), bSevered);
+				Test->TestEqual(TEXT("Stalled by the train (a kinematic)"), static_cast<int>(State->StallCause),
+				                static_cast<int>(Kinetic::EStallCause::KinematicImpact));
+				Test->TestTrue(TEXT("hit as the nose reaches X -46, at e 12.8"), E > 12.4 && E < 13.9);
+				Next(E);
+			}
+			else if (E > 16.0)
+			{
+				return Fail(*FString::Printf(TEXT("not hit by e 16 (at %s, severed %d)"), *Me->GetActorLocation().ToCompactString(),
+				                             bSevered ? 1 : 0));
+			}
+			return false;
+		case 3:  // The planks at X -30 and +10 go on the first pass; then a propane cylinder.
+		{
+			if (E < 19.0 || !State || !State->bStanding)
+			{
+				return false;
+			}
+			int32 Swept = 0, Planks = 0;
+			for (TActorIterator<AActor> It(World); It; ++It)
+			{
+				if (It->ActorHasTag(TEXT("Kinetic.PlankBridge")) && FMath::Abs(It->GetActorLocation().Y - 3000.0) < 400.0)
+				{
+					++Planks;
+					Swept += It->IsHidden() ? 1 : 0;
+				}
+			}
+			Test->TestTrue(TEXT("the south trench's plank bridges are swept"), Planks >= 2 && Swept == Planks);
+			for (TActorIterator<AKineticProp> It(World); It; ++It)
+			{
+				if (It->Volatile == EKineticVolatile::Propane && !Cylinder.IsValid())
+				{
+					Cylinder = *It;
+				}
+			}
+			if (!Cylinder.IsValid())
+			{
+				return Fail(TEXT("no propane cylinder in the level"));
+			}
+			Me->TeleportTo(At(-40.0, -40.0, 0.0) + FVector(0, 0, 100), FRotator::ZeroRotator);
+			Cylinder->BreakFree();
+			Cylinder->SetActorLocation(At(-38.8, -40.0, 6.0), false, nullptr, ETeleportType::ResetPhysics);
+			Cylinder->Mesh->SetPhysicsLinearVelocity(FVector::ZeroVector);
+			Blasts = Hazards->BlastsSeen();
+			Next(E);
+			return false;
+		}
+		case 4:  // The impact arms it; the blast, 0.3 s on, Stalls the player 1.2 m away.
+			if (Hazards->BlastsSeen() > Blasts && State && !State->bStanding)
+			{
+				Test->TestEqual(TEXT("Stalled by the blast"), static_cast<int>(State->StallCause), static_cast<int>(Kinetic::EStallCause::Blast));
+				Test->TestTrue(TEXT("the cylinder is spent"), Cylinder.IsValid() && Cylinder->IsSpent());
+				Next(E);
+			}
+			else if (E - StageAt > 4.0)
+			{
+				return Fail(*FString::Printf(TEXT("no blast (cylinder at %s)"),
+				                             Cylinder.IsValid() ? *Cylinder->GetActorLocation().ToCompactString() : TEXT("-")));
+			}
+			return false;
+		case 5:  // Shift Change at e 69: the plate released over Marker Flat lands as scenery.
+			if (E < 69.5)
+			{
+				return false;
+			}
+			if (!bChecked69)
+			{
+				bChecked69 = true;
+				Test->TestTrue(TEXT("Shift Change released the Gantry's plate"), Yard->DropsSeen() >= 1 && !Yard->IsCarrying());
+			}
+			if (E < 76.0)
+			{
+				return false;
+			}
+			{
+				bool bLanded = false;
+				for (TActorIterator<AKineticProp> It(World); It; ++It)
+				{
+					const FVector P = It->GetActorLocation();
+					bLanded |= It->MassKg > 2000.0f && It->Placement == EKineticPlacement::Rated && It->bFixedScenery && P.Z > -100.0 &&
+					           P.Z < 600.0 && P.X < 0.0;
+				}
+				Test->TestTrue(TEXT("the plate lies on Marker Flat as scenery"), bLanded);
+				Test->TestTrue(TEXT("the Haulers re-phased: the South train from e 72"), Yard->IsHaulerRunning(0));
+			}
+			return true;
+		default:
+			return true;
+		}
+	}
+
+private:
+	bool Fail(const TCHAR* Why)
+	{
+		Test->AddError(Why);
+		return true;
+	}
+	void Next(double E)
+	{
+		++Stage;
+		StageAt = E;
+	}
+
+	FAutomationTestBase* Test;
+	int Stage = 0;
+	double StageAt = 0.0;
+	bool bFiredA = false, bFiredB = false, bSevered = false, bChecked69 = false;
+	int32 Blasts = 0;
+	TWeakObjectPtr<AKineticProp> Cylinder;
+};
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FKineticYardEventsTest, "Kinetic.Yard.Events",
+                                 EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FKineticYardEventsTest::RunTest(const FString& Parameters)
+{
+	PlayMode(TEXT("Walk"), false);
+	if (!AutomationOpenMap(YardMap))
+	{
+		AddError(TEXT("the Yard grey-box did not open (make yard-greybox)"));
+		return false;
+	}
+	ADD_LATENT_AUTOMATION_COMMAND(FWaitForPlay(this));
+	ADD_LATENT_AUTOMATION_COMMAND(FEventsInTheYard(this));
+	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
+	return true;
+}
+
+
+// A rated load in the walk-the-arena mode: a Breaker Hauls hull section R2 (30 to 42, 19 to 25)
+// from across the north trench at 1,000 N. It commits after the 0.6 s hold, groans for 1.0 s,
+// slides off its skids into the north trench and lies across it; the e 40 North train takes
+// it to the plenum.
+class FRatedInTheYard : public IAutomationLatentCommand
+{
+public:
+	explicit FRatedInTheYard(FAutomationTestBase* InTest) : Test(InTest) {}
+
+	virtual bool Update() override
+	{
+		UWorld* World = GEditor ? GEditor->PlayWorld.Get() : nullptr;
+		AKineticCharacter* Me = World ? Cast<AKineticCharacter>(UGameplayStatics::GetPlayerPawn(World, 0)) : nullptr;
+		UKineticSpoolWorld* Spool = World ? World->GetSubsystem<UKineticSpoolWorld>() : nullptr;
+		AKineticYardDirector* Yard = nullptr;
+		for (TActorIterator<AKineticYardDirector> It(World); It; ++It)
+		{
+			Yard = *It;
+		}
+		if (!Me || !Spool || !Yard)
+		{
+			return Fail(TEXT("no player, Spool or Yard director"));
+		}
+		const double E = Yard->Elapsed();
+		if (E > 60.0)
+		{
+			return Fail(*FString::Printf(TEXT("timed out in stage %d"), Stage));
+		}
+		const auto At = [](double X, double Y, double Z) { return FVector(X * 100.0, -Y * 100.0, Z * 100.0); };
+		if (!Section.IsValid())
+		{
+			for (TActorIterator<AKineticKinematic> It(World); It; ++It)
+			{
+				if (It->ActorHasTag(TEXT("Kinetic.Anchor")) && FVector::Dist2D(It->GetActorLocation(), At(36.0, 22.0, 0.0)) < 100.0)
+				{
+					Section = *It;
+				}
+			}
+			if (!Section.IsValid())
+			{
+				return Fail(TEXT("no hull section R2"));
+			}
+		}
+		APlayerController* Player = Cast<APlayerController>(Me->GetController());
+		switch (Stage)
+		{
+		case 0:  // A Breaker on the North Dock across the north trench from R2, facing it.
+			if (E < 1.0)
+			{
+				return false;
+			}
+			Me->Harness = EKineticHarness::Breaker;
+			Me->ApplyHarness();
+			Me->TeleportTo(At(36.0, 34.5, 0.0) + FVector(0, 0, 100), FRotator(0.0, 90.0, 0.0));
+			Spool->SelectMode(Me, Kinetic::ELineMode::Haul);
+			Next(E);
+			return false;
+		case 1:  // Dog A into its north face, Dog B into the Breaker's own chest plate: a Haul.
+			if (E - StageAt < 0.6)
+			{
+				return false;
+			}
+			if (!bFired)
+			{
+				Player->SetControlRotation((At(36.0, 24.95, 1.3) - Me->Camera->GetComponentLocation()).Rotation());
+				Spool->FireDog(Me);
+				bFired = true;
+				return false;
+			}
+			if (E - StageAt > 1.0 && !bSelf)
+			{
+				Spool->SelfDogNext(Me);
+				bSelf = true;
+				return false;
+			}
+			if (E - StageAt > 1.4)
+			{
+				const FKineticLine* L = Spool->ActiveLine(Me);
+				Test->TestTrue(TEXT("a Haul from the section to the Breaker"), L && L->IsLive() && L->State.Mode == Kinetic::ELineMode::Haul &&
+				                                                                    L->A.Seat == EKineticSeat::Kinematic);
+				Next(E);
+			}
+			return false;
+		case 2:  // It commits, groans and goes: across the trench within 0.6 + 1.0 + 5 s.
+		{
+			const FVector P = Section->GetActorLocation();
+			if (E - StageAt < 7.5)
+			{
+				return false;
+			}
+			Spool->Release(Me);
+			Test->TestEqual(TEXT("it lies across the north trench"), P.Y / -100.0, 30.0, 0.5);
+			Test->TestEqual(TEXT("turned across it"), FMath::Abs(Section->GetActorRotation().Yaw), 90.0, 1.0);
+			Next(E);
+			return false;
+		}
+		case 3:  // The North train from e 40 carries it to the plenum.
+			if (E < 56.0)
+			{
+				return false;
+			}
+			Test->TestFalse(TEXT("carried off by the train"), Section->IsActive());
+			return true;
+		default:
+			return true;
+		}
+	}
+
+private:
+	bool Fail(const TCHAR* Why)
+	{
+		Test->AddError(Why);
+		return true;
+	}
+	void Next(double E)
+	{
+		++Stage;
+		StageAt = E;
+	}
+
+	FAutomationTestBase* Test;
+	int Stage = 0;
+	double StageAt = 0.0;
+	bool bFired = false, bSelf = false;
+	TWeakObjectPtr<AKineticKinematic> Section;
+};
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FKineticYardRatedTest, "Kinetic.Yard.Rated",
+                                 EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FKineticYardRatedTest::RunTest(const FString& Parameters)
+{
+	PlayMode(TEXT("Walk"), false);
+	if (!AutomationOpenMap(YardMap))
+	{
+		AddError(TEXT("the Yard grey-box did not open (make yard-greybox)"));
+		return false;
+	}
+	ADD_LATENT_AUTOMATION_COMMAND(FWaitForPlay(this));
+	ADD_LATENT_AUTOMATION_COMMAND(FRatedInTheYard(this));
 	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
 	return true;
 }

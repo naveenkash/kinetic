@@ -16,6 +16,8 @@
 #                      Kinetic.Yard.Scrap runs just those)
 #   make import-props  imports the generated props in art/out (art/README.md) into Content
 #   make yard-greybox  builds the Yard grey-box level from the layout docs, with the props
+#   make import-audio  generates the tells' sound cues (art/audio) and imports them
+#   make import-characters  imports the harness characters (art/characters, built with Blender)
 #
 #   build/diff-recordings A B [tolerance_m]   compares two determinism recordings
 
@@ -43,7 +45,7 @@ DEPS := $(HEADERS) $(STAMP) Makefile
 
 UNREAL_TESTS ?= Kinetic
 
-.PHONY: test test-asan bench check report all-checks clean editor unreal-test import-props yard-greybox
+.PHONY: test test-asan bench check report all-checks clean editor unreal-test import-props yard-greybox import-audio import-characters
 
 $(BUILD)/kinetic-core-tests: $(LIB_SRC) $(TEST_SRC) $(DEPS) | $(BUILD)
 	$(CXX) $(CXXFLAGS) -I$(TESTS) $(LIB_SRC) $(TEST_SRC) -o $@
@@ -122,3 +124,10 @@ import-props: editor | $(BUILD)
 
 yard-greybox: editor | $(BUILD)
 	$(call run_editor_script,Tools/unreal/build_yard_greybox.py,yard-greybox)
+
+import-characters: editor | $(BUILD)
+	$(call run_editor_script,Tools/unreal/import_characters.py,import-characters)
+
+import-audio: editor | $(BUILD)
+	python3 ../art/audio/build_audio.py
+	$(call run_editor_script,Tools/unreal/import_audio.py,import-audio)

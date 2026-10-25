@@ -13,7 +13,9 @@
 #include "InputMappingContext.h"
 #include "InputModifiers.h"
 #include "Kinetic/Units.h"
+#include "KineticKinematic.h"
 #include "KineticLadder.h"
+#include "KineticYardDirector.h"
 #include "KineticMovementComponent.h"
 #include "KineticRulesSubsystem.h"
 #include "KineticSpoolWorld.h"
@@ -103,11 +105,18 @@ void AKineticCharacter::BeginPlay()
 	ApplyHarness();
 }
 
-void AKineticCharacter::SetCrewColour(const FLinearColor& Colour)
+FLinearColor AKineticCharacter::TeamTint(int32 InCrew)
 {
+	// Amber #E69F00 and Sky #56B4E9, colour-blind safe (05 11a).
+	return InCrew == 1 ? FLinearColor::FromSRGBColor(FColor(0x56, 0xB4, 0xE9)) : FLinearColor::FromSRGBColor(FColor(0xE6, 0x9F, 0x00));
+}
+
+void AKineticCharacter::SetCrew(int32 InCrew)
+{
+	Crew = InCrew;
 	if (UMaterialInstanceDynamic* M = Body->CreateDynamicMaterialInstance(0))
 	{
-		M->SetVectorParameterValue(TEXT("Color"), Colour);
+		M->SetVectorParameterValue(TEXT("Color"), TeamTint(Crew));
 	}
 	if (UMaterialInstanceDynamic* M = Visor->CreateDynamicMaterialInstance(0))
 	{
@@ -206,6 +215,15 @@ void AKineticCharacter::Landed(const FHitResult& Hit)
 {
 	// Called before the landing zeroes the fall: the speed into the floor is still there.
 	RecordContact(Hit, GetCharacterMovement()->Velocity, FVector::ZeroVector);
+	// A Breaker who jumps onto a plank bridge breaks it (the Yard, layout zone 1).
+	AActor* Floor = Hit.GetActor();
+	if (Harness == EKineticHarness::Breaker && Floor && Floor->ActorHasTag(TEXT("Kinetic.PlankBridge")))
+	{
+		for (TActorIterator<AKineticYardDirector> It(GetWorld()); It; ++It)
+		{
+			It->Fracture(Floor);
+		}
+	}
 	Super::Landed(Hit);
 }
 
@@ -250,6 +268,11 @@ void AKineticCharacter::RecordContact(const FHitResult& Hit, const FVector& MyVe
 		Contact.Kind = Kinetic::EContactKind::Object;
 		Theirs = OtherComp->GetPhysicsLinearVelocityAtPoint(Hit.ImpactPoint) / 100.0;
 		Contact.OtherMassKg = OtherComp->GetMass();
+	}
+	else if (const AKineticKinematic* Kinematic = Cast<AKineticKinematic>(Other))
+	{
+		Contact.Kind = Kinetic::EContactKind::Kinematic;  // Judged at its own speed
+		Theirs = Kinematic->Velocity() / 100.0;
 	}
 	else
 	{

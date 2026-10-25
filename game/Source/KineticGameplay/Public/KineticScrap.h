@@ -24,6 +24,20 @@ class AKineticCharacter;
 class APlayerController;
 class UKineticSpoolWorld;
 
+// When this round's moments fall, in match time (FScrapMatch::Time, s): what an arena's
+// schedule runs from. -1 for what has not happened yet this round.
+struct FKineticRoundTimes
+{
+	double Now = 0.0;
+	double ResetAt = 0.0;
+	double LiveAt = 0.0;          // Planned: the reset and the Drop after ResetAt
+	double SirenAt = -1.0;        // The mid-match event's siren
+	double MidMatchAt = -1.0;     // Its payload
+	double PlannedMidMatchAt = 0.0;
+	double SuddenDeathAt = -1.0;  // The arena's sudden-death event begins
+	int32 Resets = 0;
+};
+
 class KINETICGAMEPLAY_API FKineticScrap
 {
 public:
@@ -56,6 +70,7 @@ public:
 	int32 MatchesFinished() const { return Finished; }
 	int32 StallsSeen() const { return Stalls; }
 	int32 ResetsSeen() const { return Resets; }
+	FKineticRoundTimes RoundTimes() const;
 
 	static constexpr double RestartSeconds = 8.0;  // After a match, a new one
 	static constexpr int32 Slots = 6;
@@ -77,6 +92,10 @@ private:
 	TUniquePtr<Kinetic::FScrapMatch> TheMatch;
 	TArray<FString> FeedLines;  // The last few calls and Stalls
 	double MatchOverAt = -1.0;
+	double ResetAt = 0.0;
+	double SirenAt = -1.0;
+	double MidMatchAt = -1.0;
+	double SuddenDeathAt = -1.0;
 	uint32 LastHumanInputs = 0;
 	int32 Finished = 0;
 	int32 Stalls = 0;
