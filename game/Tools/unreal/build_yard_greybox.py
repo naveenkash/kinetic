@@ -707,40 +707,86 @@ def spot(label: str, at, aim, kelvin: float, candela: float, cone: float, radius
     light.set_folder_path("Lighting")
 
 
+def sky() -> None:
+    """The night sky, physically: Unreal's sky atmosphere under a real volumetric cloud deck, 3 to
+    9 km up and broken. A faint moon behind it shapes the clouds; the sodium glow of the town over
+    the horizon tints them and the horizon from below (a low orange directional light just under
+    the horizon, which barely lights the Yard itself). The sky light captures that sky, live, for the fill. Height fog with volumetric
+    scattering gives the floods their shafts."""
+    atmosphere = actors.spawn_actor_from_class(unreal.SkyAtmosphere, unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0))
+    atmosphere.set_actor_label("Sky_Atmosphere")
+    atmosphere.set_folder_path("Lighting")
+    # The town glow: from just under the western horizon, shining up into the deck (clouds 1.2 km
+    # up see 1.1 degrees below the ground's horizon; any lower and they are in the Earth's shadow).
+    glow = actors.spawn_actor_from_class(unreal.DirectionalLight, unreal.Vector(0, 0, 5000),
+                                         unreal.Rotator(roll=0, pitch=0.6, yaw=20.0))
+    g = glow.light_component
+    g.set_editor_property("intensity", TOWN_GLOW_LUX)
+    g.set_editor_property("use_temperature", True)
+    g.set_editor_property("temperature", 2700.0)  # Sodium, reddened further by the long air path
+    g.set_editor_property("atmosphere_sun_light", True)
+    g.set_editor_property("atmosphere_sun_light_index", 0)
+    g.set_editor_property("cloud_scattered_luminance_scale", unreal.LinearColor(1.0, 1.0, 1.0, 1.0))
+    g.set_editor_property("cast_cloud_shadows", False)
+    g.set_editor_property("cast_shadows", False)
+    g.set_editor_property("cast_dynamic_shadows", False)
+    g.set_editor_property("diffuse_scale", 0.05)  # The deck sees it; the Yard, grazing, barely
+    g.set_editor_property("specular_scale", 0.05)
+    glow.set_actor_label("Sky_TownGlow")
+    glow.set_folder_path("Lighting")
+    # The moon behind the deck (PROPOSED: lighting-and-mood.md has none; without it a cloud deck at
+    # night has no shape). Faint and cool, high in the south-east: it silvers the clouds' tops and
+    # edges, and gives the Yard a little moonlight where the floods do not reach.
+    moon = actors.spawn_actor_from_class(unreal.DirectionalLight, unreal.Vector(0, 0, 5200),
+                                         unreal.Rotator(roll=0, pitch=-38.0, yaw=-130.0))
+    m = moon.light_component
+    m.set_editor_property("intensity", MOON_LUX)
+    m.set_editor_property("use_temperature", True)
+    m.set_editor_property("temperature", 4100.0)
+    m.set_editor_property("atmosphere_sun_light", True)
+    m.set_editor_property("atmosphere_sun_light_index", 1)
+    m.set_editor_property("cast_cloud_shadows", True)
+    m.set_editor_property("cast_shadows", True)
+    moon.set_actor_label("Sky_Moon")
+    moon.set_folder_path("Lighting")
+    clouds = actors.spawn_actor_from_class(unreal.VolumetricCloud, unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0))
+    c = clouds.get_component_by_class(unreal.VolumetricCloudComponent)
+    c.set_editor_property("layer_bottom_altitude", CLOUD_BASE_KM)
+    c.set_editor_property("layer_height", CLOUD_DEPTH_KM)
+    path = f"{MATERIALS}/MI_Yard_Overcast"
+    mi = unreal.load_asset(path) if eal.does_asset_exist(path) else assets.create_asset(
+        "MI_Yard_Overcast", MATERIALS, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+    # On the engine's own tuned instance, changing only how much of the sky the deck covers.
+    lib.set_material_instance_parent(mi, unreal.load_asset("/Engine/EngineSky/VolumetricClouds/m_SimpleVolumetricCloud_Inst"))
+    lib.set_material_instance_scalar_parameter_value(mi, "Cloud_GlobalCoverage", CLOUD_COVERAGE)
+    eal.save_loaded_asset(mi)
+    c.set_editor_property("material", mi)
+    clouds.set_actor_label("Sky_Overcast")
+    clouds.set_folder_path("Lighting")
+    sky_light = actors.spawn_actor_from_class(unreal.SkyLight, unreal.Vector(0, 0, 3000), unreal.Rotator(0, 0, 0))
+    sky_light.light_component.set_editor_property("real_time_capture", True)
+    sky_light.light_component.set_editor_property("intensity", SKY_LIGHT)
+    sky_light.set_actor_label("Sky_Light")
+    sky_light.set_folder_path("Lighting")
+    fog = actors.spawn_actor_from_class(unreal.ExponentialHeightFog, unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0))
+    f = fog.component
+    f.set_editor_property("fog_density", 0.006)
+    f.set_editor_property("fog_height_falloff", 0.6)
+    f.set_editor_property("fog_inscattering_luminance", unreal.LinearColor(0.02, 0.008, 0.003, 1.0))
+    f.set_editor_property("enable_volumetric_fog", True)
+    f.set_editor_property("volumetric_fog_scattering_distribution", 0.6)  # Forward: shafts toward a flood
+    f.set_editor_property("volumetric_fog_extinction_scale", 1.0)
+    fog.set_actor_label("Sky_Fog")
+    fog.set_folder_path("Lighting")
+
+
 def lighting(b: Builder) -> None:
     """Night shift, 02:40, overcast (lighting-and-mood.md): no sun or moon; the key is the four
     corner masts' floods and the shack's roof floods, pooled; the fill is the sodium cloud deck
-    (a sky dome the sky light captures) and the trench lamps (KineticYardDirector); thin fog on
-    the Floor only. Exposure is fixed, so a live line stays the brightest thing in frame."""
-    dome_mat = emissive_material("M_Yard_SkyDome", unlit=True)
-    dome_mi = assets.create_asset("MI_Yard_SkyDome", MATERIALS, unreal.MaterialInstanceConstant,
-                                  unreal.MaterialInstanceConstantFactoryNew()) if not eal.does_asset_exist(
-        f"{MATERIALS}/MI_Yard_SkyDome") else unreal.load_asset(f"{MATERIALS}/MI_Yard_SkyDome")
-    lib.set_material_instance_parent(dome_mi, dome_mat)
-    lib.set_material_instance_vector_parameter_value(dome_mi, "Color", unreal.LinearColor(0.45, 0.09, 0.012, 1.0))
-    lib.set_material_instance_scalar_parameter_value(dome_mi, "Strength", SKY_FILL)
-    eal.save_loaded_asset(dome_mi)
+    (sky(), which the sky light captures) and the trench lamps (KineticYardDirector). Exposure
+    is fixed, so a live line stays the brightest thing in frame."""
     emissive_material("M_Yard_Lamp", unlit=False)
-    dome = actors.spawn_actor_from_class(unreal.StaticMeshActor, unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0))
-    dome.static_mesh_component.set_static_mesh(unreal.load_asset("/Engine/BasicShapes/Sphere"))
-    dome.static_mesh_component.set_material(0, dome_mi)
-    # Not solid: the whole Yard is inside it, and a solid sphere pushes every player out to 800 m.
-    dome.static_mesh_component.set_collision_profile_name("NoCollision")
-    dome.static_mesh_component.set_editor_property("can_ever_affect_navigation", False)
-    dome.static_mesh_component.set_editor_property("cast_shadow", False)
-    dome.set_actor_scale3d(unreal.Vector(1600, 1600, 1600))  # 800 m radius
-    dome.set_actor_label("Sky_SodiumDome")
-    dome.set_folder_path("Lighting")
-    sky = actors.spawn_actor_from_class(unreal.SkyLight, unreal.Vector(0, 0, 3000), unreal.Rotator(0, 0, 0))
-    sky.light_component.set_editor_property("real_time_capture", True)
-    sky.light_component.set_editor_property("intensity", SKY_LIGHT)  # The fill, from the dim dome
-    sky.set_folder_path("Lighting")
-    fog = actors.spawn_actor_from_class(unreal.ExponentialHeightFog, unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0))
-    f = fog.component
-    f.set_editor_property("fog_density", 0.02)
-    f.set_editor_property("fog_height_falloff", 1.2)  # Thin, at the Floor
-    f.set_editor_property("fog_inscattering_luminance", unreal.LinearColor(0.035, 0.014, 0.006, 1.0))
-    fog.set_folder_path("Lighting")
+    sky()
     # The corner masts: three 30-degree pools each, inboard and down.
     for x in (-52, 52):
         for y in (-40, 40):
@@ -779,8 +825,12 @@ def lighting(b: Builder) -> None:
 
 
 YARD_EXPOSURE = -1.5  # EV: manual exposure is x8 at 0 EV; tuned on make shots
-SKY_FILL = 1.0        # The cloud deck's own glow, seen
-SKY_LIGHT = 20.0      # The fill the sky light carries from it
+MOON_LUX = 2.0        # Moonlight through the gaps (lux)
+TOWN_GLOW_LUX = 6.0   # The town's sodium glow under the horizon (lux), lighting the cloud deck
+CLOUD_COVERAGE = 0.15  # Over the engine's -0.2: a heavy, broken deck (more is more cover)
+CLOUD_BASE_KM = 3.0
+CLOUD_DEPTH_KM = 6.0
+SKY_LIGHT = 20.0      # The fill the sky light carries from the sky
 FLOOD_CD = 40000.0    # A mast flood's centre intensity
 
 

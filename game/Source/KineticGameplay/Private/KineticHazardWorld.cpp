@@ -28,24 +28,29 @@ namespace
 // (without this a clang at the press played at full volume across the whole Yard).
 USoundAttenuation* CueFalloff(const TCHAR* Name)
 {
-	const bool bBig = FCString::Strcmp(Name, TEXT("Blast")) == 0 || FCString::Strcmp(Name, TEXT("GasJet")) == 0 ||
-	                  FCString::Strcmp(Name, TEXT("PlateLand")) == 0;
-	static USoundAttenuation* Near = nullptr;
-	static USoundAttenuation* Far = nullptr;
-	USoundAttenuation*& Made = bBig ? Far : Near;
-	if (!Made)
+	// Near: the machinery's knocks and snaps. Far: blasts and the plate. Wide: the trench klaxons,
+	// tells the whole Yard must hear, but from where the train is coming.
+	const int32 Kind = FCString::Strncmp(Name, TEXT("Klaxon"), 6) == 0 ? 2
+	                   : FCString::Strcmp(Name, TEXT("Blast")) == 0 || FCString::Strcmp(Name, TEXT("GasJet")) == 0 ||
+	                           FCString::Strcmp(Name, TEXT("PlateLand")) == 0
+	                       ? 1
+	                       : 0;
+	static USoundAttenuation* Made[3] = {};
+	static const double Inner[3] = {400.0, 800.0, 3000.0};
+	static const float Falloff[3] = {6000.0f, 12000.0f, 20000.0f};
+	if (!Made[Kind])
 	{
-		Made = NewObject<USoundAttenuation>(GetTransientPackage(), bBig ? TEXT("SA_KineticCueFar") : TEXT("SA_KineticCueNear"));
-		Made->AddToRoot();
-		FSoundAttenuationSettings& A = Made->Attenuation;
+		Made[Kind] = NewObject<USoundAttenuation>(GetTransientPackage());
+		Made[Kind]->AddToRoot();
+		FSoundAttenuationSettings& A = Made[Kind]->Attenuation;
 		A.bAttenuate = true;
 		A.bSpatialize = true;
 		A.DistanceAlgorithm = EAttenuationDistanceModel::NaturalSound;
 		A.AttenuationShape = EAttenuationShape::Sphere;
-		A.AttenuationShapeExtents = FVector(bBig ? 800.0 : 400.0, 0.0, 0.0);
-		A.FalloffDistance = bBig ? 12000.0f : 6000.0f;
+		A.AttenuationShapeExtents = FVector(Inner[Kind], 0.0, 0.0);
+		A.FalloffDistance = Falloff[Kind];
 	}
-	return Made;
+	return Made[Kind];
 }
 
 FVec3 ToCore(const FVector& Cm) { return {Cm.X / 100.0, Cm.Y / 100.0, Cm.Z / 100.0}; }

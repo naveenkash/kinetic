@@ -433,7 +433,8 @@ void AKineticYardDirector::UpdateHaulers()
 		// The klaxon, arena-wide, 3 s before each nose-in.
 		if (!Run.Schedule().DeparturesBetween(PrevE + 3.0, E + 3.0).empty() && PrevE > -50.0)
 		{
-			UKineticHazardWorld::PlayCue(GetWorld(), Trenches[I].Klaxon);
+			const FVector At = L(0.0, Trenches[I].YM, 2.0);  // From the trench, heard across the Yard
+			UKineticHazardWorld::PlayCue(GetWorld(), Trenches[I].Klaxon, &At);
 		}
 		AKineticKinematic* K = Trains[I];
 		if (const std::optional<Kinetic::FPose> Pose = Run.PoseAt(E))

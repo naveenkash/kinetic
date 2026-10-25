@@ -1208,6 +1208,7 @@ public:
 		    {TEXT("MarkerFlat_Gantry"), FVector(-30.0, 2.0, 12.0), FVector(10.0, 14.0, 6.0)},
 		    {TEXT("Trench_South"), FVector(-70.0, -27.5, 3.0), FVector(0.0, -30.0, -2.0)},
 		    {TEXT("Press_Pit"), FVector(30.0, -12.0, 8.0), FVector(45.0, 0.0, -4.0)},
+		    {TEXT("Sky_FromTheFlat"), FVector(-20.0, 0.0, 2.0), FVector(40.0, 30.0, 30.0)},
 		};
 		const auto At = [](const FVector& M) { return FVector(M.X * 100.0, -M.Y * 100.0, M.Z * 100.0); };
 		if (Now < 2.0)
@@ -1246,6 +1247,12 @@ public:
 			Test->AddInfo(FString::Printf(TEXT("shot %s"), *File));
 			if (Next == 0)
 			{
+				for (const TCHAR* Var : {TEXT("r.VolumetricCloud"), TEXT("r.VolumetricCloud.Support"), TEXT("r.SupportSkyAtmosphere"),
+				                         TEXT("r.VolumetricRenderTarget")})
+				{
+					const IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(Var);
+					Test->AddInfo(FString::Printf(TEXT("cvar %s = %s"), Var, CVar ? *CVar->GetString() : TEXT("(none)")));
+				}
 				for (TActorIterator<AKineticCharacter> It(World); It; ++It)
 				{
 					const FVector P = It->GetActorLocation() / 100.0;
