@@ -38,7 +38,13 @@ To play the grey-box, open the project in the editor (it opens on the Yard) and 
 "/Users/Shared/Epic Games/UE_5.8/Engine/Binaries/Mac/UnrealEditor.app/Contents/MacOS/UnrealEditor" "$PWD/Kinetic.uproject" "/Game/Arenas/YRD_Yard/L_YRD_Greybox?Class=Breaker?Mode=Scrap" -game -windowed -ResX=1600 -ResY=900
 ```
 
-`make editor` builds the editor target with Xcode 15.2 to 27.9 (the range in the engine's `Config/Apple/Apple_SDK.json`). `make unreal-test` runs the automation tests headless (`UNREAL_TESTS=Kinetic.Yard.Scrap` runs just those). `make import-props` imports `art/out`, `make import-audio` generates and imports the sound cues, `make import-kit` imports the arena kit and its surfaces ([art/README.md](../art/README.md), Arenas), and `make yard-greybox` then builds the level: the grey boxes, the kit drawn over them, and the night lighting. `make shots` renders views of the Yard to `Saved/Kinetic/Shots` for checking the lighting. `UE_ROOT` overrides the engine location, which defaults to the Launcher's `/Users/Shared/Epic Games/UE_5.8`. The editor's log is in `~/Library/Logs/Unreal Engine/KineticEditor/`.
+`make editor` builds the editor target with Xcode 15.2 to 27.9 (the range in the engine's `Config/Apple/Apple_SDK.json`). `make unreal-test` runs the automation tests headless (`UNREAL_TESTS=Kinetic.Yard.Scrap` runs just those). `make import-props` imports `art/out`, `make import-audio` generates and imports the sound cues, `make import-kit` imports the arena kit and its surfaces ([art/README.md](../art/README.md), Arenas), and `make yard-greybox` then builds the level: the grey boxes, the kit drawn over them, and the night lighting. `make shots` renders views of the Yard to `Saved/Kinetic/Shots` for checking the lighting. The characters are MetaHumans:
+- `make metahumans` shapes the five class MetaHumans.
+- Their build needs the editor signed in to Epic, with MetaHuman Creator Core Data installed: in the editor's Output Log Cmd box, run `py "<repo>/game/Tools/unreal/metahumans_signed_in.py"`.
+- `make export-metahumans` writes their bodies and faces out for art/characters to fit the gear to (`harness.py --metahuman`).
+- `make retarget-metahumans` retargets the six takes onto them.
+- `make import-metahuman-gear` imports the fitted gear.
+- `kinetic.MetaHumans 0` plays the harness figures instead. `UE_ROOT` overrides the engine location, which defaults to the Launcher's `/Users/Shared/Epic Games/UE_5.8`. The editor's log is in `~/Library/Logs/Unreal Engine/KineticEditor/`.
 
 ## The engine-free core
 

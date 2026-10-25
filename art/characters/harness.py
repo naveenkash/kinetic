@@ -61,7 +61,7 @@ import kinetic_art as ka  # noqa: E402
 
 # Bones: name, parent, head, tail (metres; X forward, Y the character's left, Z up).
 BONES = [
-    ("root", None, (0, 0, 0), (0, 0, 0.1)),
+    ("root", None, (0, 0, 0), (0, 0.1, 0)),  # Along +Y, roll 0: an identity rest matrix, so Unreal's root is clean
     ("pelvis", "root", (0, 0, 0.95), (0, 0, 1.05)),
     ("spine_01", "pelvis", (0, 0, 1.05), (0, 0, 1.18)),
     ("spine_02", "spine_01", (0, 0, 1.18), (0, 0, 1.32)),
@@ -81,12 +81,14 @@ for side, s in (("l", 1.0), ("r", -1.0)):
         (f"ball_{side}", f"foot_{side}", (0.13, 0.10 * s, 0.03), (0.21, 0.10 * s, 0.02)),
     ]
 
-# Per class: silhouette (shoulder width with plates, m), body bulk, plates (chest, back,
+# Per class: silhouette (shoulder width with plates, m; the specs'. The fitted pauldrons make the
+# real shoulders narrower, and report.json measures them), body bulk, plates (chest, back,
 # shoulder; width, height in m), the Spool's place on the right forearm (0 elbow, 1 wrist), its
-# length and radius, and the livery: (hex, roughness, metallic) per material slot.
+# length and radius, the livery: (hex, roughness, metallic) per material slot, and the workwear:
+# PROPOSED coverall colours (the specs give none) and the Breaker's retro-reflective bands (z, m).
 CLASSES = {
     "Climber": dict(
-        wear=0.3, boots=("climb", "climb"), glove=None, thread="#C9C3B4", dirt="#8A8070", iris="#3E5A6A",
+        workwear="#5E6B45", wear=0.3, boots=("climb", "climb"), glove=None, thread="#C9C3B4", dirt="#8A8070", iris="#3E5A6A",
         suit=dict(ease=0.55, pockets=(), knee_pads=False, folds=0.6, shoulder=0.55), 
         shoulders=0.48, bulk=0.85, limb=0.92, chest=(0.26, 0.22), back=(0.24, 0.30), shoulder=(0.14, 0.12), oval=True,
         plate_style="mirror", spool_at=0.88, spool=(0.09, 0.03), headgear="wrap", frame="ribbons", wraps=True, lean=0.0,
@@ -96,7 +98,7 @@ CLASSES = {
                  "Body": ("#E9E4D8", 0.9, 0.0), "Boot": ("#E9E4D8", 0.8, 0.0), "Spool": ("#C9CDD2", 0.35, 1.0),
                  "Accent": ("#C9CDD2", 0.4, 1.0)}),
     "Scrapper": dict(
-        wear=0.9, boots=("work", "hitop"), glove="#6A5A3A", thread="#C8862B", dirt="#3A3026", iris="#3A2618",
+        workwear="#2F7F72", wear=0.9, boots=("work", "hitop"), glove="#6A5A3A", thread="#C8862B", dirt="#3A3026", iris="#3A2618",
         suit=dict(ease=1.0, pockets=("thigh_r", "seat"), knee_pads=True, folds=1.1), 
         shoulders=0.54, bulk=0.95, chest=(0.28, 0.24), back=(0.30, 0.28), shoulder=(0.15, 0.13), shoulder_r=(0.13, 0.11),
         plate_style="salvage", spool_at=0.55, spool=(0.16, 0.045), capacitor=True, headgear="salvage", frame="half",
@@ -106,7 +108,7 @@ CLASSES = {
                  "Body": ("#3A4A45", 0.85, 0.0), "Boot": ("#4A3A2C", 0.7, 0.0), "Spool": ("#A67C3B", 0.4, 1.0),
                  "Accent": ("#E8C23A", 0.6, 0.0)}),
     "Rigger": dict(
-        wear=0.6, boots=("work", "work"), glove="#6B5238", thread="#B9A98A", dirt="#3A3026", iris="#4A3524",
+        workwear="#2C3E5C", wear=0.6, boots=("work", "work"), glove="#6B5238", thread="#B9A98A", dirt="#3A3026", iris="#4A3524",
         suit=dict(ease=1.0, pockets=("thigh_r", "seat"), knee_pads=True, folds=1.0), 
         shoulders=0.62, bulk=1.0, chest=(0.30, 0.26), back=(0.32, 0.30), shoulder=(0.16, 0.14), plate_style="lip",
         spool_at=0.55, spool=(0.16, 0.05), headgear="square", frame="rails", lean=0.0, boot_top=0.2, laces=True,
@@ -116,7 +118,7 @@ CLASSES = {
                  "Body": ("#2A2622", 0.85, 0.0), "Boot": ("#4A3A2C", 0.7, 0.0), "Spool": ("#A67C3B", 0.35, 1.0),
                  "Accent": ("#A67C3B", 0.35, 1.0)}),
     "Doubler": dict(
-        wear=0.45, boots=("work", "work"), glove="#141416", thread="#39FF14", dirt="#2A2622", iris="#2A1C14",
+        workwear="#6E2A2A", wear=0.45, boots=("work", "work"), glove="#141416", thread="#39FF14", dirt="#2A2622", iris="#2A1C14",
         suit=dict(ease=0.85, pockets=("thigh_r",), knee_pads=False, folds=0.9), 
         shoulders=0.62, bulk=1.0, chest=(0.30, 0.26), back=(0.32, 0.30), shoulder=(0.16, 0.14), plate_style="lip",
         spool_at=0.5, spool=(0.28, 0.055), twin=True, headgear="hood", frame="short", neon=True, lean=0.0, boot_top=0.24,
@@ -126,13 +128,13 @@ CLASSES = {
                  "Body": ("#0E0E10", 0.85, 0.0), "Boot": ("#0E0E10", 0.6, 0.0), "Spool": ("#6A5A4A", 0.45, 1.0),
                  "Accent": ("#FFE600", 0.4, 0.0)}),
     "Breaker": dict(
-        wear=0.15, boots=("tall", "tall"), glove="#33363A", thread="#FF5A1F", dirt="#4A4238", iris="#3A2A1E",
+        workwear="#E0662A", reflective=((1.125, 1.165), (0.535, 0.575)), wear=0.15, boots=("tall", "tall"), glove="#33363A", thread="#3A3A3A", dirt="#4A4238", iris="#3A2A1E",
         suit=dict(ease=1.1, pockets=("thigh_r", "seat"), knee_pads=True, folds=0.8), 
         shoulders=0.82, bulk=1.3, limb=1.1, chest=(0.36, 0.30), back=(0.40, 0.36), shoulder=(0.22, 0.18), rake=15.0,
         plate_style="chamfer", spool_at=0.12, spool=(0.22, 0.07), gauntlet=True, headgear="visor", frame="shell",
         lean=5.0, boot_top=0.5, shin_shell=True, strap_width=0.07, tape=("#FF5A1F", "#2B2E31"), helmet_colour="#FF5A1F",
         skin="#7A4E36", number="HTR 118", lease="KESSL 9930", run_speed=5.0,
-        colours={"Plate": ("#5A5E62", 0.45, 0.85), "Frame": ("#2B2E31", 0.7, 0.2), "Strap": ("#FF5A1F", 0.85, 0.0),
+        colours={"Plate": ("#5A5E62", 0.45, 0.85), "Frame": ("#2B2E31", 0.7, 0.2), "Strap": ("#1F2124", 0.85, 0.0),  # PROPOSED: black webbing (the spec's orange vanishes on the orange suit)
                  "Body": ("#2B2E31", 0.85, 0.0), "Boot": ("#2B2E31", 0.6, 0.0), "Spool": ("#5A5E62", 0.45, 0.85),
                  "Accent": ("#FF5A1F", 0.5, 0.0)}),
 }
@@ -197,6 +199,7 @@ def materials(cls: str, spec: dict) -> dict:
         "Canvas": hl.tape(n("Canvas"), "#B8452A", wear),
         "Rand": hl.rubber(n("Rand"), "#1A1A1A", wear),
         "Foxing": hl.rubber(n("Foxing"), "#D8D2C4", wear),
+        "Reflective": hl.tape(n("Reflective"), "#C8CCCE", wear * 0.5),
     }
     return m
 
@@ -431,7 +434,7 @@ def soft_pieces(cls: str, spec: dict, mats: dict) -> dict:
         v = sdf.refine(boot.upper, v, 2)
         high = sdf.to_object(f"HIGH_Boot_{side}", v, q)
         low = sdf.decimated(high, 4200 if style == "tall" else 3400, f"Boot_{side}")
-        sv, sq = sdf.mesh(boot.sole, lo, (hi[0], hi[1], boot.sole_h + 0.004), 0.0013)
+        sv, sq = sdf.mesh(boot.sole, *boot.bounds(top=boot.sole_h + 0.004), 0.0013)
         sv = sdf.refine(boot.sole, sv, 2)
         shigh = sdf.to_object(f"HIGH_Sole_{side}", sv, sq)
         slow = sdf.decimated(shigh, 1800, f"Sole_{side}")
@@ -483,6 +486,42 @@ def smooth(e0: float, e1: float, x):
     return t * t * (3 - 2 * t)
 
 
+def harness_parts_on(parts, spec: dict, boots: dict, head: dict | None = None) -> None:
+    """The harness on a body (parts.body, weighted): the plates curved to the chest and back,
+    pauldrons, the fall-arrest webbing and spine hardware (harness_armour.py), the Spool, Cutter,
+    the boots' hardware, lease plate, shoulder lamp and the class's extras. parts.bone_frame
+    places it on another skeleton. `head` would size the headgear to another head (none for now)."""
+    import harness_parts as hp
+
+    frame_of = parts.bone_frame or bone_frame
+    import harness_armour as ha
+
+    # The plates curved to the torso, pauldrons, the fall-arrest webbing and the spine hardware.
+    fit = ha.fitted(parts, spec, frame_of, boots)
+    hp.spool(parts, spec, frame_of)
+    hp.cutter(parts)
+    hp.boot_hardware(parts, spec, boots)
+    # PROPOSED: no headgear. The class specs call for helmets, hoods and the Climber's head wrap
+    # (harness_parts.headgear builds them, sized to any head); they are left off for now.
+    del head
+    # The lease plate, riveted to the chest plate's lower left.
+    chest = fit["chest"]
+    p, n = chest.outer(chest.w / 2 - 0.06, chest.zc - chest.h / 2 + 0.04)
+    lease = hp.bevelled_box("Lease", (0.004, 0.06, 0.03), width=0.0015)
+    hp.place(lease, hp.frame(p + n * 0.002, n))
+    parts.add(lease, "spine_03", "Accent")
+    tag = hp.stamp("LeaseText", spec.get("lease", "CLEAR"), 0.011)
+    hp.place(tag, hp.frame(p + n * 0.0042, n))
+    parts.add(tag, "spine_03", "Stamp")
+    # The shoulder lamp in team tint, on the left pauldron.
+    p, n = fit["caps"]["l"].at(0.0, 0.35)
+    lamp = hp.bevelled_box("ShoulderLamp", (0.026, 0.04, 0.03), width=0.006)
+    hp.place(lamp, hp.frame(p + n * 0.012, n))
+    parts.add(lamp, "upperarm_l", TEAM_SLOT)
+    ha.share(lamp, "upperarm_l", "clavicle_l")
+    extras(parts, spec, fit)
+
+
 def build_mesh(name: str, spec: dict, mats: dict, rig):
     """The game mesh and the dense mesh its textures are baked from."""
     import harness_look as hl
@@ -492,46 +531,7 @@ def build_mesh(name: str, spec: dict, mats: dict, rig):
     pieces = soft_pieces(name, spec, mats)
     figure = pieces["suit"]
     parts.set_body(figure)
-    # Where the torso's surface is, measured, so the plates sit on it.
-    co = sdf.verts_of(figure)
-    band = co[(co[:, 2] > 1.3) & (co[:, 2] < 1.4) & (np.abs(co[:, 1]) < 0.06)]
-    chest_x = float(band[:, 0].max()) + 0.011  # The plate's back face on the chest
-    back_x = float(band[:, 0].min()) - 0.011
-    sel = co[(np.abs(co[:, 1]) > 0.12) & (np.abs(co[:, 1]) < 0.2) & (co[:, 2] < 1.55) & parts._torso]
-    shoulder_z = float(sel[:, 2].max()) + 0.012
-    style = spec["plate_style"]
-    hp.catch_plate(parts, "spine_03", spec["chest"], (chest_x, 0, 1.35), (1, 0, 0), style, number=spec.get("number"))
-    hp.catch_plate(parts, "spine_03", spec["back"], (back_x, 0, 1.32 if spec.get("clutter") else 1.36), (-1, 0, 0), style)
-    half = spec["shoulders"] / 2
-    for side, s in (("l", 1.0), ("r", -1.0)):
-        size = spec["shoulder"] if side == "l" or "shoulder_r" not in spec else spec["shoulder_r"]
-        normal = Vector((0, 0.35 * s, 1)).normalized()
-        hp.catch_plate(parts, f"clavicle_{side}", size, (0, 0, shoulder_z), tuple(normal), "mirror" if spec.get("oval") else style,
-                       rake=spec.get("rake", 0.0) * s, outer_y=half * s, bolts=0 if spec.get("oval") else 2)
-    hp.straps(parts, spec, chest_x - 0.012)
-    hp.spine_frame(parts, spec, back_x + 0.012)
-    hp.spool(parts, spec, bone_frame)
-    hp.cutter(parts)
-    hp.boot_hardware(parts, spec, pieces["boots"])
-    hp.headgear(parts, spec)
-    # The telemetry pack under the back plate with its Office seal, and the lease plate.
-    pack = hp.bevelled_box("Telemetry", (0.04, 0.14, 0.1), width=0.006)
-    hp.place(pack, Matrix.Translation((back_x - 0.02, 0.0, 1.2)))
-    parts.add(pack, "spine_02", "Frame" if spec["frame"] == "shell" else "Dark")
-    seal = hp.cylinder("TelemetrySeal", 0.015, 0.004, segments=16)
-    hp.place(seal, hp.frame((back_x - 0.042, 0.0, 1.2), (-1, 0, 0)))
-    parts.add(seal, "spine_02", "Seal")
-    lease = hp.bevelled_box("Lease", (0.004, 0.06, 0.03), width=0.0015)
-    hp.place(lease, Matrix.Translation((chest_x + 0.014, 0.1, 1.25)))
-    parts.add(lease, "spine_03", "Accent")
-    tag = hp.stamp("LeaseText", spec.get("lease", "CLEAR"), 0.012)
-    hp.place(tag, Matrix.Translation((chest_x + 0.017, 0.1, 1.25)))
-    parts.add(tag, "spine_03", "Stamp")
-    # The shoulder lamp in team tint.
-    lamp = hp.bevelled_box("ShoulderLamp", (0.04, 0.035, 0.03), width=0.006)
-    hp.place(lamp, Matrix.Translation((0.06, half * 0.62, 1.56)))
-    parts.add(lamp, "clavicle_l", TEAM_SLOT)
-    extras(parts, spec, chest_x, back_x)
+    harness_parts_on(parts, spec, pieces["boots"])
     # The soft gear takes its weights from the surface under it: the suit, or its boot.
     sources = {"Suit": figure, **{pieces[f"boot_{s}"].name: pieces[f"boot_{s}"] for s in "lr"}}
     for obj in parts.skinned:
@@ -551,37 +551,52 @@ def build_mesh(name: str, spec: dict, mats: dict, rig):
     return low, soft
 
 
-def extras(parts, spec: dict, chest_x: float, back_x: float) -> None:
+def extras(parts, spec: dict, fit: dict) -> None:
     """Each class's own: the Scrapper's hip clutter, the Doubler's neon tape, the Climber's wraps."""
     import harness_parts as hp
 
-    if spec.get("clutter"):
-        for i, (dx, dz) in enumerate(((0.06, 0.98), (-0.05, 0.96), (0.005, 0.9))):
-            pouch = hp.bevelled_box("Pouch", (0.085, 0.07, 0.1), width=0.015, segments=2)
-            hp.place(pouch, Matrix.Translation((dx, 0.2, dz)))
+    body = fit["body"]
+    if spec.get("clutter"):  # Pouches, a coil of chain and a wrench, hung on the left hip
+        for i, (dx, dz) in enumerate(((0.05, 0.96), (-0.055, 0.95), (0.0, 0.88))):
+            loc, n = body.side(parts.torso_x(dz) + dx, dz, 1.0)
+            if loc is None:
+                continue
+            pouch = hp.bevelled_box("Pouch", (0.045, 0.085, 0.1), width=0.012, segments=2)
+            hp.place(pouch, hp.frame(loc + n * 0.028, n))
             parts.add(pouch, "pelvis", "Strap" if i else "Accent")
-            flap = hp.bevelled_box("Flap", (0.09, 0.075, 0.03), width=0.008)
-            hp.place(flap, Matrix.Translation((dx, 0.2, dz + 0.05)))
+            flap = hp.bevelled_box("Flap", (0.05, 0.09, 0.03), width=0.008)
+            hp.place(flap, hp.frame(loc + n * 0.03 + Vector((0, 0, 0.05)), n))
             parts.add(flap, "pelvis", "Body")
-        for i in range(8):  # A coil of chain, link by link
-            a = 2 * math.pi * i / 8
-            link = ka.ring("Link", 0.012, 0.004, (0, 0, 0), axis="Y" if i % 2 else "X", segments=10, sides=6, stretch=0.012)
-            hp.place(link, Matrix.Translation((-0.06 + 0.055 * math.cos(a), 0.225, 0.92 + 0.055 * math.sin(a))))
-            parts.add(link, "pelvis", "Steel")
-        wrench = hp.bevelled_box("Wrench", (0.02, 0.012, 0.2), width=0.004)
-        hp.place(wrench, Matrix.Translation((0.08, 0.19, 0.88)) @ Matrix.Rotation(math.radians(12), 4, "X"))
-        parts.add(wrench, "pelvis", "Steel")
+        loc, n = body.side(parts.torso_x(0.9) - 0.04, 0.9, 1.0)
+        if loc is not None:
+            m = hp.frame(loc + n * 0.02, n)
+            for i in range(8):  # A coil of chain, link by link
+                a = 2 * math.pi * i / 8
+                link = ka.ring("Link", 0.011, 0.0036, (0, 0, 0), axis="Y" if i % 2 else "Z", segments=10, sides=6, stretch=0.011)
+                hp.place(link, m @ Matrix.Translation((0.0, 0.045 * math.cos(a), 0.045 * math.sin(a))))
+                parts.add(link, "pelvis", "Steel")
+        loc, n = body.side(parts.torso_x(0.9) + 0.07, 0.9, 1.0)
+        if loc is not None:
+            wrench = hp.bevelled_box("Wrench", (0.012, 0.02, 0.2), width=0.004)
+            hp.place(wrench, hp.frame(loc + n * 0.014, n) @ Matrix.Rotation(math.radians(12), 4, "X"))
+            parts.add(wrench, "pelvis", "Steel")
     if spec.get("neon"):
-        for s in (1.0, -1.0):  # The X of neon tape across the back
-            pts = [(back_x - 0.005, 0.15 * s, 1.45), (back_x - 0.012, 0.0, 1.27), (back_x - 0.005, -0.14 * s, 1.08)]
-            parts.add(hp.strap_path("Neon", pts, 0.025, 0.003, outward=lambda p: Vector((-1, 0, 0))), "spine_02", "Tape", skinned=True)
-    if spec.get("wraps"):
-        for side, s in (("l", 1.0), ("r", -1.0)):
-            for z in (0.92, 0.97, 1.02):
-                wx, wy = parts.fit(0.004, 0.245 * s, z, pad=0.003, reach=0.08)
-                wrap = hp.strap_path("Wrap", hp.ellipse(0.004, 0.245 * s, z, wx, wy, 18), 0.03, 0.004,
-                                     outward=lambda p, c=0.245 * s: Vector((p.x - 0.004, p.y - c, 0)), closed=True)
-                parts.add(wrap, f"lowerarm_{side}", "Strap")  # Rigid: the hip is nearer than the arm's far side
+        for s in (1.0, -1.0):  # The X of neon tape across the back, laid on the coverall
+            ctl = [body.back(0.15 * s, 1.45)[0], body.back(0.0, 1.27)[0], body.back(-0.14 * s, 1.08)[0]]
+            pts, nrm = body.hug([c for c in ctl if c is not None], 0.003)
+            import harness_armour as ha
+            ha.strap(parts, "Neon", pts, nrm, 0.025, 0.003, slot="Tape")
+    if spec.get("wraps"):  # Three bands of cloth round each forearm above the Spool's place
+        frame_of = bone_frame if parts.bone_frame is None else parts.bone_frame
+        for side in ("l", "r"):
+            head, tail = frame_of(f"lowerarm_{side}")
+            axis = (tail - head).normalized()
+            for t in (0.62, 0.71, 0.8):
+                o = head + (tail - head) * t
+                pts = parts.ring(o, axis, pad=0.003)
+                wrap = hp.strap_path("Wrap", pts, 0.03, 0.004, outward=lambda p, o=o, a=axis: (p - o) - a * (p - o).dot(a),
+                                     closed=True, smooth=1)
+                parts.add(wrap, f"lowerarm_{side}", "Strap")
 
 
 # Animation ------------------------------------------------------------------------------------
@@ -676,16 +691,71 @@ def takes(rig, spec: dict) -> list[dict]:
             take(rig, "Fall", 1.0, fall), take(rig, "Brace", 1.0, brace), take(rig, "Stagger", 0.6, stagger)]
 
 
-def export(path: str, rig, mesh) -> None:
-    bpy.ops.object.select_all(action="DESELECT")
-    rig.select_set(True)
-    mesh.select_set(True)
+CM = 100.0  # Blender metres to the FBX's centimetres
+
+
+def _action_curves(action):
+    """Every F-curve of an action (slotted actions keep them in channel bags)."""
+    curves = list(getattr(action, "fcurves", []) or [])
+    for layer in getattr(action, "layers", []):
+        for strip in layer.strips:
+            for bag in getattr(strip, "channelbags", []):
+                curves += list(bag.fcurves)
+    return curves
+
+
+def _scale_scene(rig, mesh, k: float) -> None:
+    """Scales the skeleton, the mesh and the takes' bone translations by k, in place."""
     bpy.context.view_layer.objects.active = rig
-    bpy.ops.export_scene.fbx(filepath=path, use_selection=True, apply_scale_options="FBX_SCALE_UNITS",
-                             object_types={"ARMATURE", "MESH"}, mesh_smooth_type="FACE", add_leaf_bones=False,
-                             primary_bone_axis="Y", secondary_bone_axis="X", armature_nodetype="NULL",
-                             bake_anim=True, bake_anim_use_all_actions=True, bake_anim_use_nla_strips=False,
-                             bake_anim_force_startend_keying=True, bake_anim_simplify_factor=0.0, path_mode="AUTO")
+    bpy.ops.object.mode_set(mode="EDIT")
+    for eb in rig.data.edit_bones:
+        eb.head *= k
+        eb.tail *= k
+    bpy.ops.object.mode_set(mode="OBJECT")
+    mesh.data.transform(Matrix.Scale(k, 4))
+    mesh.data.update()
+    for action in bpy.data.actions:
+        for fc in _action_curves(action):
+            if fc.data_path.endswith(".location"):
+                for kp in fc.keyframe_points:
+                    kp.co.y *= k
+                    kp.handle_left.y *= k
+                    kp.handle_right.y *= k
+                fc.update()
+    for pb in rig.pose.bones:
+        pb.location = pb.location * k
+
+
+def export(path: str, rig, mesh) -> None:
+    """The mesh, skeleton and takes as FBX in centimetres, Z up, the armature node at identity,
+    so that in Unreal the root bone has unit scale and no rotation and every bone's translation
+    is in centimetres (pelvis 95 cm above root along +Z), the character facing +X, its left on -Y.
+
+    The scene is written as it is in Blender's own axes (forward Y, up Z: no axis conversion on
+    the root objects) with the scene unit set to the centimetre and the data scaled by 100 for
+    the export (then put back), so the FBX's unit scale is 1 and nothing has to be scaled on
+    import. Before this, the metre-to-centimetre scale and the Y-up turn sat on the Armature node,
+    which Unreal folds into the root bone (scale 100, a 90 degree roll)."""
+    scene = bpy.context.scene
+    unit = scene.unit_settings.scale_length
+    frame = scene.frame_current
+    _scale_scene(rig, mesh, CM)
+    scene.unit_settings.scale_length = 1.0 / CM
+    try:
+        bpy.ops.object.select_all(action="DESELECT")
+        rig.select_set(True)
+        mesh.select_set(True)
+        bpy.context.view_layer.objects.active = rig
+        bpy.ops.export_scene.fbx(filepath=path, use_selection=True, apply_scale_options="FBX_SCALE_UNITS",
+                                 global_scale=1.0, axis_forward="Y", axis_up="Z", bake_space_transform=False,
+                                 object_types={"ARMATURE", "MESH"}, mesh_smooth_type="FACE", add_leaf_bones=False,
+                                 primary_bone_axis="Y", secondary_bone_axis="X", armature_nodetype="NULL",
+                                 bake_anim=True, bake_anim_use_all_actions=True, bake_anim_use_nla_strips=False,
+                                 bake_anim_force_startend_keying=True, bake_anim_simplify_factor=0.0, path_mode="AUTO")
+    finally:
+        scene.unit_settings.scale_length = unit
+        _scale_scene(rig, mesh, 1.0 / CM)
+        scene.frame_set(frame)
 
 
 def build(cls: str, out_root: str, preview_only: bool, res: int = 4096) -> dict:
@@ -790,7 +860,14 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--out", default=os.path.join(HERE, "..", "out", "characters"))
     parser.add_argument("--preview-only", action="store_true")
     parser.add_argument("--res", type=int, default=4096, help="texture size")
+    parser.add_argument("--metahuman", action="store_true", help="the gear fitted to each class's MetaHuman (harness_mh.py)")
     args = parser.parse_args(argv)
+    if args.metahuman:
+        import harness_mh
+        for cls in [args.cls] if args.cls else list(CLASSES):
+            r = harness_mh.build(cls, args.res, preview=not args.preview_only)
+            print(f"{r['name']}: {r['triangles']} triangles on {len(r['bones'])} bones, textures {sorted(r['textures'])}")
+        return 0
     for cls in [args.cls] if args.cls else list(CLASSES):
         r = build(cls, os.path.abspath(args.out), args.preview_only, args.res)
         print(f"{r['name']}: {r['triangles']} triangles, {r['height_m']} m tall, shoulders {r['shoulder_width_m']} m "

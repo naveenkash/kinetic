@@ -117,7 +117,7 @@ void AKineticCharacter::BeginPlay()
 
 namespace
 {
-TAutoConsoleVariable<int32> CVarMetaHumans(TEXT("kinetic.MetaHumans"), 0,
+TAutoConsoleVariable<int32> CVarMetaHumans(TEXT("kinetic.MetaHumans"), 1,
                                            TEXT("1: play each class as its MetaHuman when it is built, retargeted and fitted"));
 }
 

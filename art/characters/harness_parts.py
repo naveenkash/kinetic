@@ -46,6 +46,60 @@ class Parts:
         self.body = None         # The suit, once made and weighted in the rest pose: straps are sized to it
         self._co = None
         self._torso = None
+        self.bone_frame = None   # (head, tail) of a bone by name, when the gear goes on another skeleton
+        self.bone_map = {}       # This skeleton's bone names for the ones the gear is written for
+
+    def limb_point(self, bone: str, z: float, default):
+        """Where a limb's bone passes height z (x, y): a strap round the thigh is centred on it."""
+        if self.bone_frame is None:
+            return default
+        head, tail = self.bone_frame(bone)
+        t = (head.z - z) / max(head.z - tail.z, 1e-6)
+        q = head + (tail - head) * t
+        return float(q.x), float(q.y)
+
+    def ring(self, origin, axis, pad: float = 0.004, half: float = 0.012, reach: float = 0.12, n: int = 24,
+             torso: bool = False, side: float = 0.0):
+        """A closed loop round the body's cross-section through `origin` across `axis` (a wrap
+        round a forearm at any angle, a belt, a leg loop), `pad` off the surface: n points. With
+        `torso` only the torso counts (not the arms beside it); with `side` only that side of the
+        body (+1 left, -1 right: a thigh, not its neighbour)."""
+        import numpy as np
+        o, a = np.asarray(origin, float), np.asarray(axis, float)
+        a = a / np.linalg.norm(a)
+        u = np.cross(a, (0.0, 0.0, 1.0) if abs(a[2]) < 0.9 else (1.0, 0.0, 0.0))
+        u /= np.linalg.norm(u)
+        v = np.cross(a, u)
+        rel = self._co - o
+        keep = (np.abs(rel @ a) < half) & (np.linalg.norm(rel - np.outer(rel @ a, a), axis=1) < reach)
+        if torso:
+            keep &= self._torso
+        if side:
+            keep &= self._co[:, 1] * side > 0.004
+        pts = rel[keep]
+        ang = np.arctan2(pts @ v, pts @ u)
+        rad = np.hypot(pts @ u, pts @ v)
+        bins = np.full(n, np.nan)
+        idx = ((ang + np.pi) / (2 * np.pi) * n).astype(int) % n
+        for i in range(n):
+            if np.any(idx == i):
+                bins[i] = rad[idx == i].max()
+        if np.all(np.isnan(bins)):
+            bins[:] = 0.05
+        good = ~np.isnan(bins)
+        k = np.arange(n)
+        bins = np.interp(k, k[good], bins[good], period=n)
+        bins = np.maximum(bins, np.roll(bins, 1) * 0.5 + np.roll(bins, -1) * 0.5)  # No dips between samples
+        theta = (k + 0.5) / n * 2 * np.pi - np.pi
+        return [Vector(o + (u * np.cos(t) + v * np.sin(t)) * (r + pad)) for t, r in zip(theta, bins)]
+
+    def torso_x(self, z: float) -> float:
+        """The middle of the torso front to back at height z."""
+        import numpy as np
+        co = self._co
+        keep = (np.abs(co[:, 2] - z) < 0.02) & self._torso & (np.abs(co[:, 1]) < 0.12)
+        pts = co[keep]
+        return float((pts[:, 0].max() + pts[:, 0].min()) / 2) if len(pts) else 0.0
 
     def set_body(self, body) -> None:
         import numpy as np
@@ -77,6 +131,7 @@ class Parts:
 
     def add(self, obj, bone: str | None, slot: str | None = None, skinned: bool = False):
         import harness_look as hl
+        bone = self.bone_map.get(bone, bone)
         for m in list(obj.modifiers):  # Solidified and bevelled shapes, as they will be joined
             bpy.context.view_layer.objects.active = obj
             bpy.ops.object.modifier_apply(modifier=m.name)
@@ -420,7 +475,8 @@ def spool(parts: Parts, spec: dict, bone_frame):
 
 def cutter(parts: Parts):
     """The Cutter in its sheath on the left thigh's outer face: the sheath, the guard, the grip."""
-    m = frame((0.0, 0.1 + parts.fit(0.006, 0.1, 0.7, reach=0.17)[1] + 0.014, 0.7), (0, 0, -1), up=(1, 0, 0))
+    cx, cy = parts.limb_point("thigh_l", 0.7, (0.006, 0.1))
+    m = frame((cx - 0.006, cy + parts.fit(cx, cy, 0.7, reach=0.17)[1] + 0.014, 0.7), (0, 0, -1), up=(1, 0, 0))
     sheath = bevelled_box("Sheath", (0.26, 0.05, 0.022), width=0.006, segments=2)
     place(sheath, m @ Matrix.Translation((0.06, 0, 0)))
     parts.add(sheath, "thigh_l", "Boot")
@@ -431,9 +487,10 @@ def cutter(parts: Parts):
     place(grip, m @ Matrix.Translation((-0.135, 0, 0)))
     parts.add(grip, "thigh_l", "Strap")
     for z in (0.75, 0.65):  # The thigh straps that hold it
-        lx, ly = parts.fit(0.006, 0.1, z, reach=0.17)
-        loop = strap_path("SheathStrap", ellipse(0.006, 0.1, z, lx, ly, 24), 0.02, 0.004,
-                          outward=lambda p: Vector((p.x - 0.006, p.y - 0.1, 0)), closed=True)
+        cx, cy = parts.limb_point("thigh_l", z, (0.006, 0.1))
+        lx, ly = parts.fit(cx, cy, z, reach=0.17)
+        loop = strap_path("SheathStrap", ellipse(cx, cy, z, lx, ly, 24), 0.02, 0.004,
+                          outward=lambda p, c=(cx, cy): Vector((p.x - c[0], p.y - c[1], 0)), closed=True)
         parts.add(loop, "thigh_l", "Strap")
 
 
@@ -467,9 +524,9 @@ def boot_hardware(parts: Parts, spec: dict, boots: dict):
                 for k in (1.0, -1.0):
                     yl = 0.019 * k * s
                     if z is None:
-                        start = (x, boot.y0 + yl, 0.22)
+                        start = boot.world((x, boot.y0 + yl, 0.22))
                     else:
-                        start = (0.12, boot.y0 + yl, z)
+                        start = boot.world((0.12, boot.y0 + yl, z))
                     p, n = on_surface(field, start)
                     row.append((p, n))
                     eyelet = ka.ring("Eyelet", 0.0034, 0.0011, (0, 0, 0), axis="X", segments=12, sides=6)
@@ -495,7 +552,7 @@ def boot_hardware(parts: Parts, spec: dict, boots: dict):
             # The bow at the top: two loops and two tails.
             top = holes[-1][0][0].lerp(holes[-1][1][0], 0.5)
             p, n = on_surface(field, top, lift=0.004)
-            fwd = Vector((1, 0, 0)) - n * n.x
+            fwd = Vector(boot.R[:, 0]) - n * n.dot(Vector(boot.R[:, 0]))
             for k in (1.0, -1.0):
                 loop = [p + Vector((0, k * s * a, 0)) * 0.02 + fwd.normalized() * b * 0.012 + n * 0.003
                         for a, b in ((0.0, 0.0), (0.5, 0.6), (1.0, 0.4), (0.9, -0.3), (0.4, -0.2), (0.0, 0.0))]
@@ -510,7 +567,7 @@ def boot_hardware(parts: Parts, spec: dict, boots: dict):
             for x in (0.055, 0.1):
                 pts = []
                 for phi in np.linspace(-1.35, 1.45, 15):
-                    start = (x, boot.y0 + s * 0.09 * math.sin(phi), 0.06 + 0.09 * math.cos(phi))
+                    start = boot.world((x, boot.y0 + s * 0.09 * math.sin(phi), 0.06 + 0.09 * math.cos(phi)))
                     p, n = on_surface(field, start, lift=0.0028)
                     pts.append(p)
                 strap = strap_path("ShoeStrap", pts, 0.022, 0.0035, outward=lambda q, f=field: on_surface(f, q)[1], smooth=1)
@@ -518,20 +575,21 @@ def boot_hardware(parts: Parts, spec: dict, boots: dict):
                 strap["skin_from"] = source
         if boot.style == "tall":
             # The hard shin shell: a plate conforming to the shaft's front.
-            shell = conforming_plate(field, lambda a, z: (-0.012 + 0.2 * math.cos(a), boot.y0 + 0.2 * math.sin(a) * s, z),
+            shell = conforming_plate(field, lambda a, z: boot.world((-0.012 + 0.2 * math.cos(a), boot.y0 + 0.2 * math.sin(a) * s, z)),
                                      np.radians(np.linspace(-62, 62, 17)), np.linspace(0.14, boot.top - 0.05, 18), 0.0035, 0.007)
             parts.add(shell, f"calf_{side}", "Plate")
-            heel = conforming_plate(field, lambda a, z: (-0.2 * math.cos(a) - 0.01, boot.y0 + 0.2 * math.sin(a) * s, z),
+            heel = conforming_plate(field, lambda a, z: boot.world((-0.2 * math.cos(a) - 0.01, boot.y0 + 0.2 * math.sin(a) * s, z)),
                                     np.radians(np.linspace(-48, 48, 13)), np.linspace(boot.sole_h + 0.006, 0.095, 9), 0.0015, 0.0045)
             parts.add(heel, bone, "Steel")
             for z in (0.27, boot.top - 0.1):  # Buckled straps round the shaft
-                ring_pts = [on_surface(field, (-0.012 + 0.2 * math.cos(a), boot.y0 + 0.2 * math.sin(a), z), lift=0.003)[0]
+                ring_pts = [on_surface(field, boot.world((-0.012 + 0.2 * math.cos(a), boot.y0 + 0.2 * math.sin(a), z)), lift=0.003)[0]
                             for a in np.linspace(0, 2 * math.pi, 28, endpoint=False)]
-                c = Vector((-0.012, boot.y0, z))
+                c = Vector(boot.world((-0.012, boot.y0, z)))
                 strap = strap_path("ShaftStrap", ring_pts, 0.03, 0.0035, outward=lambda q, c=c: Vector((q.x - c.x, q.y - c.y, 0)),
                                    closed=True, smooth=1)
-                parts.add(strap, f"calf_{side}", "Strap")
-                p, n = on_surface(field, (-0.012, boot.y0 + 0.2 * s, z), lift=0.007)
+                hi_vis = spec.get("reflective") and z < 0.3  # The Breaker's shin band
+                parts.add(strap, f"calf_{side}", "Reflective" if hi_vis else "Strap")
+                p, n = on_surface(field, boot.world((-0.012, boot.y0 + 0.2 * s, z)), lift=0.007)
                 buckle(parts, f"calf_{side}", frame(p, n), 0.027, "Accent")
 
 
@@ -567,7 +625,29 @@ def conforming_plate(field, at, angles, heights, lift: float, thickness: float):
     return obj
 
 
-def headgear(parts: Parts, spec: dict):
+HEAD_CAP = ((-0.005, 0.0, 1.695), (0.106, 0.081, 0.124))  # The stand-in head above the eyes: centre, radii
+
+
+def headgear(parts: Parts, spec: dict, fit: dict | None = None):
+    """The class headgear on the stand-in head; with `fit` (another head's cap above the eyes:
+    centre and radii), stretched to sit on that head instead."""
+    first = len(parts.rigid)
+    _headgear(parts, spec, ridge=fit is None)
+    if fit is None:
+        return
+    import numpy as np
+    c0, r0 = (np.array(x) for x in HEAD_CAP)
+    c1, r1 = np.asarray(fit["centre"], float), np.asarray(fit["radii"], float)
+    k = r1 / r0
+    for obj in parts.rigid[first:]:
+        co = np.empty(len(obj.data.vertices) * 3)
+        obj.data.vertices.foreach_get("co", co)
+        co = c1 + (co.reshape(-1, 3) - c0) * k
+        obj.data.vertices.foreach_set("co", co.ravel())
+        obj.data.update()
+
+
+def _headgear(parts: Parts, spec: dict, ridge: bool = True):
     kind = spec.get("headgear", "helmet")
     centre = Vector((-0.004, 0, 1.722))
     if kind == "wrap":
@@ -593,7 +673,7 @@ def headgear(parts: Parts, spec: dict):
     place(shell, Matrix.Translation(centre))
     parts.add(shell, "head", "Helmet")
     # The ridge down the crown, the brim or the visor, the rivets of the suspension.
-    if kind in ("square", "salvage"):  # A hard hat's moulded ridge down the crown
+    if kind in ("square", "salvage") and ridge:  # A hard hat's moulded ridge down the crown
         ridge = bmesh.new()
         bmesh.ops.create_uvsphere(ridge, u_segments=24, v_segments=12, radius=1.0)
         for vert in ridge.verts:
@@ -637,27 +717,32 @@ def straps(parts: Parts, spec: dict, chest_x: float):
     w = spec.get("strap_width", 0.05)
     out = lambda p: Vector((p.x, p.y, 0.0)) if abs(p.x) > 0.001 or abs(p.y) > 0.001 else Vector((1, 0, 0))
     # The waist belt and its buckle.
-    wx, wy = parts.fit(0.0, 0.0, 1.03, reach=0.3)
-    belt = strap_path("Belt", ellipse(0.0, 0, 1.03, wx, wy, 32), w, 0.006, outward=out, closed=True)
+    bx0 = parts.torso_x(1.03)
+    wx, wy = parts.fit(bx0, 0.0, 1.03, reach=0.3)
+    belt = strap_path("Belt", ellipse(bx0, 0, 1.03, wx, wy, 32), w, 0.006,
+                      outward=lambda p: Vector((p.x - bx0, p.y, 0.0)), closed=True)
     parts.add(belt, "pelvis", "Strap", skinned=True)
     belt["skin_bones"] = ["pelvis", "spine_01"]  # A belt rides the hips, not the thighs
-    buckle(parts, "pelvis", Matrix.Translation((wx + 0.006, 0, 1.03)), w * 0.9)
+    buckle(parts, "pelvis", Matrix.Translation((bx0 + wx + 0.006, 0, 1.03)), w * 0.9)
     # The chest cross: two straps from each shoulder over the chest plate's edges to the belt.
     for s in (1.0, -1.0):
         fx = lambda z: parts.fit(0.0, 0.0, z, reach=0.3)[0]
         pts = [(0.03, 0.15 * s, 1.47), (fx(1.4), 0.11 * s, 1.4), (chest_x + 0.008, 0.02 * s, 1.24),
                (fx(1.1), -0.09 * s, 1.1), (fx(1.04) * 0.9, -0.13 * s, 1.04)]
+        if parts.bone_frame is not None:  # Under the chest plate, never through it
+            pts = [(min(x, chest_x + 0.008) if 1.2 < z < 1.5 else x, y, z) for x, y, z in pts]
         parts.add(strap_path("ChestCross", pts, w * 0.8, 0.005, outward=out), "spine_03", "Strap", skinned=True)
         bx = lambda z: -parts.fit(0.0, 0.0, z, reach=0.3)[0]
         back = [(0.03, 0.15 * s, 1.47), (-0.04, 0.15 * s, 1.47), (bx(1.36), 0.11 * s, 1.36), (bx(1.06), 0.11 * s, 1.06)]
         parts.add(strap_path("ShoulderStrap", back, w * 0.8, 0.005, outward=out), "spine_03", "Strap", skinned=True)
     # The leg loops.
     for side, s in (("l", 1.0), ("r", -1.0)):
-        lx, ly = parts.fit(0.006, 0.1 * s, 0.82, reach=0.17)
-        loop = strap_path("LegLoop", ellipse(0.006, 0.1 * s, 0.82, lx, ly, 24, tilt=0.02), w * 0.7, 0.005,
-                          outward=lambda p, c=0.1 * s: Vector((p.x - 0.006, p.y - c, 0)), closed=True)
+        cx, cy = parts.limb_point(f"thigh_{side}", 0.82, (0.006, 0.1 * s))
+        lx, ly = parts.fit(cx, cy, 0.82, reach=0.17)
+        loop = strap_path("LegLoop", ellipse(cx, cy, 0.82, lx, ly, 24, tilt=0.02), w * 0.7, 0.005,
+                          outward=lambda p, c=(cx, cy): Vector((p.x - c[0], p.y - c[1], 0)), closed=True)
         parts.add(loop, f"thigh_{side}", "Strap")
-        buckle(parts, f"thigh_{side}", Matrix.Translation((0.006 + lx + 0.004, 0.1 * s, 0.82)), w * 0.6)
+        buckle(parts, f"thigh_{side}", Matrix.Translation((cx + lx + 0.004, cy, 0.82)), w * 0.6)
 
 
 def spine_frame(parts: Parts, spec: dict, back_x: float):
@@ -680,6 +765,9 @@ def spine_frame(parts: Parts, spec: dict, back_x: float):
     length = {"rails": 0.6, "short": 0.45, "half": 0.6}[frame_kind]
     rails = (0.07,) if frame_kind == "half" else (-0.07, 0.07)
     z0 = 0.98
+    if parts.bone_frame is not None:  # Pelvis to the base of the neck on another body
+        neck = parts.bone_frame("neck_01")[0].z
+        length *= (neck + 0.02 - z0) / 0.6
     for y in rails:
         rail = bevelled_box("Rail", (0.025, 0.025, length), width=0.004)
         place(rail, Matrix.Translation((x, y, z0 + length / 2)))

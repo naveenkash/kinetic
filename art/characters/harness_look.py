@@ -338,14 +338,14 @@ def suit_fabric(name: str, spec: dict, layout: dict):
     """The coverall's cloth. `layout` (harness_body.Suit.layout) gives the seams' places in the
     rest pose."""
     g = Graph(name)
-    body = spec["colours"]["Body"][0]
+    body = spec.get("workwear", spec["colours"]["Body"][0])
     thread = spec.get("thread", "#8C7A5A")
     wear = spec.get("wear", 0.5)
     x, y, z = g.xyz(g.P)
     ay = g.math("ABSOLUTE", y)
     torso = g.smooth(ay, 0.215, 0.195)
     # Seams: the side and shoulder line, the waist, the back yoke, the placket, armholes, cuffs, hems.
-    h = plane_seam(g, (1, 0, 0), -0.004, g.smooth(z, 1.58, 1.54))
+    h = plane_seam(g, (1, 0, 0), layout.get("side_x", -0.004), g.smooth(z, 1.58, 1.54))
     h = g.add(h, plane_seam(g, (0, 0, 1), 1.035, torso))
     h = g.add(h, plane_seam(g, (0, 0, 1), 1.385, g.mul(g.smooth(x, -0.01, -0.03), g.smooth(ay, 0.16, 0.14))))
     front = g.mul(g.smooth(x, 0.03, 0.05), region(g, z, 0.86, 1.53))
@@ -379,6 +379,16 @@ def suit_fabric(name: str, spec: dict, layout: dict):
     base = g.mix(g.lerp(mottle, 0.3, 0.7), shade(body, 0.86), shade(body, 1.1))
     up = g.smooth(g.xyz(g.N)[2], 0.4, 0.95)
     base = g.mix(g.mul(up, 0.18 * (0.4 + wear)), base, shade(body, 1.35))
+    bands = None  # Retro-reflective tape sewn on (the Breaker's hi-vis)
+    for z0, z1 in spec.get("reflective", ()):
+        b = region(g, z, z0, z1, soft=0.0015)
+        if z0 > 0.9:
+            b = g.mul(b, torso)
+        bands = b if bands is None else g.math("MAXIMUM", bands, b)
+    if bands is not None:
+        beads = g.noise(3000.0, 1.0, 0.5)
+        base = g.mix(bands, base, g.mix(beads, "#B9BDC0", "#D4D8DA"))
+        h = g.add(h, g.mul(bands, 0.0003), g.mul(g.mul(bands, beads), 0.00002))
     grime = g.attr("grime")
     dirt = spec.get("dirt", "#3A3026")
     base = g.mix(g.mul(grime, 0.55 + 0.3 * wear), base, dirt)
@@ -388,6 +398,8 @@ def suit_fabric(name: str, spec: dict, layout: dict):
     stitch_col = g.smooth(seams, 0.0003, 0.00042)
     base = g.mix(g.mul(stitch_col, 0.4), base, thread)
     rough = g.add(0.84, g.mul(mottle, 0.1), g.mul(grime, -0.12))
+    if bands is not None:
+        rough = g.mixf(bands, rough, 0.35)
     return g.finish(base, rough, 0.0, h)
 
 

@@ -56,7 +56,7 @@ class Suit:
     """The coverall's field in the A-pose, and what the materials and the gear need to know
     about it (the boot top, the patches). `spec` is the class's entry in harness.CLASSES."""
 
-    def __init__(self, spec: dict, bones):
+    def __init__(self, spec: dict, bones, apose: bool = True):
         self.spec = spec
         self.k = k = spec["bulk"]
         limb = spec.get("limb", 1.0)
@@ -71,7 +71,7 @@ class Suit:
         self.knees = suit.get("knee_pads", True)
         self.folds = suit.get("folds", 1.0)
         self.shoulder = suit.get("shoulder", 1.0)  # The deltoid's breadth (the Climber's is slight)
-        self.bones = bone_table(apose_bones(bones))
+        self.bones = bone_table(apose_bones(bones) if apose else bones)
         w, d = self.width, k
         e = 0.008 * (ease - 1.0)  # Cloth ease beyond the loose default (negative: fitted)
         rows = [  # z, cx, cy, front, back, left, right, n: the torso's sections, clothed
@@ -515,10 +515,19 @@ class Boot:
     """A boot on the rest-pose foot: the upper (a last shape along the foot, the shaft up to the
     boot top round the tucked trouser), the padded collar, toe cap and heel counter; and its sole
     with the welt, the heel and the tread. Styles: work (laced leather), climb (soft shoe with a
-    rubber rand), hitop (canvas with a rubber toe), tall (the Breaker's knee boot)."""
+    rubber rand), hitop (canvas with a rubber toe), tall (the Breaker's knee boot).
 
-    def __init__(self, side: str, spec: dict, suit: Suit, style: str):
+    The boot is designed on a canonical foot (ankle over (0, +-0.1, 0), toes along +X, the
+    ground at z 0). `place` = (origin, axes, scale) puts it on any foot: a canonical point q goes
+    to origin + axes @ (q * scale). `fit(z)` is the least shaft radius at canonical height z (the
+    leg and trouser it has to close round)."""
+
+    def __init__(self, side: str, spec: dict, suit: Suit, style: str, place=None, fit=None, low_widest: bool = False):
         self.s = s = 1.0 if side == "l" else -1.0
+        if place is None:
+            place = (np.zeros(3), np.eye(3), np.ones(3))
+        self.o, self.R, self.k = (np.asarray(x, float) for x in place)
+        self.fit = fit
         self.y0 = 0.1 * s
         self.style = style
         self.top = spec.get("boot_top", 0.2)
@@ -537,6 +546,9 @@ class Boot:
             (0.210, 0.049, 0.002, 0.023, 0.019, 0.043, 0.037, 2.4),
             (0.236, 0.047, 0.000, 0.019, 0.017, 0.027, 0.023, 2.2),
         ]
+        if low_widest:  # Widest near the sole, for a real foot that is broadest where it meets the ground
+            rows = [(x, cz - min(0.016, dn - 0.014), cy, up + min(0.016, dn - 0.014), dn - min(0.016, dn - 0.014), o, i, n + 0.6)
+                    for x, cz, cy, up, dn, o, i, n in rows]
         if style == "climb":  # A slipper-shaped shoe, low and close
             rows = [(x, cz - 0.004, cy, up * 0.9, dn * 0.95, o * 0.95, i * 0.95, n) for x, cz, cy, up, dn, o, i, n in rows]
         rows = [(x, cz + lift, cy, up, dn, o * wide, i * wide, n) for x, cz, cy, up, dn, o, i, n in rows]
@@ -551,12 +563,31 @@ class Boot:
             f = (z - 0.12) / max(top - 0.12, 1e-3)
             calf = 0.012 * math.sin(math.pi * min(1.0, (z - 0.12) / 0.3)) if tuck else 0.0
             r = 0.046 + (r_top - 0.046) * f + calf
+            if fit is not None:
+                r = max(r, fit(z))
             shaft.append((z, -0.018 + 0.006 * f, 0.0, r, r + 0.002, r * 0.95, r * 0.95, 2.0 + (0.5 if tuck else 0.0)))
         shaft = sorted({round(row[0], 4): row for row in shaft if row[0] <= top + 1e-6}.values())
+        if fit is not None:
+            shaft = [(z, cx, cy, max(a, fit(z) + 0.003), max(b, fit(z) + 0.006), max(c, fit(z)), max(d, fit(z)), n)
+                     for z, cx, cy, a, b, c, d, n in shaft]
         self.shaft = sdf.Loft((0, self.y0, 0), np.eye(3), shaft, round_ends=0.006)
-        self.r_top = r_top
+        self.r_top = max(r_top, shaft[-1][3])
+
+    def local(self, p):
+        """World points into the canonical boot frame."""
+        return ((p - self.o) @ self.R) / self.k
+
+    def world(self, q):
+        """A canonical boot point into the world."""
+        return self.o + self.R @ (np.asarray(q, float) * self.k)
 
     def upper(self, p):
+        return self._upper(self.local(p)) * self.k.min()
+
+    def sole(self, p):
+        return self._sole(self.local(p)) * self.k.min()
+
+    def _upper(self, p):
         x, y, z = p[:, 0], p[:, 1], p[:, 2]
         d = smin(self.foot(p), self.shaft(p), 0.02)
         top = self.top
@@ -589,7 +620,7 @@ class Boot:
         level[:, 2] = P[:, 0]  # The section's centre height: its widest
         return self.foot(level) - (0.0045 if self.style in ("work", "tall") else 0.003)
 
-    def sole(self, p):
+    def _sole(self, p):
         x, y, z = p[:, 0], p[:, 1], p[:, 2]
         h = self.sole_h
         d = smax(self.footprint(p), np.abs(z - h / 2) - h / 2, 0.003 if self.style != "climb" else 0.004)
@@ -611,5 +642,10 @@ class Boot:
             groove = np.minimum(np.maximum(z - depth, (t - 0.16) * pitch), np.maximum(z - depth, np.abs(yl) - 0.004))
         return smax(d, -groove, 0.0012)
 
-    def bounds(self):
-        return (-0.11, self.y0 - 0.08, -0.002), (0.26, self.y0 + 0.08, self.top + 0.02)
+    def bounds(self, top: float | None = None):
+        """The world box round the boot (or round its sole, up to canonical height `top`)."""
+        hi_z = self.top + 0.02 if top is None else top
+        corners = np.array([[x, y, z] for x in (-0.11, 0.26) for y in (self.y0 - 0.08, self.y0 + 0.08)
+                            for z in (-0.002, hi_z)])
+        pts = np.array([self.world(c) for c in corners])
+        return pts.min(0), pts.max(0)
