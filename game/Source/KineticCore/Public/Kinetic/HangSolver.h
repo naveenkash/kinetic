@@ -65,6 +65,6 @@ struct FHangSolverSettings
 	int MaxPositionIterations = 100;
 };
 
-void SolveHangLines(std::vector<FHangBody>& Bodies, std::vector<FHangLine>& Lines, const FSpoolGlobals& Globals,
+KINETICCORE_API void SolveHangLines(std::vector<FHangBody>& Bodies, std::vector<FHangLine>& Lines, const FSpoolGlobals& Globals,
                     double Dt, const FHangSolverSettings& Settings = {});
 } // namespace Kinetic

@@ -77,6 +77,6 @@ struct FDivergence
 // Compares two recordings tick by tick. ToleranceM 0 means bit-identical positions and
 // velocities; above 0, positions within the tolerance count as equal. Only the listed bodies
 // count when BodyIds is not empty; each must be in every tick of both.
-FDivergence Compare(const FDeterminismRecording& A, const FDeterminismRecording& B, double ToleranceM,
+KINETICCORE_API FDivergence Compare(const FDeterminismRecording& A, const FDeterminismRecording& B, double ToleranceM,
                     const std::vector<int>& BodyIds = {});
 } // namespace Kinetic

@@ -13,6 +13,7 @@
 #include "Kinetic/Units.h"
 #include "KineticLadder.h"
 #include "KineticRulesSubsystem.h"
+#include "KineticSpoolWorld.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogKineticCharacter, Log, All);
 
@@ -38,6 +39,8 @@ AKineticCharacter::AKineticCharacter()
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
 	Movement->NavAgentProps.bCanCrouch = true;
 	Movement->bRunPhysicsWithNoController = true;  // Tests and bots move it without a player
+	NormalFriction = Movement->GroundFriction;
+	NormalBraking = Movement->BrakingDecelerationWalking;
 }
 
 bool AKineticCharacter::ApplyHarness()
@@ -76,15 +79,44 @@ void AKineticCharacter::BeginPlay()
 void AKineticCharacter::SetSprinting(bool bSprint)
 {
 	bSprinting = bSprint;
-	GetCharacterMovement()->MaxWalkSpeed = Cm(bSprinting ? SprintSpeedM : RunSpeedM);
+	if (!bUnderLine)
+	{
+		GetCharacterMovement()->MaxWalkSpeed = Cm(bSprinting ? SprintSpeedM : RunSpeedM);
+	}
 }
+
+void AKineticCharacter::SetUnderLine(bool bLine, bool bBraced)
+{
+	bHeldStill = bBraced;
+	if (bLine == bUnderLine)
+	{
+		return;
+	}
+	bUnderLine = bLine;
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	if (bLine)
+	{
+		// The skid is the line's acceleration and nothing else: no friction, no speed limit.
+		Movement->GroundFriction = 0.0f;
+		Movement->BrakingDecelerationWalking = 0.0f;
+		Movement->MaxWalkSpeed = 5000.0f;
+	}
+	else
+	{
+		Movement->GroundFriction = NormalFriction;
+		Movement->BrakingDecelerationWalking = NormalBraking;
+		Movement->MaxWalkSpeed = Cm(bSprinting ? SprintSpeedM : RunSpeedM);
+	}
+}
+
+void AKineticCharacter::FirePressed() { OnFire(); }
 
 void AKineticCharacter::Move(const FVector2D& Axis)
 {
 	ForwardInput = static_cast<float>(Axis.Y);
-	if (IsClimbing())
+	if (IsClimbing() || bUnderLine || bHeldStill)
 	{
-		return;  // On a ladder, forward is up: UpdateLadder reads ForwardInput
+		return;  // On a ladder forward is up (UpdateLadder reads it); under a line or braced, no walking
 	}
 	const FRotator Yaw(0.0, GetControlRotation().Yaw, 0.0);
 	AddMovementInput(FRotationMatrix(Yaw).GetUnitAxis(EAxis::X), static_cast<float>(Axis.Y));
@@ -201,6 +233,13 @@ void AKineticCharacter::BuildInput()
 	JumpAction = Action(TEXT("IA_Jump"), EInputActionValueType::Boolean);
 	SprintAction = Action(TEXT("IA_Sprint"), EInputActionValueType::Boolean);
 	CrouchAction = Action(TEXT("IA_Crouch"), EInputActionValueType::Boolean);
+	FireAction = Action(TEXT("IA_Fire"), EInputActionValueType::Boolean);
+	SelfDogAction = Action(TEXT("IA_SelfDog"), EInputActionValueType::Boolean);
+	ModeActions[0] = Action(TEXT("IA_ModeHaul"), EInputActionValueType::Boolean);
+	ModeActions[1] = Action(TEXT("IA_ModeJack"), EInputActionValueType::Boolean);
+	ModeActions[2] = Action(TEXT("IA_ModeHang"), EInputActionValueType::Boolean);
+	ReleaseAction = Action(TEXT("IA_Release"), EInputActionValueType::Boolean);
+	DrawAction = Action(TEXT("IA_Draw"), EInputActionValueType::Boolean);
 	InputContext = NewObject<UInputMappingContext>(this, TEXT("IMC_Kinetic"));
 
 	// W A S D onto one 2D axis: W and S drive Y (swizzled), A and D drive X; S and A negated.
@@ -227,6 +266,14 @@ void AKineticCharacter::BuildInput()
 	InputContext->MapKey(JumpAction, EKeys::SpaceBar);
 	InputContext->MapKey(SprintAction, EKeys::LeftShift);
 	InputContext->MapKey(CrouchAction, EKeys::C);
+	// The Spool (the browser client's controls).
+	InputContext->MapKey(FireAction, EKeys::LeftMouseButton);
+	InputContext->MapKey(SelfDogAction, EKeys::E);
+	InputContext->MapKey(ModeActions[0], EKeys::One);
+	InputContext->MapKey(ModeActions[1], EKeys::Two);
+	InputContext->MapKey(ModeActions[2], EKeys::Three);
+	InputContext->MapKey(ReleaseAction, EKeys::R);
+	InputContext->MapKey(DrawAction, EKeys::RightMouseButton);
 }
 
 void AKineticCharacter::NotifyControllerChanged()
@@ -262,6 +309,64 @@ void AKineticCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	Input->BindAction(SprintAction, ETriggerEvent::Completed, this, &AKineticCharacter::OnSprint);
 	Input->BindAction(CrouchAction, ETriggerEvent::Started, this, &AKineticCharacter::OnCrouch);
 	Input->BindAction(CrouchAction, ETriggerEvent::Completed, this, &AKineticCharacter::OnCrouch);
+	Input->BindAction(FireAction, ETriggerEvent::Started, this, &AKineticCharacter::OnFire);
+	Input->BindAction(SelfDogAction, ETriggerEvent::Started, this, &AKineticCharacter::OnSelfDog);
+	Input->BindAction(ModeActions[0], ETriggerEvent::Started, this, &AKineticCharacter::OnMode, ELineModeInput::Haul);
+	Input->BindAction(ModeActions[1], ETriggerEvent::Started, this, &AKineticCharacter::OnMode, ELineModeInput::Jack);
+	Input->BindAction(ModeActions[2], ETriggerEvent::Started, this, &AKineticCharacter::OnMode, ELineModeInput::Hang);
+	Input->BindAction(ReleaseAction, ETriggerEvent::Started, this, &AKineticCharacter::OnRelease);
+	Input->BindAction(DrawAction, ETriggerEvent::Started, this, &AKineticCharacter::OnDraw);
+	Input->BindAction(DrawAction, ETriggerEvent::Completed, this, &AKineticCharacter::OnDraw);
+}
+
+void AKineticCharacter::OnFire()
+{
+	if (UKineticSpoolWorld* Spool = GetWorld()->GetSubsystem<UKineticSpoolWorld>())
+	{
+		if (bDrawn)
+		{
+			Spool->Swing(this);  // With the Cutter out, the button swings it (05 4.1)
+		}
+		else
+		{
+			Spool->FireDog(this);
+		}
+	}
+}
+
+void AKineticCharacter::OnSelfDog()
+{
+	if (UKineticSpoolWorld* Spool = GetWorld()->GetSubsystem<UKineticSpoolWorld>())
+	{
+		Spool->SelfDogNext(this);
+	}
+}
+
+void AKineticCharacter::OnMode(ELineModeInput Mode)
+{
+	if (UKineticSpoolWorld* Spool = GetWorld()->GetSubsystem<UKineticSpoolWorld>())
+	{
+		Spool->SelectMode(this, Mode == ELineModeInput::Haul   ? Kinetic::ELineMode::Haul
+		                        : Mode == ELineModeInput::Jack ? Kinetic::ELineMode::Jack
+		                                                       : Kinetic::ELineMode::Hang);
+	}
+}
+
+void AKineticCharacter::OnRelease()
+{
+	if (UKineticSpoolWorld* Spool = GetWorld()->GetSubsystem<UKineticSpoolWorld>())
+	{
+		Spool->Release(this);
+	}
+}
+
+void AKineticCharacter::OnDraw(const FInputActionValue& Value)
+{
+	bDrawn = Value.Get<bool>();
+	if (UKineticSpoolWorld* Spool = GetWorld()->GetSubsystem<UKineticSpoolWorld>())
+	{
+		Spool->SetCutterDrawn(this, bDrawn);
+	}
 }
 
 void AKineticCharacter::OnMove(const FInputActionValue& Value) { Move(Value.Get<FVector2D>()); }
@@ -295,6 +400,11 @@ void AKineticCharacter::OnSprint(const FInputActionValue& Value) { SetSprinting(
 
 void AKineticCharacter::OnCrouch(const FInputActionValue& Value)
 {
+	// C is the brace for the classes that have one (05 5.4: crouch while still), a crouch otherwise.
+	if (UKineticSpoolWorld* Spool = GetWorld()->GetSubsystem<UKineticSpoolWorld>())
+	{
+		Spool->SetBrace(this, Value.Get<bool>());
+	}
 	if (Value.Get<bool>())
 	{
 		Crouch();

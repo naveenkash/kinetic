@@ -113,5 +113,5 @@ private:
 // the Drop (game-modes 2.2). Its siren leads by 5 s.
 enum class EMatchMode : uint8_t { Scrap, Claim, Haul, FreeScrap };
 KINETICCORE_API double MidMatchEventTime(EMatchMode Mode, double RoundStart, double RoundSeconds);
-double RoundSecondsOf(EMatchMode Mode);  // The round clock (a Haul half), Drop included, s
+KINETICCORE_API double RoundSecondsOf(EMatchMode Mode);  // The round clock (a Haul half), Drop included, s
 } // namespace Kinetic

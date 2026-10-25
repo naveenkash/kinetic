@@ -27,6 +27,24 @@ LEVEL = "/Game/Arenas/YRD_Yard/L_YRD_Greybox"
 MATERIALS = "/Game/Arenas/YRD_Yard/Greybox"
 CUBE = "/Engine/BasicShapes/Cube"
 LADDER = unreal.load_class(None, "/Script/KineticGameplay.KineticLadder")
+PROP = unreal.load_class(None, "/Script/KineticGameplay.KineticProp")
+
+# Each generated prop's mass (its spec) and how the manifest places it.
+PROP_BODIES = {
+    "SM_Volatile_FuelDrum": (180.0, "RACK"),           # On the drip tray, racked (200 N)
+    "SM_Volatile_PropaneCylinder": (45.0, "RACK"),     # In the rack
+    "SM_Volatile_CylinderRack": (95.0, "RACK"),        # Racked (200 N)
+    "SM_Medium_SteelCrate_HTR": (250.0, "LOOSE"),
+    "SM_Light_Plank": (12.0, "LOOSE"),
+    "SM_Light_ClampCrate": (28.0, "LOOSE"),
+    "SM_Light_ChainCoil_HTR": (25.0, "LOOSE"),
+    "SM_Light_CableReel_HTR": (28.0, "LOOSE"),
+    "SM_Light_FoldingChair": (6.0, "LOOSE"),
+    "SM_Light_ToolBag_Guild": (20.0, "LOOSE"),
+    "SM_Light_PaintCan_Office": (5.0, "LOOSE"),
+    "SM_Light_Bucket_Water": (10.0, "LOOSE"),
+    "SM_Light_FloodlightStand_Office": (22.0, "LOOSE"),
+}
 
 # Grey-box colours by role, so a tier reads at a glance.
 COLOURS = {
@@ -137,17 +155,21 @@ class Builder:
         return False
 
     def prop(self, name: str, label: str, x: float, y: float, z: float, yaw_deg: float = 0.0,
-             pitch_deg: float = 0.0) -> unreal.StaticMeshActor | None:
-        """A generated prop at its pivot. Yaw is counter-clockwise from east, as in the layout."""
+             pitch_deg: float = 0.0):
+        """A generated prop at its pivot, as an AKineticProp with its spec's mass and the
+        manifest's placement. Yaw is counter-clockwise from east, as in the layout."""
         mesh_path = prop_path(name)
         mesh = unreal.load_asset(mesh_path) if eal.does_asset_exist(mesh_path) else None
         if mesh is None:
             self.missing.append(name)
             return None
         # The layout's counter-clockwise yaw is clockwise in Unreal's flipped frame.
-        actor = actors.spawn_actor_from_class(unreal.StaticMeshActor, to_unreal(x, y, z),
+        actor = actors.spawn_actor_from_class(PROP, to_unreal(x, y, z),
                                               unreal.Rotator(roll=0.0, pitch=pitch_deg, yaw=-yaw_deg))
-        actor.static_mesh_component.set_static_mesh(mesh)
+        actor.get_component_by_class(unreal.StaticMeshComponent).set_static_mesh(mesh)
+        mass, placement = PROP_BODIES[name]
+        actor.set_editor_property("mass_kg", mass)
+        actor.set_editor_property("placement", getattr(unreal.KineticPlacement, placement))
         actor.set_actor_label(label)
         actor.set_folder_path("Props")
         self.count += 1
@@ -523,11 +545,14 @@ def lighting(b: Builder) -> None:
 
 
 def main() -> None:
-    # The level is rebuilt whole: an existing one is deleted first.
+    # The level is rebuilt whole: an existing one is opened and emptied (it may be the map the
+    # editor opened on, which cannot be deleted while loaded), a missing one created.
     if eal.does_asset_exist(LEVEL):
-        levels.new_level("/Temp/Untitled")
-        eal.delete_asset(LEVEL)
-    if not levels.new_level(LEVEL):
+        if not levels.load_level(LEVEL):
+            raise RuntimeError(f"could not open {LEVEL}")
+        doomed = [a for a in actors.get_all_level_actors() if not isinstance(a, (unreal.WorldSettings, unreal.Brush))]
+        actors.destroy_actors(doomed)
+    elif not levels.new_level(LEVEL):
         raise RuntimeError(f"could not create {LEVEL}")
     b = Builder()
     floor(b)

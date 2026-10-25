@@ -164,7 +164,7 @@ struct FBotRigRules
 	double SlingshotMinAngleDeg = 120.0;  // The wall must be behind the bot
 };
 
-FBotIntent ChooseRig(const FBotView& View, const FKineticTables& Tables, const FBotRigRules& Rules = {});
+KINETICCORE_API FBotIntent ChooseRig(const FBotView& View, const FKineticTables& Tables, const FBotRigRules& Rules = {});
 
 // What a bot may never do. Overspin is a hold past engagement, so bots release on engagement.
 inline constexpr double BotOverspinHeldSeconds = 0.0;
