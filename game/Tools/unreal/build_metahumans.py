@@ -2,9 +2,8 @@
 from Epic's MetaHuman, the harness on them code-built (art/characters). Two stages:
 
     make -C game metahumans            creates and shapes /Game/Characters/MetaHumans/MH_<Class>
-    (in the editor, signed in to MetaHuman with an Epic account:
-     Tools > Execute Python Script > game/Tools/unreal/build_metahumans.py, with KINETIC_MH_BUILD=1
-     in the environment, or run build_all() from the Python console)
+    (in the editor, signed in to MetaHuman with an Epic account, in the Output Log's Cmd box:
+     py "<repo>/game/Tools/unreal/metahumans_signed_in.py"; or KINETIC_MH_BUILD=1 headless)
 
 Shaping runs anywhere. Rigging and the high-resolution skin textures are Epic's cloud services and
 need the editor signed in to MetaHuman; the build needs the rig. The body targets come from the
@@ -61,20 +60,25 @@ def build(cls: str, mh, sub) -> bool:
     rig.blocking = True
     rig.report_progress = False
     sub.request_auto_rigging(mh, rig)
-    if not sub.can_build_meta_human(mh, True):
-        unreal.log_error(f"Kinetic: {cls}: not rigged (sign in to MetaHuman in the editor first)")
-        return False
     textures = unreal.MetaHumanCharacterTextureRequestParams()
     textures.blocking = True
     textures.report_progress = False
     sub.request_texture_sources(mh, textures)
+    # Both are Epic's services: a build needs the rig and the skin textures.
+    if not sub.can_build_meta_human(mh, True):
+        unreal.log_error(f"Kinetic: {cls}: not buildable after rigging and textures (see the errors above; signed in?)")
+        return False
     params = unreal.MetaHumanCharacterEditorBuildParameters()
     params.pipeline_type = unreal.MetaHumanDefaultPipelineType.OPTIMIZED
     params.pipeline_quality = unreal.MetaHumanQualityLevel.MEDIUM
     params.absolute_build_path = f"{BUILD}/MH_{cls}"
     params.common_folder_path = f"{BUILD}/Common"
     params.enable_wardrobe_item_validation = False
-    sub.build_meta_human(mh, params)
+    try:
+        sub.build_meta_human(mh, params)
+    except RuntimeError as e:  # The assembly's errors come back raised: report them, go on to the next class
+        unreal.log_error(f"Kinetic: {cls}: build failed: {str(e).splitlines()[0]}")
+        return False
     unreal.log(f"Kinetic: {cls}: built into {BUILD}/MH_{cls}")
     return True
 
@@ -84,6 +88,8 @@ def run_all(with_build: bool) -> int:
     failed = 0
     for cls in BODIES:
         mh = character(cls)
+        # An asset open in MetaHuman Creator's tab cannot be edited from here: close it first.
+        unreal.get_editor_subsystem(unreal.AssetEditorSubsystem).close_all_editors_for_asset(mh)
         if not sub.try_add_object_to_edit(mh):
             unreal.log_error(f"Kinetic: {cls}: could not edit {mh.get_path_name()} (open in an editor tab?)")
             failed += 1

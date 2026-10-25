@@ -111,5 +111,21 @@ The level's night lighting is set in `build_yard_greybox.py`:
 blender -b --factory-startup -P art/characters/harness.py -- [--class Rigger] [--res 2048]
 ```
 
-Each is a skin-modifier body weighted to the skeleton (with hands and a face), the class's harness from `harness_parts.py` (Catch Plates at their class sizes with lips, chamfers or mirror faces, bolts and stamped numbers, body-fitted straps and buckles, the spine frame and gel reservoirs, the Spool with its mode ring, Dogs and line exit, the Cutter, boots, headgear, the class's extras), and six takes (Idle, Run, Climb, Fall, Brace, Stagger). The livery is baked to 2K textures; the team-tint parts keep a slot of their own. `make -C game import-characters` imports them. These are the stand-ins until MetaHuman supplies the faces and bodies (PROPOSED: the harness stays code-built and is fitted onto them).
+Each class is built from four scripts:
+- `harness_sdf.py` holds signed-distance shapes, meshed with Blender's OpenVDB.
+- `harness_body.py` makes the soft parts:
+  - a work coverall over an adult figure, with collar, placket, pockets, knee patches and folds;
+  - a head with eyes, brows and cropped hair;
+  - gloved hands, and boots with soles, welts and tread.
+  - Each is dense for the bake and decimated for the game.
+- `harness_look.py` holds the procedural materials:
+  - cloth with seams and stitching, leather and rubber;
+  - skin;
+  - painted metal chipped per the class's wear, webbing with weave and stitched ends.
+- `harness_parts.py` builds the class's harness:
+  - Catch Plates, straps and buckles, the spine frame;
+  - the Spool, Dogs and Cutter, and the boot hardware;
+  - the class's extras.
+
+All five share one skeleton with Unreal Mannequin bone names and play six takes (Idle, Run, Climb, Fall, Brace, Stagger). They bake to 4K BaseColor, ORM and Normal maps (use `--res 2048` for quick iterations), and the team-tint parts keep a slot of their own. `make -C game import-characters` imports them.
 
