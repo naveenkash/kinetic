@@ -15,6 +15,7 @@
 #include "KineticRulesSubsystem.h"
 #include "KineticSpoolWorld.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Sound/SoundAttenuation.h"
 #include "Sound/SoundBase.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogKineticHazard, Log, All);
@@ -23,6 +24,30 @@ using Kinetic::FVec3;
 
 namespace
 {
+// A cue at a place is heard from there: full within a few metres, gone by the falloff, panned
+// (without this a clang at the press played at full volume across the whole Yard).
+USoundAttenuation* CueFalloff(const TCHAR* Name)
+{
+	const bool bBig = FCString::Strcmp(Name, TEXT("Blast")) == 0 || FCString::Strcmp(Name, TEXT("GasJet")) == 0 ||
+	                  FCString::Strcmp(Name, TEXT("PlateLand")) == 0;
+	static USoundAttenuation* Near = nullptr;
+	static USoundAttenuation* Far = nullptr;
+	USoundAttenuation*& Made = bBig ? Far : Near;
+	if (!Made)
+	{
+		Made = NewObject<USoundAttenuation>(GetTransientPackage(), bBig ? TEXT("SA_KineticCueFar") : TEXT("SA_KineticCueNear"));
+		Made->AddToRoot();
+		FSoundAttenuationSettings& A = Made->Attenuation;
+		A.bAttenuate = true;
+		A.bSpatialize = true;
+		A.DistanceAlgorithm = EAttenuationDistanceModel::NaturalSound;
+		A.AttenuationShape = EAttenuationShape::Sphere;
+		A.AttenuationShapeExtents = FVector(bBig ? 800.0 : 400.0, 0.0, 0.0);
+		A.FalloffDistance = bBig ? 12000.0f : 6000.0f;
+	}
+	return Made;
+}
+
 FVec3 ToCore(const FVector& Cm) { return {Cm.X / 100.0, Cm.Y / 100.0, Cm.Z / 100.0}; }
 FVector FromCore(const FVec3& M) { return FVector(M.X * 100.0, M.Y * 100.0, M.Z * 100.0); }
 
@@ -58,9 +83,11 @@ void UKineticHazardWorld::PlayCue(UWorld* World, const TCHAR* Name, const FVecto
 	{
 		return;  // Not imported (make import-audio): silent
 	}
+	UE_LOG(LogKineticHazard, Log, TEXT("cue %s at %.1f s%s"), Name, World->GetTimeSeconds(),
+	       At ? *FString::Printf(TEXT(" (%.0f, %.0f, %.0f) m"), At->X / 100.0, -At->Y / 100.0, At->Z / 100.0) : TEXT(", arena-wide"));
 	if (At)
 	{
-		UGameplayStatics::PlaySoundAtLocation(World, Sound, *At);
+		UGameplayStatics::PlaySoundAtLocation(World, Sound, *At, FRotator::ZeroRotator, 1.0f, 1.0f, 0.0f, CueFalloff(Name));
 	}
 	else
 	{

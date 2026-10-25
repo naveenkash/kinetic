@@ -181,9 +181,29 @@ public:
 			{
 				Test->TestTrue(TEXT("walking off a ladder's top catches the rungs"), Character->IsClimbing());
 				Test->TestTrue(TEXT("caught near the top"), At.Z > 800.0 - 250.0);
-				return true;
+				// Then the mesa's south edge, away from any ladder, running at it.
+				Character->LeaveLadder();
+				Character->TeleportTo(FVector(-6400.0, 3600.0, 800.0 + Character->GetSimpleCollisionHalfHeight() + 5.0),
+				                      FRotator(0.0, 90.0, 0.0));
+				Stage = 4;
+				StageAt = Now;
 			}
 			return false;
+		case 4:  // Run off the 8 m edge: the walk stops at it (the drop would Stall).
+			if (APlayerController* Player = Cast<APlayerController>(Character->GetController()))
+			{
+				Player->SetControlRotation(FRotator(0.0, 90.0, 0.0));  // Unreal +Y: layout south
+			}
+			Character->Move(FVector2D(0.0, 1.0));
+			if (Now - StageAt < 3.0)
+			{
+				return false;
+			}
+			// Feet on the lip: the capsule's round bottom rests over it, a little below the top.
+			Test->TestTrue(TEXT("still on the mesa top after running at its edge"),
+			               At.Z - Character->GetSimpleCollisionHalfHeight() > 700.0);
+			Test->TestTrue(TEXT("standing at the edge"), Character->GetCharacterMovement()->IsMovingOnGround());
+			return true;
 		default:
 			return true;
 		}

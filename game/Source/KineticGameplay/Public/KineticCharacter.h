@@ -74,6 +74,8 @@ public:
 	void SetSprinting(bool bSprint);
 	bool IsSprinting() const { return bSprinting; }
 	bool IsClimbing() const { return Ladder != nullptr; }
+	// Walking under their own legs (no line on them, not stunned): such a walk stops at a drop that would Stall.
+	bool WalksOwnWay() const { return !bUnderLine && !bStunned; }
 	const AKineticLadder* GetLadder() const { return Ladder; }
 	// Lets go of the ladder (a reset or a Stall moves the character off it).
 	void LeaveLadder();

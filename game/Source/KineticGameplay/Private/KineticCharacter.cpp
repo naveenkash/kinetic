@@ -472,7 +472,7 @@ void AKineticCharacter::UpdateLadder(float DeltaSeconds)
 				AKineticLadder* Candidate = *It;
 				const FVector Hold = Candidate->ClimbAt(FMath::Min(GetActorLocation().Z, Candidate->TopZ() - 120.0 + CapsuleHalfHeightCm));
 				if (Feet > Candidate->TopZ() - 150.0f && Feet < Candidate->TopZ() + 10.0f &&
-				    FVector::Dist2D(GetActorLocation(), Hold) < 100.0)
+				    FVector::Dist2D(GetActorLocation(), Hold) < 150.0)  // The ledge guard's window (UKineticMovementComponent)
 				{
 					FCollisionQueryParams Params(SCENE_QUERY_STAT(KineticLadderCatch), false, this);
 					if (GetWorld()->OverlapBlockingTestByChannel(Hold, FQuat::Identity, ECC_Pawn,

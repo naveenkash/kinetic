@@ -13,6 +13,11 @@ class KINETICGAMEPLAY_API UKineticMovementComponent : public UCharacterMovementC
 {
 	GENERATED_BODY()
 
+public:
+	// No walking off an edge whose drop would Stall (the 8 m Stacks): the walk slides along it
+	// instead. A jump still goes over, and a line still drags a player off.
+	virtual bool CanWalkOffLedges() const override;
+
 protected:
 	virtual void HandleImpact(const FHitResult& Hit, float TimeSlice, const FVector& MoveDelta) override;
 };
