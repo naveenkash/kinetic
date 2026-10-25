@@ -3,6 +3,8 @@
 // 3.8 and 4.2.
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include "Kinetic/Tables.h"
 
 #include <cstdint>
@@ -18,19 +20,19 @@ struct FTensionInputs
 };
 
 // The owner's current pull tension for one line, in newtons.
-double LineTension(const FHarnessTuning& Harness, const FSpoolGlobals& Globals, const FTensionInputs& Inputs);
+KINETICCORE_API double LineTension(const FHarnessTuning& Harness, const FSpoolGlobals& Globals, const FTensionInputs& Inputs);
 
 // On Hang, overspin raises the Hang load instead of the pull, in proportion to the tension
 // gain (PROPOSED: the bible states the direction, not the curve).
-double HangLoadWithOverspin(const FHarnessTuning& Harness, const FSpoolGlobals& Globals, double OverspinHeldSeconds);
+KINETICCORE_API double HangLoadWithOverspin(const FHarnessTuning& Harness, const FSpoolGlobals& Globals, double OverspinHeldSeconds);
 
 enum class EOverspinStage : uint8_t { None, Escalating, Octave, Snapped };
 
-EOverspinStage OverspinStage(const FHarnessTuning& Harness, const FSpoolGlobals& Globals, double OverspinHeldSeconds);
+KINETICCORE_API EOverspinStage OverspinStage(const FHarnessTuning& Harness, const FSpoolGlobals& Globals, double OverspinHeldSeconds);
 
 // The single impulse the far Dog's body receives when an overspun line snaps (3.7).
-double SnapImpulseNs(double AppliedForceN, const FSpoolGlobals& Globals);
+KINETICCORE_API double SnapImpulseNs(double AppliedForceN, const FSpoolGlobals& Globals);
 
 // The recoil both ends receive when a line is cut (4.2).
-double CutRecoilNs(double AppliedForceN, const FSpoolGlobals& Globals);
+KINETICCORE_API double CutRecoilNs(double AppliedForceN, const FSpoolGlobals& Globals);
 } // namespace Kinetic

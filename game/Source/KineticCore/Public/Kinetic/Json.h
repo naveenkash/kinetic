@@ -3,6 +3,8 @@
 // match always produces the same bytes (and the same raw_events_sha256).
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -10,7 +12,7 @@
 
 namespace Kinetic
 {
-class FJsonWriter
+class KINETICCORE_API FJsonWriter
 {
 public:
 	FJsonWriter& BeginObject();

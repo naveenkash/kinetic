@@ -1,5 +1,6 @@
 # Builds and tests KineticCore without Unreal: any C++20 compiler (Apple clang on macOS).
-# When Unreal 5.8 is set up, the same Public/Private sources build as the KineticCore module.
+# The same Public/Private sources build as the KineticCore module in Kinetic.uproject; the tests
+# live outside the module (Tests/KineticCore), since Unreal compiles every source in a module.
 #
 #   make test        unit tests
 #   make test-asan   unit tests under AddressSanitizer and UndefinedBehaviorSanitizer
@@ -9,12 +10,18 @@
 #                    backend will read them
 #   make all-checks  everything above
 #
+# With Unreal 5.8 installed (UE_ROOT, the Launcher's folder by default):
+#   make editor        builds the KineticEditor target
+#   make unreal-test   runs the Kinetic.* automation tests in a headless editor
+#   make import-props  imports the generated props in art/out (art/README.md) into Content
+#
 #   build/diff-recordings A B [tolerance_m]   compares two determinism recordings
 
 ifeq ($(origin CXX),default)
 CXX := clang++
 endif
 CORE := Source/KineticCore
+TESTS := Tests/KineticCore
 TABLES := $(abspath Content/Core/Tables)
 BUILD := build
 
@@ -23,8 +30,8 @@ CXXFLAGS := -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror -Wshadow -Wconversio
 SANITIZE := -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer
 
 LIB_SRC := $(wildcard $(CORE)/Private/*.cpp)
-TEST_SRC := $(wildcard $(CORE)/Tests/*.cpp)
-HEADERS := $(wildcard $(CORE)/Public/Kinetic/*.h) $(wildcard $(CORE)/Tests/*.h)
+TEST_SRC := $(wildcard $(TESTS)/*.cpp)
+HEADERS := $(wildcard $(CORE)/Public/Kinetic/*.h) $(wildcard $(TESTS)/*.h)
 
 # Rebuild when the compiler, the flags (the tables path is one), or the source list change:
 # the stamp's name is a hash of all three.
@@ -32,13 +39,13 @@ BUILD_KEY := $(shell printf '%s' "$(CXX) $(CXXFLAGS) $(SANITIZE) $(LIB_SRC) $(TE
 STAMP := $(BUILD)/flags-$(BUILD_KEY).stamp
 DEPS := $(HEADERS) $(STAMP) Makefile
 
-.PHONY: test test-asan bench check report all-checks clean
+.PHONY: test test-asan bench check report all-checks clean editor unreal-test import-props
 
 $(BUILD)/kinetic-core-tests: $(LIB_SRC) $(TEST_SRC) $(DEPS) | $(BUILD)
-	$(CXX) $(CXXFLAGS) -I$(CORE)/Tests $(LIB_SRC) $(TEST_SRC) -o $@
+	$(CXX) $(CXXFLAGS) -I$(TESTS) $(LIB_SRC) $(TEST_SRC) -o $@
 
 $(BUILD)/kinetic-core-tests-asan: $(LIB_SRC) $(TEST_SRC) $(DEPS) | $(BUILD)
-	$(CXX) $(CXXFLAGS) $(SANITIZE) -I$(CORE)/Tests $(LIB_SRC) $(TEST_SRC) -o $@
+	$(CXX) $(CXXFLAGS) $(SANITIZE) -I$(TESTS) $(LIB_SRC) $(TEST_SRC) -o $@
 
 $(BUILD)/panic-bench: $(LIB_SRC) Tools/bench/PanicBench.cpp $(DEPS) | $(BUILD)
 	$(CXX) $(CXXFLAGS) $(LIB_SRC) Tools/bench/PanicBench.cpp -o $@
@@ -77,3 +84,34 @@ all-checks: check test test-asan bench report
 
 clean:
 	rm -rf $(BUILD)
+
+UE_ROOT ?= /Users/Shared/Epic Games/UE_5.8
+UPROJECT := $(abspath Kinetic.uproject)
+UE_CMD = "$(UE_ROOT)/Engine/Binaries/Mac/UnrealEditor-Cmd" "$(UPROJECT)" -unattended -nullrhi -nosplash -nopause -NoSound -nocrashreports
+
+editor:
+	"$(UE_ROOT)/Engine/Build/BatchFiles/Mac/Build.sh" KineticEditor Mac Development -Project="$(UPROJECT)" -WaitMutex
+
+# The editor's exit code does not carry test failures, so the log is checked for them.
+unreal-test: editor | $(BUILD)
+	@rm -f $(BUILD)/unreal-test.log
+	$(UE_CMD) -ExecCmds="Automation RunTests Kinetic; Quit" -abslog="$(abspath $(BUILD))/unreal-test.log" > /dev/null 2>&1 || true
+	@grep "Test Completed" $(BUILD)/unreal-test.log
+	@grep -q "TEST COMPLETE. EXIT CODE: 0" $(BUILD)/unreal-test.log
+	@! grep -q "Result={Fail" $(BUILD)/unreal-test.log
+
+# Editor scripts run in a headless editor, not the pythonscript commandlet: the editor
+# subsystems they use need GEditor. When unattended, a script ends the process itself with its
+# status, once its work is saved (see run() in the scripts), and that status is the target's.
+# The log is the editor's own file (-abslog).
+define run_editor_script
+	@rm -f $(BUILD)/$(2).log
+	@$(UE_CMD) -ExecutePythonScript="$(abspath $(1))" -abslog="$(abspath $(BUILD))/$(2).log" > /dev/null 2>&1; \
+	  status=$$?; \
+	  grep -E "LogPython: (Display: )?Kinetic:" $(BUILD)/$(2).log; \
+	  grep "LogPython: Error" $(BUILD)/$(2).log | head -40; \
+	  exit $$status
+endef
+
+import-props: editor | $(BUILD)
+	$(call run_editor_script,Tools/unreal/import_props.py,import-props)

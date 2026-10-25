@@ -186,7 +186,7 @@ Bot rules:
 
 ### 9.1 Implementation (engine-free)
 
-`game/Source/KineticCore/Public/Kinetic/Bots.h` holds the decisions the bot behavior trees call; the trees move, aim and press. It is tested by `game/Source/KineticCore/Tests/BotTest.cpp`.
+`game/Source/KineticCore/Public/Kinetic/Bots.h` holds the decisions the bot behavior trees call; the trees move, aim and press. It is tested by `game/Tests/KineticCore/BotTest.cpp`.
 
 | Piece | What it does |
 |---|---|

@@ -3,6 +3,8 @@
 // multiplied by the other surface's modifier.
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include "Kinetic/Tables.h"
 #include "Kinetic/Vec3.h"
 
@@ -14,14 +16,14 @@ namespace Kinetic
 {
 enum class EOutcome : uint8_t { None, Stagger, Flip, Stall };
 
-EOutcome MoreSevere(EOutcome A, EOutcome B);
+KINETICCORE_API EOutcome MoreSevere(EOutcome A, EOutcome B);
 
 // Value is a relative speed (m/s) or an impulse (N·s), whichever the table measures.
-EOutcome Classify(EImpactTable Table, double Value, ESurface Surface, const FKineticTables& Tables);
+KINETICCORE_API EOutcome Classify(EImpactTable Table, double Value, ESurface Surface, const FKineticTables& Tables);
 
 // Player against player (7.2): each party is judged on the other's mass times the relative
 // speed against the object table, with the symmetric 14 m/s floor; the more severe wins.
-EOutcome ClassifyPlayerVsPlayer(double OtherMassKg, double RelativeSpeed, const FKineticTables& Tables);
+KINETICCORE_API EOutcome ClassifyPlayerVsPlayer(double OtherMassKg, double RelativeSpeed, const FKineticTables& Tables);
 
 inline double ImpactImpulse(double MassKg, double Speed) { return MassKg * Speed; }
 
@@ -34,7 +36,7 @@ struct FBlastResult
 	double ImpulseNs = 0.0;
 };
 
-FBlastResult ClassifyBlast(EVolatile Kind, double DistanceM, bool bDeepUnderwater, const FKineticTables& Tables);
+KINETICCORE_API FBlastResult ClassifyBlast(EVolatile Kind, double DistanceM, bool bDeepUnderwater, const FKineticTables& Tables);
 
 // One step's contacts on a player, debounced and filtered (player-physics 4.1 and 4.2).
 enum class EContactKind : uint8_t { Static, Kinematic, Object, Player };
@@ -66,9 +68,9 @@ struct FContact
 // The share of an object's weight a contact pushing the player along Normal carries: 1 straight
 // down onto them, 0 sideways or from below. A missing normal counts as 1, so a resting weight
 // never reads as a hit when a caller forgets it (EndStep asserts in builds with asserts).
-double SupportShare(const FVec3& Normal);
+KINETICCORE_API double SupportShare(const FVec3& Normal);
 
-class FImpactMonitor
+class KINETICCORE_API FImpactMonitor
 {
 public:
 	explicit FImpactMonitor(const FKineticTables& InTables) : Tables(InTables) {}
@@ -118,7 +120,7 @@ struct FCrushContact
 	bool bKinematicOrHeavy = false;
 };
 
-class FCrushDetector
+class KINETICCORE_API FCrushDetector
 {
 public:
 	explicit FCrushDetector(const FKineticTables& InTables) : Tables(InTables) {}

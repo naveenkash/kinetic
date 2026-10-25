@@ -5,6 +5,8 @@
 // back until the lead has passed.
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include <optional>
 #include <string>
 #include <vector>
@@ -26,10 +28,10 @@ enum class ETellSystem : uint8_t
 	VolatileArmed,
 };
 
-const char* ToString(ETellSystem System);
+KINETICCORE_API const char* ToString(ETellSystem System);
 
 // Section 11's minimum lead, s. A timeline may lead by more, never less.
-double MinimumLead(ETellSystem System);
+KINETICCORE_API double MinimumLead(ETellSystem System);
 
 // One timeline tell: a cue (audio and visual, each with its own lead) before a payload at
 // TriggerTime, either once or every Period from TriggerTime until Until.
@@ -45,11 +47,11 @@ struct FTellEvent
 };
 
 // Every payload time of an event in [From, To), ascending.
-std::vector<double> Occurrences(const FTellEvent& Event, double From, double To);
+KINETICCORE_API std::vector<double> Occurrences(const FTellEvent& Event, double From, double To);
 
 // The Tell.LeadTimes check (3.3): one problem per event whose audio or visual lead undercuts
 // its system's minimum, or whose occurrences overlap their own cue (period shorter than lead).
-std::vector<std::string> TimelineProblems(const std::vector<FTellEvent>& Timeline);
+KINETICCORE_API std::vector<std::string> TimelineProblems(const std::vector<FTellEvent>& Timeline);
 
 enum class ECueKind : uint8_t { Audio, Visual };
 
@@ -67,7 +69,7 @@ struct FCue
 // event replicated at round start, 3.1) join as a late client would: their cues already due
 // fire on the next Advance, and nothing else fires again. Time never runs backward here
 // (FServerClock guarantees it; earlier times are ignored).
-class FTellScheduler
+class KINETICCORE_API FTellScheduler
 {
 public:
 	explicit FTellScheduler(std::vector<FTellEvent> InTimeline);
@@ -86,7 +88,7 @@ private:
 // sooner than 1.0 s after its groan was sent, a volatile no sooner than 0.3 s after its hiss.
 // Each source (one rated load, one cylinder) is gated on its latest cue, by Id; a new cue
 // re-arms it. Clear a source once its consequence has fired, and Reset at round reset.
-class FTellGate
+class KINETICCORE_API FTellGate
 {
 public:
 	void Cue(ETellSystem System, int Id, double ServerTime);
@@ -110,6 +112,6 @@ private:
 // 2:00 in each Haul half, 3:00 in Free Scrap, on the round clock, which runs from the start of
 // the Drop (game-modes 2.2). Its siren leads by 5 s.
 enum class EMatchMode : uint8_t { Scrap, Claim, Haul, FreeScrap };
-double MidMatchEventTime(EMatchMode Mode, double RoundStart, double RoundSeconds);
+KINETICCORE_API double MidMatchEventTime(EMatchMode Mode, double RoundStart, double RoundSeconds);
 double RoundSecondsOf(EMatchMode Mode);  // The round clock (a Haul half), Drop included, s
 } // namespace Kinetic

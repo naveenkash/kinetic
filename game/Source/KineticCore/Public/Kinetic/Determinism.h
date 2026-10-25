@@ -10,6 +10,8 @@
 // after a correction) replaces it.
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include "Kinetic/Vec3.h"
 
 #include <cstdint>
@@ -34,7 +36,7 @@ struct FTickSample
 	std::vector<FBodySample> Bodies;  // In body id order
 };
 
-class FDeterminismRecording
+class KINETICCORE_API FDeterminismRecording
 {
 public:
 	explicit FDeterminismRecording(uint64_t InSeed = 0) : Seed(InSeed) {}

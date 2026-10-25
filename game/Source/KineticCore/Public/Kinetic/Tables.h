@@ -2,6 +2,8 @@
 // as data tables. Values are SI. Tools/ci/check_tables.py keeps them equal to bible/05.
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include <array>
 #include <cstdint>
 #include <filesystem>
@@ -15,7 +17,7 @@ namespace Kinetic
 enum class EHarnessClass : uint8_t { Climber, Scrapper, Rigger, Doubler, Breaker };
 inline constexpr std::array AllHarnessClasses{EHarnessClass::Climber, EHarnessClass::Scrapper, EHarnessClass::Rigger,
                                               EHarnessClass::Doubler, EHarnessClass::Breaker};
-std::string_view ToString(EHarnessClass Class);
+KINETICCORE_API std::string_view ToString(EHarnessClass Class);
 
 enum class ECutterVariant : uint8_t { Standard, Hot, Long };
 enum class ESurface : uint8_t { Hard, Wood, Scrap, DeepWater, StallGel };
@@ -88,7 +90,7 @@ public:
 };
 
 // Every table, loaded once. Throws FTableError naming the file, row and column of any problem.
-class FKineticTables
+class KINETICCORE_API FKineticTables
 {
 public:
 	static FKineticTables LoadFromDirectory(const std::filesystem::path& Directory);

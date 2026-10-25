@@ -22,6 +22,8 @@
 //   nobody falls would otherwise never end).
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include "Kinetic/MatchEvents.h"
 
 #include <vector>
@@ -96,7 +98,7 @@ struct FPlayerConnection
 	bool bAbandoned = false;  // Did not return within the reconnect window
 };
 
-class FScrapMatch
+class KINETICCORE_API FScrapMatch
 {
 public:
 	FScrapMatch(std::vector<FMatchPlayer> Roster, FScrapRules Rules, FEventLog& Log);

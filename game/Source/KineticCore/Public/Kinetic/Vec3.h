@@ -3,6 +3,8 @@
 // FVector one for one.
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include <cmath>
 
 namespace Kinetic

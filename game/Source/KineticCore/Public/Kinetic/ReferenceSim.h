@@ -12,6 +12,8 @@
 // 4. The hard velocity cap.
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include "Kinetic/LineSolver.h"
 #include "Kinetic/MassRules.h"
 #include "Kinetic/Tables.h"
@@ -57,7 +59,7 @@ struct FSimLine
 	uint32_t EventsSeen = 0;
 };
 
-class FReferenceSim
+class KINETICCORE_API FReferenceSim
 {
 public:
 	FReferenceSim(const FKineticTables& InTables, double InDt) : Tables(InTables), Dt(InDt) {}
@@ -114,6 +116,6 @@ struct FPanicRun
 	double SpeedAtDistance = 0.0;         // m/s
 };
 
-FPanicRun RunHaulPanic(const FKineticTables& Tables, EHarnessClass Attacker, EHarnessClass Victim, double DistanceM,
+KINETICCORE_API FPanicRun RunHaulPanic(const FKineticTables& Tables, EHarnessClass Attacker, EHarnessClass Victim, double DistanceM,
                        double Dt, double MaxSeconds);
 } // namespace Kinetic

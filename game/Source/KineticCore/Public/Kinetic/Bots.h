@@ -20,6 +20,8 @@
 // tutorial crew follows bot-crew.md where onboarding-script.md differs (open-items 7d).
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include "Kinetic/LineSolver.h"
 #include "Kinetic/Tables.h"
 #include "Kinetic/Vec3.h"
@@ -33,7 +35,7 @@
 namespace Kinetic
 {
 // splitmix64 over the match seed and the slot.
-class FBotRandom
+class KINETICCORE_API FBotRandom
 {
 public:
 	FBotRandom(uint64_t MatchSeed, int Slot);
@@ -51,7 +53,7 @@ inline constexpr double BackfillCutMaxSeconds = 1.6;
 inline constexpr double ProbationerCutSeconds = 1.4;  // PROPOSED in bot-crew.md
 
 // "Office crew" in matches, the Probationers in the tutorial: O-01 or P-01.
-std::string BotCallsign(EBotProfile Profile, int Number);
+KINETICCORE_API std::string BotCallsign(EBotProfile Profile, int Number);
 
 struct FBotCutPlan
 {
@@ -61,7 +63,7 @@ struct FBotCutPlan
 	double SwingAt = 0.0;  // The cut
 };
 
-class FBotDefense
+class KINETICCORE_API FBotDefense
 {
 public:
 	// The bot's class and Cutter set the warm-up, and the Cutter its swing and recovery.
@@ -116,7 +118,7 @@ struct FBotDoorway
 	FVec3 Centre() const { return (Left + Right) * 0.5; }
 };
 
-struct FBotHauler
+struct KINETICCORE_API FBotHauler
 {
 	FVec3 TrackA, TrackB;          // The stretch of track the train is about to run, A first
 	double ArrivesInSeconds = 0.0;  // At TrackA, from the klaxon's schedule; negative once past it
@@ -174,7 +176,7 @@ struct FBotUse
 	bool bMapCable = false;          // Hangtown's cuttable cables
 	bool bRatedLoad = false;
 };
-bool BotMayUse(const FBotUse& Use);
+KINETICCORE_API bool BotMayUse(const FBotUse& Use);
 
 // The tutorial's Probationers, P-01 to P-03 (index 0 to 2), against one player.
 enum class EProbationerTask : uint8_t
@@ -211,7 +213,7 @@ struct FProbationerView
 	std::array<bool, 3> bAlive{true, true, true};  // Standing, not Stalled
 };
 
-class FProbationerCrew
+class KINETICCORE_API FProbationerCrew
 {
 public:
 	static constexpr double FireRangeM = 15.0;

@@ -5,6 +5,8 @@
 // a kinematic severs any line it passes through (1.3; bible/05 3.5).
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include "Kinetic/Vec3.h"
 
 #include <optional>
@@ -14,7 +16,7 @@
 namespace Kinetic
 {
 // A rigid pose: position, and a rotation of Angle radians about the unit Axis.
-struct FPose
+struct KINETICCORE_API FPose
 {
 	FVec3 Position;
 	FVec3 Axis = Up;
@@ -26,10 +28,10 @@ struct FPose
 	FVec3 ToLocal(const FVec3& World) const { return Unrotate(World - Position); }
 };
 
-FVec3 Cross(const FVec3& A, const FVec3& B);
+KINETICCORE_API FVec3 Cross(const FVec3& A, const FVec3& B);
 
 // A path of straight pieces walked at constant speed (a trench, a rail).
-class FPolylinePath
+class KINETICCORE_API FPolylinePath
 {
 public:
 	explicit FPolylinePath(std::vector<FVec3> InPoints);
@@ -54,7 +56,7 @@ struct FDepartureSegment
 	double Until = 1e300; // Departures stop before this time
 };
 
-class FTimetable
+class KINETICCORE_API FTimetable
 {
 public:
 	explicit FTimetable(std::vector<FDepartureSegment> InSegments) : Segments(std::move(InSegments)) {}
@@ -72,7 +74,7 @@ private:
 // tail clears the far end; between runs it is out of the arena (in the plenum) and has no pose.
 // The pose is at the nose, facing along the path (a rotation about Up), so a box behind the
 // nose is local -X whichever way the trench runs.
-class FRailRun
+class KINETICCORE_API FRailRun
 {
 public:
 	FRailRun(FPolylinePath InPath, double InSpeed, FTimetable InTimetable, double InTrainLength = 14.0)
@@ -108,7 +110,7 @@ struct FKeyframe
 	FVec3 Position;
 };
 
-class FCycle
+class KINETICCORE_API FCycle
 {
 public:
 	FCycle(std::vector<FKeyframe> InKeys, double InPeriod, double InPhaseAtZero);
@@ -124,7 +126,7 @@ private:
 };
 
 // Steady rotation about an axis through a pivot (the Anchor's Maintenance Ring, 120 s per turn).
-struct FSpin
+struct KINETICCORE_API FSpin
 {
 	FVec3 Pivot;
 	FVec3 Axis = Up;
@@ -134,7 +136,7 @@ struct FSpin
 };
 
 // A rocking rotation (Ballast's Breathing hull, ±6° over 90 s): Amplitude × sin(2πt / Period).
-struct FRock
+struct KINETICCORE_API FRock
 {
 	FVec3 Pivot;
 	FVec3 Axis{1.0, 0.0, 0.0};
@@ -146,7 +148,7 @@ struct FRock
 
 // The Ballast Haul sled (1.1a): one free coordinate S along a one-way rail, driven by the rail
 // component of the line forces on it, against pawl drag, never backward.
-class FHaulSled
+class KINETICCORE_API FHaulSled
 {
 public:
 	explicit FHaulSled(FPolylinePath InRail) : Rail(std::move(InRail)) {}
@@ -176,7 +178,7 @@ private:
 // the resnap threshold, seen in two samples in a row (one spike is ignored), is slewed out over
 // ResnapSeconds instead of jumping. Once synced the estimate never runs backward, so a cue never
 // fires twice. Before the first sample there is no estimate: Now returns the local time.
-class FServerClock
+class KINETICCORE_API FServerClock
 {
 public:
 	void Sample(double ServerTime, double RoundTrip, double LocalNow);
@@ -208,8 +210,8 @@ struct FBox
 	FVec3 Center;       // Local offset of the box from the pose (a Hauler's pose is its nose)
 };
 
-std::optional<double> SegmentHitsBox(const FBox& Box, const FPose& Pose, const FVec3& A, const FVec3& B);
-std::optional<double> SweptSever(const FBox& Box, const FPose& From, const FPose& To, int Substeps, const FVec3& A,
+KINETICCORE_API std::optional<double> SegmentHitsBox(const FBox& Box, const FPose& Pose, const FVec3& A, const FVec3& B);
+KINETICCORE_API std::optional<double> SweptSever(const FBox& Box, const FPose& From, const FPose& To, int Substeps, const FVec3& A,
                                  const FVec3& B);
-FPose Lerp(const FPose& From, const FPose& To, double Alpha);
+KINETICCORE_API FPose Lerp(const FPose& From, const FPose& To, double Alpha);
 } // namespace Kinetic

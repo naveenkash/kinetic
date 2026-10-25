@@ -1,2 +1,22 @@
-build/
 __pycache__/
+# The headless and Unreal build products and logs (Makefile).
+build/
+# Unreal's generated folders and IDE projects.
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+*.xcworkspace
+*.xcodeproj
+*.code-workspace
+.vscode/
+# Plugins build into their own folders.
+Plugins/*/Binaries/
+Plugins/*/Intermediate/
+# Generated content: the scripts in Tools/unreal (and art/) rebuild it.
+Content/**/*.uasset
+Content/**/*.umap
+# Windows and other IDEs, for later.
+.vs/
+*.sln
+.idea/

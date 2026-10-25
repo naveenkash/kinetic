@@ -194,6 +194,12 @@ def build(variant: str = "htr") -> dict:
         for sy in (-1, 1):
             sockets[f"SKT_Dog_Hook_{i:02d}"] = (sx * (hx - CAST[0] / 2), sy * (hy - CAST[1] / 2), H)
             i += 1
+    # The doc names the long sides N and S (X is the container's length), the blank end, the
+    # doors and the top corner castings; each socket faces out of its face.
+    normals = {"SKT_Dog_SideN_01": (0, 1, 0), "SKT_Dog_SideS_01": (0, -1, 0), "SKT_Dog_End_01": (-1, 0, 0),
+               "SKT_Dog_Door_01": (1, 0, 0), "SKT_Dog_Door_02": (1, 0, 0)}
     for name, loc in sockets.items():
-        ka.socket(name, loc, body)
-    return {"name": v["mesh"], "body": body, "doors": doors, "size": (L, W, H)}
+        ka.socket(name, loc, body, normals.get(name, (0, 0, 1) if "_Hook_" in name else None))
+    # Its walls are single sheets, seen from inside once the doors are open: two-sided.
+    return {"name": v["mesh"], "meshes": [body, *doors], "size": (L, W, H), "budget": 16000,
+            "double_sided": [body.name, *(d.name for d in doors)]}

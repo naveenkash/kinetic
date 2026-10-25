@@ -2,6 +2,8 @@
 // stream the server uploads, so the backend can tell the report and the events belong together.
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include <array>
 #include <cstdint>
 #include <string>
@@ -9,7 +11,7 @@
 
 namespace Kinetic
 {
-class FSha256
+class KINETICCORE_API FSha256
 {
 public:
 	FSha256();

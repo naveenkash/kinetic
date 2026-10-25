@@ -3,6 +3,8 @@
 // kg·cm/s² (1 N = 100 kg·cm/s²). spool-and-line-implementation.md, header note.
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include "Kinetic/Vec3.h"
 
 namespace Kinetic::Units

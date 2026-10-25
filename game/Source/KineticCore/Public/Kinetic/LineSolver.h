@@ -10,6 +10,8 @@
 // object or break a brace on the step it fires.
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include "Kinetic/Tables.h"
 #include "Kinetic/Vec3.h"
 
@@ -90,16 +92,16 @@ struct FLineStepResult
 
 // Starts a mode and resets the per-engagement state. Hang captures L0, never under the
 // Dogs-meet length; Set keeps a Hang's rest length when it follows one and captures L0 otherwise.
-void EngageMode(FLineState& State, ELineMode Mode, double Now, const FVec3& PositionA, const FVec3& PositionB,
+KINETICCORE_API void EngageMode(FLineState& State, ELineMode Mode, double Now, const FVec3& PositionA, const FVec3& PositionB,
                 const FSpoolGlobals& Globals);
 
 // The Kick fires unless either Dog sits in another player's Catch Plate (3.2).
-bool IsKickAllowed(const FLineEndpoint& A, const FLineEndpoint& B);
+KINETICCORE_API bool IsKickAllowed(const FLineEndpoint& A, const FLineEndpoint& B);
 
 // One physics step of a Haul or Jack line, before integration with current positions.
 // TensionN is the owner's current pull tension (Spool.h: class T, overspin, Doubler split).
 // A Haul goes Slack when the Dogs meet; a Jack at the class line length. A Slack line reads
 // 0; Hang and Set lines are solved by HangSolver.h.
-FLineStepResult StepLine(FLineState& State, const FLineParams& Params, double TensionN, const FLineEndpoint& A,
+KINETICCORE_API FLineStepResult StepLine(FLineState& State, const FLineParams& Params, double TensionN, const FLineEndpoint& A,
                          const FLineEndpoint& B, const FSpoolGlobals& Globals, double Dt, double Now);
 } // namespace Kinetic

@@ -151,7 +151,7 @@ KINETIC runs its own backend for identity, crews, matchmaking, allocation and re
 
 ## 12. Engine-free implementation
 
-`game/Source/KineticCore` holds the parts of this document that need no engine, tested by `game/Source/KineticCore/Tests/NetTest.cpp`. The Unreal side writes these bytes through its own archive and drives the scheduler and validator from its net driver.
+`game/Source/KineticCore` holds the parts of this document that need no engine, tested by `game/Tests/KineticCore/NetTest.cpp`. The Unreal side writes these bytes through its own archive and drives the scheduler and validator from its net driver.
 
 | File | What it implements |
 |---|---|

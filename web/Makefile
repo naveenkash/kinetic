@@ -18,13 +18,13 @@ CXXFLAGS := -std=c++20 -O2 $(WARN) -I$(CORE)/Public -Isim -DKINETIC_TABLES_DIR=\
 
 CORE_SRC := $(wildcard $(CORE)/Private/*.cpp)
 SIM_SRC := $(filter-out sim/Bindings.cpp,$(wildcard sim/*.cpp))
-TEST_SRC := $(wildcard sim/Tests/*.cpp) $(CORE)/Tests/TestMain.cpp
-HEADERS := $(wildcard $(CORE)/Public/Kinetic/*.h) $(wildcard sim/*.h) $(wildcard $(CORE)/Tests/*.h)
+TEST_SRC := $(wildcard sim/Tests/*.cpp) ../game/Tests/KineticCore/TestMain.cpp
+HEADERS := $(wildcard $(CORE)/Public/Kinetic/*.h) $(wildcard sim/*.h) $(wildcard ../game/Tests/KineticCore/*.h)
 
 .PHONY: test wasm client dev clean
 
 $(BUILD)/web-sim-tests: $(CORE_SRC) $(SIM_SRC) $(TEST_SRC) $(HEADERS) Makefile | $(BUILD)
-	$(CXX) $(CXXFLAGS) -I$(CORE)/Tests $(CORE_SRC) $(SIM_SRC) $(TEST_SRC) -o $@
+	$(CXX) $(CXXFLAGS) -I../game/Tests/KineticCore $(CORE_SRC) $(SIM_SRC) $(TEST_SRC) -o $@
 
 test: $(BUILD)/web-sim-tests
 	./$<

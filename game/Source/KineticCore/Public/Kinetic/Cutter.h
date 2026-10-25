@@ -3,6 +3,8 @@
 // the camera's forward vector; the cone angle is the full apex angle (70° is 35° either side).
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include "Kinetic/Tables.h"
 #include "Kinetic/Vec3.h"
 
@@ -10,7 +12,7 @@
 
 namespace Kinetic
 {
-double CutterWarmupSeconds(ECutterVariant Variant, EHarnessClass Class, const FKineticTables& Tables);
+KINETICCORE_API double CutterWarmupSeconds(ECutterVariant Variant, EHarnessClass Class, const FKineticTables& Tables);
 
 struct FCutQuery
 {
@@ -21,7 +23,7 @@ struct FCutQuery
 };
 
 // The parameter t in [0, 1] along A to B of the cuttable point nearest the blade, or nothing.
-std::optional<double> FindCutPoint(const FCutQuery& Query, const FVec3& SegmentA, const FVec3& SegmentB);
+KINETICCORE_API std::optional<double> FindCutPoint(const FCutQuery& Query, const FVec3& SegmentA, const FVec3& SegmentB);
 
 inline bool CanCut(const FCutQuery& Query, const FVec3& SegmentA, const FVec3& SegmentB)
 {

@@ -5,6 +5,8 @@
 // writes these bytes through its own archive.
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include "Kinetic/Vec3.h"
 
 #include <cstdint>
@@ -14,7 +16,7 @@
 namespace Kinetic
 {
 // Appends and reads bit fields, least significant bit first.
-class FBitWriter
+class KINETICCORE_API FBitWriter
 {
 public:
 	void Write(uint64_t Value, int Bits);
@@ -26,7 +28,7 @@ private:
 	int Count = 0;
 };
 
-class FBitReader
+class KINETICCORE_API FBitReader
 {
 public:
 	explicit FBitReader(const std::vector<uint8_t>& InData) : Data(InData) {}
@@ -52,27 +54,27 @@ inline constexpr double AngularSpeedRange = 50.0;  // rad/s (PROPOSED)
 
 // Quantizes each axis to 16 bits: a range of R over 65,534 steps, so the middle of a symmetric
 // range (a body at rest) is exactly code 32,767. Anything not finite sends the middle.
-uint16_t QuantizeUnit(double Value, double Min, double Max);
-double DequantizeUnit(uint16_t Q, double Min, double Max);
+KINETICCORE_API uint16_t QuantizeUnit(double Value, double Min, double Max);
+KINETICCORE_API double DequantizeUnit(uint16_t Q, double Min, double Max);
 
 struct FQuantVec { uint16_t X = 0, Y = 0, Z = 0; };
-FQuantVec QuantizePosition(const FVec3& P, const FArenaBounds& Bounds);
-FVec3 DequantizePosition(const FQuantVec& Q, const FArenaBounds& Bounds);
-FQuantVec QuantizeVelocity(const FVec3& V, double Range);
-FVec3 DequantizeVelocity(const FQuantVec& Q, double Range);
+KINETICCORE_API FQuantVec QuantizePosition(const FVec3& P, const FArenaBounds& Bounds);
+KINETICCORE_API FVec3 DequantizePosition(const FQuantVec& Q, const FArenaBounds& Bounds);
+KINETICCORE_API FQuantVec QuantizeVelocity(const FVec3& V, double Range);
+KINETICCORE_API FVec3 DequantizeVelocity(const FQuantVec& Q, double Range);
 
 // A unit quaternion. Smallest-three: the largest component is dropped (its index in 2 bits,
 // its sign folded in by negating the whole quaternion) and the other three, each within
 // ±1/√2, are sent in 15 bits each: 47 bits in 6 bytes.
-struct FQuat
+struct KINETICCORE_API FQuat
 {
 	double X = 0.0, Y = 0.0, Z = 0.0, W = 1.0;
 	FQuat Normalized() const;
 	double Dot(const FQuat& O) const { return X * O.X + Y * O.Y + Z * O.Z + W * O.W; }
 };
-FQuat AxisAngle(const FVec3& Axis, double Angle);
-uint64_t PackQuat(const FQuat& Q);  // 47 bits
-FQuat UnpackQuat(uint64_t Bits);
+KINETICCORE_API FQuat AxisAngle(const FVec3& Axis, double Angle);
+KINETICCORE_API uint64_t PackQuat(const FQuat& Q);  // 47 bits
+KINETICCORE_API FQuat UnpackQuat(uint64_t Bits);
 
 // A replicated physics body: 32 bytes of payload.
 struct FBodyState
@@ -86,8 +88,8 @@ struct FBodyState
 };
 inline constexpr int BodyPayloadBytes = 32;
 inline constexpr int ActorHeaderBytes = 16;  // The engine's, counted in the budget only
-std::vector<uint8_t> EncodeBody(const FBodyState& Body, const FArenaBounds& Bounds);
-std::optional<FBodyState> DecodeBody(const std::vector<uint8_t>& Bytes, const FArenaBounds& Bounds);
+KINETICCORE_API std::vector<uint8_t> EncodeBody(const FBodyState& Body, const FArenaBounds& Bounds);
+KINETICCORE_API std::optional<FBodyState> DecodeBody(const std::vector<uint8_t>& Bytes, const FArenaBounds& Bounds);
 
 // A line update: 5 bytes. Force as one byte over 0 to 6 kN (the singing pitch and emissive
 // need no finer), the mode, five state bits, and the Reel rest length at 1/80 m to 51.2 m.
@@ -105,6 +107,6 @@ inline constexpr int LineUpdateBytes = 5;
 inline constexpr double LineForceRangeN = 6000.0;
 inline constexpr double RestLengthRangeM = 51.2;
 inline constexpr uint16_t MaxLineId = 4095;
-std::optional<std::vector<uint8_t>> EncodeLine(const FNetLine& Line);
-std::optional<FNetLine> DecodeLine(const std::vector<uint8_t>& Bytes);
+KINETICCORE_API std::optional<std::vector<uint8_t>> EncodeLine(const FNetLine& Line);
+KINETICCORE_API std::optional<FNetLine> DecodeLine(const std::vector<uint8_t>& Bytes);
 } // namespace Kinetic

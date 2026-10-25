@@ -6,6 +6,8 @@
 // kinematic ones. They never Stall directly.
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include "Kinetic/Tables.h"
 #include "Kinetic/Vec3.h"
 
@@ -15,11 +17,11 @@ namespace Kinetic
 {
 // What a volume may move (6.6).
 enum class EVolumeTarget : uint8_t { Player, LooseObject, LineHeldObject, PlacedObject, RatedObject, CableHung, Kinematic };
-bool VolumeMoves(EVolumeTarget Target);
+KINETICCORE_API bool VolumeMoves(EVolumeTarget Target);
 
 // A 0 to 1 curve over a repeating cycle, piecewise linear between (time in cycle, value) keys,
 // wrapping from the last key to the first key of the next cycle.
-struct FGustCurve
+struct KINETICCORE_API FGustCurve
 {
 	double PeriodSeconds = 40.0;
 	std::vector<std::pair<double, double>> Keys;  // Sorted by time; empty means always 1
@@ -36,7 +38,7 @@ struct FZBand
 
 // The Anchor's Updraft: upward a_ref at the Stump's axis, falling linearly to 0 at Radius,
 // scaled by the gust curve.
-struct FUpdraft
+struct KINETICCORE_API FUpdraft
 {
 	FVec3 Axis{0.0, 0.0, 0.0};  // A point on the Stump's vertical axis
 	double CoreARef = 14.0;     // m/s²
@@ -50,7 +52,7 @@ struct FUpdraft
 
 // The Anchor's Pulse: every Period from First, a 0.4 s shove outward at 20 m/s², then a 0.6 s
 // inhale toward the Stump at 8 m/s², both falling linearly to 0 at the Rim.
-struct FPulse
+struct KINETICCORE_API FPulse
 {
 	FVec3 Axis{0.0, 0.0, 0.0};
 	double First = 55.0;
@@ -67,7 +69,7 @@ struct FPulse
 
 // Ballast's water rush: a box in the Hold, a_ref 12 m/s² toward the nose (set by the hull's
 // tilt), starting 6 s after a tank rupture, for DurationSeconds (PROPOSED: 4 s).
-struct FWaterRush
+struct KINETICCORE_API FWaterRush
 {
 	FVec3 Min, Max;          // Axis-aligned box in the Hold
 	FVec3 Direction{1, 0, 0};
@@ -80,7 +82,7 @@ struct FWaterRush
 // A compressed-gas manifold's jet (6.4): a 6 m cone pushing along its axis for 3 s after a Jack
 // over 600 N or a blast, at 5 m/s² (a 100 kg body reaches 15 m/s in 3 s), no push once a body
 // already moves at 15 m/s along the jet. Cone half-angle PROPOSED: 15°.
-struct FGasJet
+struct KINETICCORE_API FGasJet
 {
 	FVec3 Apex;
 	FVec3 Axis{1, 0, 0};
@@ -94,7 +96,7 @@ struct FGasJet
 
 // A fuel drum's fire patch (6.4): a 3 m disc for 6 s, pushing outward until a body moves away
 // at 4 m/s (a_ref PROPOSED: 8 m/s²); entering it staggers (EStaggerCause::FirePatch).
-struct FFirePatch
+struct KINETICCORE_API FFirePatch
 {
 	FVec3 Center;
 	double Radius = 3.0;
@@ -107,5 +109,5 @@ struct FFirePatch
 };
 
 // The acceleration a body of mass m feels from a_ref (direction kept, magnitude scaled and capped).
-FVec3 BodyAcceleration(const FVec3& ARef, double MassKg, EVolumeTarget Target, const FSpoolGlobals& Globals);
+KINETICCORE_API FVec3 BodyAcceleration(const FVec3& ARef, double MassKg, EVolumeTarget Target, const FSpoolGlobals& Globals);
 } // namespace Kinetic

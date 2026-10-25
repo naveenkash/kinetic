@@ -9,7 +9,7 @@ _How an object goes from its spec document to a shipped asset. Every object in d
 > - exports for Unreal and for the browser client.
 >
 > The steps below still apply, with "the artist" read as "the asset's script". Two steps change:
-> - **High-poly sculpts (section 3)** give way to scripted bevels, weighted normals and procedural detail. The look is stylized hard-surface, which suits code.
+> - **High-poly sculpts (section 3)** give way to scripted bevels, weighted normals and procedural detail. The look is stylized hard-surface, which suits code. Where detail is too dense for the budget (chain links, rope wraps, weld mesh), the script models it in full as the high mesh and bakes it onto a low one (normal map, colour, AO, and an alpha mask for cards).
 > - **Characters (section 10)** are built from rigid harness and armour pieces under a scripted skeleton.
 >
 > The team table in team-and-roles.md no longer staffs artists for asset production.

@@ -29,6 +29,8 @@
 // - On the capsule only a walkable contact is floor; a wall contact is not a landing.
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include "Kinetic/Impact.h"
 #include "Kinetic/MassRules.h"
 #include "Kinetic/Tables.h"
@@ -41,7 +43,7 @@ namespace Kinetic
 enum class EPlayerState : uint8_t { Grounded, Dragged, Airborne, Hoisted, Flipped, Staggered, Perched, LedgeHang, Stalled };
 enum class EPlayerBody : uint8_t { Capsule, Flight };
 
-const char* ToString(EPlayerState State);
+KINETICCORE_API const char* ToString(EPlayerState State);
 
 // Why a stagger happened, for its duration (7.1, 3.5, 3.7, 4.4).
 enum class EStaggerCause : uint8_t { Impact, HangLineHit, OverspinRecoil, CutterMelee, FirePatch };
@@ -92,7 +94,7 @@ struct FPlayerStepResult
 	bool bLanded = false;
 };
 
-class FPlayerStateMachine
+class KINETICCORE_API FPlayerStateMachine
 {
 public:
 	FPlayerStateMachine(EHarnessClass InClass, const FKineticTables& InTables);
@@ -160,7 +162,7 @@ private:
 // Anchor's Well is not retrieved and despawns when it falls below the volume.
 enum class EStallStage : uint8_t { Locking, Prop, Lifting, Gone };
 
-class FStallSequence
+class KINETICCORE_API FStallSequence
 {
 public:
 	FStallSequence(double StartTime, bool bRingOut, bool bIntoAnchorWell)
@@ -188,6 +190,6 @@ private:
 // True when a player HeightM above the Well volume, at VerticalSpeed (m/s, positive down,
 // negative while still rising), will reach it within LeadSeconds (0.5 s: the Hooks spin up
 // audibly, 7.5). Falls are capped at the 50 m/s terminal speed (2.4).
-bool ShouldCueHooks(double HeightM, double VerticalSpeed, double Gravity, double TerminalSpeed = 50.0,
+KINETICCORE_API bool ShouldCueHooks(double HeightM, double VerticalSpeed, double Gravity, double TerminalSpeed = 50.0,
                     double LeadSeconds = 0.5);
 } // namespace Kinetic

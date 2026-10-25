@@ -5,6 +5,8 @@
 // SHA-256 goes in the report.
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include "Kinetic/Impact.h"
 #include "Kinetic/LineSolver.h"
 #include "Kinetic/Tables.h"
@@ -45,14 +47,14 @@ enum class ERig : uint8_t
 enum class ERoundEnd : uint8_t { CrewDown, TimeOut, SuddenDeath, Replayed, Forfeit };
 enum class EConnection : uint8_t { Disconnected, Returned, IdleWarning, Withdrawn, Backfilled, Abandoned };
 
-const char* ToString(ESeatTarget Value);
-const char* ToString(EPlate Value);
-const char* ToString(ELineOutcome Value);
-const char* ToString(EStallCause Value);
-const char* ToString(ERig Value);
-const char* ToString(ERoundEnd Value);
-const char* ToString(EConnection Value);
-const char* ToString(ELineMode Value);
+KINETICCORE_API const char* ToString(ESeatTarget Value);
+KINETICCORE_API const char* ToString(EPlate Value);
+KINETICCORE_API const char* ToString(ELineOutcome Value);
+KINETICCORE_API const char* ToString(EStallCause Value);
+KINETICCORE_API const char* ToString(ERig Value);
+KINETICCORE_API const char* ToString(ERoundEnd Value);
+KINETICCORE_API const char* ToString(EConnection Value);
+KINETICCORE_API const char* ToString(ELineMode Value);
 
 // Every Dog seat: shooter, target type, plate if a player.
 struct FDogSeatEvent
@@ -198,7 +200,7 @@ using FMatchEvent = std::variant<FDogSeatEvent, FModeEvent, FCutEvent, FStallEve
                                  FConnectionEvent, FServerSecondEvent>;
 
 // The match's raw events, in the order they happened.
-class FEventLog
+class KINETICCORE_API FEventLog
 {
 public:
 	void Append(const FMatchEvent& Event) { Events.push_back(Event); }
@@ -212,5 +214,5 @@ private:
 	std::vector<FMatchEvent> Events;
 };
 
-std::string ToJson(const FMatchEvent& Event);
+KINETICCORE_API std::string ToJson(const FMatchEvent& Event);
 } // namespace Kinetic

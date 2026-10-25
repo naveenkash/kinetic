@@ -22,6 +22,8 @@
 //   5 s in the same round.
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include "Kinetic/MatchEvents.h"
 #include "Kinetic/ScrapMatch.h"
 
@@ -66,13 +68,13 @@ struct FPlayerFacts
 inline constexpr double SnapSurvivalSeconds = 5.0;
 
 // Facts for every player in the roster, in roster order.
-std::vector<FPlayerFacts> ComputeFacts(const std::vector<FMatchPlayer>& Roster, const FEventLog& Log,
+KINETICCORE_API std::vector<FPlayerFacts> ComputeFacts(const std::vector<FMatchPlayer>& Roster, const FEventLog& Log,
                                        const FKineticTables& Tables);
 
 // The report JSON. Teams are written 1 and 2; winner_team is null for a no-contest. The
 // result also writes forfeit_team, forfeit_penalty_free and no_contest (PROPOSED additions to
 // backend-architecture 12.1). Connections come from the match flow, in roster order.
-std::string BuildMatchReport(const FMatchInfo& Info, const std::vector<FMatchPlayer>& Roster, const FEventLog& Log,
+KINETICCORE_API std::string BuildMatchReport(const FMatchInfo& Info, const std::vector<FMatchPlayer>& Roster, const FEventLog& Log,
                              const std::vector<FPlayerConnection>& Connections, const FScrapResult& Result,
                              const FKineticTables& Tables);
 } // namespace Kinetic

@@ -1,1 +1,3 @@
 out/
+# Blender's backups, if a scene is ever saved while debugging an asset script.
+*.blend1

@@ -3,6 +3,8 @@
 // bible/05 sections 3.3, 5.1 to 5.4, 6.1 to 6.3, 6.6; spool-and-line section 3.3.
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include "Kinetic/Tables.h"
 #include "Kinetic/Vec3.h"
 
@@ -37,7 +39,7 @@ struct FPlayerLineResponse
 	bool bBraceBroken = false;
 };
 
-FPlayerBody PlayerBodyFor(const FHarnessTuning& Harness, bool bBraced, bool bGrounded);
+KINETICCORE_API FPlayerBody PlayerBodyFor(const FHarnessTuning& Harness, bool bBraced, bool bGrounded);
 
 // Over this share of the line force upward, a pull that reaches the player's weight is a hoist.
 inline constexpr double HoistUpwardShare = 0.5;
@@ -48,17 +50,17 @@ inline constexpr double HoistUpwardShare = 0.5;
 // takes off the feet. A Kick always lifts an unbraced grounded player into a
 // flight body (spool-and-line section 3.3). A mostly upward pull that reaches the player's
 // weight unloads the feet: hoisted (bible/05 section 5.2).
-FPlayerLineResponse ResolvePlayerUnderLine(const FPlayerBody& Player, const FVec3& LineForce, bool bKickActive,
+KINETICCORE_API FPlayerLineResponse ResolvePlayerUnderLine(const FPlayerBody& Player, const FVec3& LineForce, bool bKickActive,
                                            double Gravity);
 
 // Objects --------------------------------------------------------------------------
 
 enum class EMassTier : uint8_t { Light, Medium, Heavy, Rated };
 
-EMassTier TierOf(double MassKg, bool bStructural, const FMassTierBounds& Bounds);
+KINETICCORE_API EMassTier TierOf(double MassKg, bool bStructural, const FMassTierBounds& Bounds);
 
 // Light, or Medium under the bonus mass cap (a propane cylinder yes, a fuel drum no), 6.1.
-bool IsSmallPropBonusTarget(double MassKg, const FKineticTables& Tables);
+KINETICCORE_API bool IsSmallPropBonusTarget(double MassKg, const FKineticTables& Tables);
 
 struct FObjectBody
 {
@@ -79,12 +81,12 @@ struct FObjectLineResponse
 
 // False for fixed scenery and rated loads (their commit timeline moves them). The active line
 // solver uses 1/m for everything else, and the thresholds below then decide what moves.
-bool CanEverMoveUnderALine(const FObjectBody& Object);
+KINETICCORE_API bool CanEverMoveUnderALine(const FObjectBody& Object);
 
 // ActivePull is the vector sum of every Haul, Jack push and Kick force on the object this step
 // (6.2a). Hang lines never test break-free (6.2): bOnlyHangLines keeps a placed object static.
 // A kinematic attachment released from its path is a simulated body from then on (6.7).
-FObjectLineResponse ResolveObjectUnderLines(const FObjectBody& Object, const FVec3& ActivePull, bool bOnlyHangLines,
+KINETICCORE_API FObjectLineResponse ResolveObjectUnderLines(const FObjectBody& Object, const FVec3& ActivePull, bool bOnlyHangLines,
                                             const FKineticTables& Tables);
 
 // Inclusive (v0.2.1), with a relative tolerance: a pull built as Axis × 1,000 N can measure
@@ -93,7 +95,7 @@ inline bool MeetsBreakFree(double PullN, double ThresholdN) { return PullN >= Th
 
 // A rated load commits once active pull along its authored axis has held at or above the
 // rated threshold for RatedCommitHold seconds; its scripted timeline then carries the motion.
-class FRatedCommit
+class KINETICCORE_API FRatedCommit
 {
 public:
 	bool Update(double PullAlongAxisN, double Dt, const FKineticTables& Tables);
@@ -109,5 +111,5 @@ private:
 
 // Acceleration a body of MassKg feels in a volume authored as ARef for the reference body,
 // capped at ForceVolumeCapMul × ARef (6.6).
-double ForceVolumeAcceleration(double ARef, double MassKg, const FSpoolGlobals& Globals);
+KINETICCORE_API double ForceVolumeAcceleration(double ARef, double MassKg, const FSpoolGlobals& Globals);
 } // namespace Kinetic

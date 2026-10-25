@@ -18,6 +18,8 @@
 // - The latency policy (6) and misprediction statistics (11).
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include "Kinetic/Cutter.h"
 #include "Kinetic/Vec3.h"
 
@@ -62,7 +64,7 @@ struct FFrameSnapshot
 	std::vector<FPlayerPose> Players;
 };
 
-class FRewindHistory
+class KINETICCORE_API FRewindHistory
 {
 public:
 	void Record(FFrameSnapshot Snapshot);  // Frames in ascending order
@@ -86,7 +88,7 @@ struct FCutDecision
 	int64_t JudgedFrame = 0;  // The cut's timestamp: the frame it is judged at
 };
 
-class FCutValidator
+class KINETICCORE_API FCutValidator
 {
 public:
 	explicit FCutValidator(const FRewindHistory& InHistory) : History(InHistory) {}
@@ -133,7 +135,7 @@ private:
 
 // Turns From toward To by at most MaxDegrees (unit vectors in, unit vector out). Turning to
 // the exact opposite goes by way of an arbitrary perpendicular.
-FVec3 ClampTurn(const FVec3& From, const FVec3& To, double MaxDegrees);
+KINETICCORE_API FVec3 ClampTurn(const FVec3& From, const FVec3& To, double MaxDegrees);
 
 // 7.2: a Dog's sweep this frame, From to To, against the other players' plates at the client's
 // frame. The sweep comes from the server's own simulation of the projectile, launched from the
@@ -148,11 +150,11 @@ struct FPlateHit
 };
 inline constexpr double DogRadiusM = 0.08;  // 05 3.1
 inline constexpr double PlateHitRadiusM = 0.35;
-std::optional<FPlateHit> ResweepDog(const FRewindHistory& History, int64_t ClientFrame, int Shooter, const FVec3& From,
+KINETICCORE_API std::optional<FPlateHit> ResweepDog(const FRewindHistory& History, int64_t ClientFrame, int Shooter, const FVec3& From,
                                     const FVec3& To);
 
 // The grace window for a victim at this one-way latency, in frames (7.1 step 5).
-int GraceFrames(double OneWayLatencySeconds);
+KINETICCORE_API int GraceFrames(double OneWayLatencySeconds);
 
 struct FPendingStall
 {
@@ -162,7 +164,7 @@ struct FPendingStall
 	int64_t ConfirmFrame = 0;
 };
 
-class FPendingStalls
+class KINETICCORE_API FPendingStalls
 {
 public:
 	// A line-caused Stall: pending for G (returns false), unless it was going over an edge,
@@ -180,7 +182,7 @@ private:
 };
 
 // One-way latency from round trips, smoothed (the grace window and the policy read it).
-class FLatencyEstimate
+class KINETICCORE_API FLatencyEstimate
 {
 public:
 	void Sample(double RoundTripSeconds);
@@ -196,7 +198,7 @@ private:
 // Section 6: over 300 ms a client's own flight body moves to Predictive Interpolation and the
 // player is warned; over 400 ms they leave the region's matchmaking pools.
 enum class ELatencyPolicy : uint8_t { Resimulation, PredictiveInterpolation, LeavePools };
-ELatencyPolicy PolicyFor(double RoundTripSeconds);
+KINETICCORE_API ELatencyPolicy PolicyFor(double RoundTripSeconds);
 
 // Section 11: per-player correction statistics. Each time the server corrects a player's own
 // prediction, record whether the prediction was better for the player than the server's state

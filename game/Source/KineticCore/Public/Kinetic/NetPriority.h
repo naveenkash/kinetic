@@ -4,6 +4,8 @@
 // and then tier-2 bodies first and never lines or players.
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include "Kinetic/Vec3.h"
 
 #include <cstdint>
@@ -31,22 +33,22 @@ struct FNetActor
 };
 
 // Section 5's table; 0 means dormant (not sent).
-int NetPriority(const FNetActor& Actor);
+KINETICCORE_API int NetPriority(const FNetActor& Actor);
 
 // Section 2's rates and section 3's tiers.
 enum class EBodyTier : uint8_t { Tier1, Tier2, Tier3, Dormant };
 inline constexpr double Tier1RadiusM = 15.0;
 inline constexpr double Tier2RadiusM = 40.0;  // PROPOSED: section 3 names the tier, not its edge
-EBodyTier TierOf(const FNetActor& Body);
+KINETICCORE_API EBodyTier TierOf(const FNetActor& Body);
 // Other players at 30 Hz (section 2), or 60 Hz while airborne: section 3's worst case counts
 // their flight bodies at the owner's rate. Lines at 30 Hz, except the viewer's own lines and
 // any line with a Dog in the viewer's plate, at 60 Hz (section 2's "lines on their body").
-double UpdateHz(const FNetActor& Actor);  // 0 for dormant
-int UpdateBytes(const FNetActor& Actor);  // Payload plus the actor header
-bool NeverShed(const FNetActor& Actor);   // Lines and players
+KINETICCORE_API double UpdateHz(const FNetActor& Actor);  // 0 for dormant
+KINETICCORE_API int UpdateBytes(const FNetActor& Actor);  // Payload plus the actor header
+KINETICCORE_API bool NeverShed(const FNetActor& Actor);   // Lines and players
 // The order in which the rest are shed, last shed first: tier-1 bodies (0), tier-2 bodies and
 // the nearest clusters (1), tier-3 bodies and the other clusters (2).
-int ShedRank(const FNetActor& Actor);
+KINETICCORE_API int ShedRank(const FNetActor& Actor);
 
 // Section 3's worst case, from its own counts, for checking the arithmetic.
 struct FBandwidthCase
@@ -58,7 +60,7 @@ struct FBandwidthCase
 	double EventsBytesPerSecond = 1500.0;
 	double PacketsPerSecond = 60.0;
 };
-double DownstreamBytesPerSecond(const FBandwidthCase& Case);
+KINETICCORE_API double DownstreamBytesPerSecond(const FBandwidthCase& Case);
 
 inline constexpr double MaxClientRateBytes = 100000.0;  // MaxClientRate
 inline constexpr double UdpIpHeaderBytes = 28.0;
@@ -70,7 +72,7 @@ inline constexpr double UdpIpHeaderBytes = 28.0;
 // budget covers tier 1. Then the rest by shed rank, then priority, then the most overdue, while
 // the tick's budget (MaxClientRate over the tick rate, less headers) lasts. Starved actors go
 // first within tier 1 too. Anything not sent stays due and is offered again next tick.
-class FNetScheduler
+class KINETICCORE_API FNetScheduler
 {
 public:
 	explicit FNetScheduler(double InTickHz = 60.0, double InBudgetBytesPerSecond = MaxClientRateBytes)

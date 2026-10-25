@@ -16,6 +16,8 @@
 // - No enemy line: no killer (the world did it, or a teammate's line).
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include "Kinetic/MatchEvents.h"
 
 #include <map>
@@ -30,7 +32,7 @@ struct FCredit
 	std::vector<int> Assists;  // By slot, ascending
 };
 
-class FCreditTracker
+class KINETICCORE_API FCreditTracker
 {
 public:
 	static constexpr double WindowSeconds = 5.0;
@@ -77,6 +79,6 @@ struct FScrapCard
 	double HookLiftSeconds = 2.0;
 };
 
-FScrapCard MakeScrapCard(const FStallEvent& Stall, const FMatchPlayer& Victim, bool bIntoAnchorWell,
+KINETICCORE_API FScrapCard MakeScrapCard(const FStallEvent& Stall, const FMatchPlayer& Victim, bool bIntoAnchorWell,
                          const FKineticTables& Tables);
 } // namespace Kinetic

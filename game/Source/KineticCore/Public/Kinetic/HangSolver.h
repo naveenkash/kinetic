@@ -28,6 +28,8 @@
 // the floor is resisted by it. In the engine, Chaos solves contacts alongside the line joints.
 #pragma once
 
+#include "Kinetic/Api.h"
+
 #include "Kinetic/LineSolver.h"
 
 #include <optional>
