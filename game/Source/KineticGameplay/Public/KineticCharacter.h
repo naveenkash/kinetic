@@ -149,6 +149,7 @@ private:
 	void OnMode(ELineModeInput Mode);
 	void OnRelease();
 	void OnDraw(const FInputActionValue& Value);
+	void OnCursor();
 	void UpdateLadder(float DeltaSeconds);
 	void LoadFigure();
 	void UpdateFigure();
@@ -167,6 +168,7 @@ private:
 	bool bFigure = false;
 	EFigureTake Take = EFigureTake::Count;
 	double StaggerUntil = 0.0;
+	double GroundedAt = -1.0;  // The last tick on the ground (a ladder catches a step off its top)
 	UPROPERTY()
 	TObjectPtr<UAnimSequence> Takes[static_cast<int32>(EFigureTake::Count)];
 	uint32 Inputs = 0;
@@ -200,4 +202,7 @@ private:
 	TObjectPtr<UInputAction> ReleaseAction;
 	UPROPERTY()
 	TObjectPtr<UInputAction> DrawAction;
+	UPROPERTY()
+	TObjectPtr<UInputAction> CursorAction;
+	bool bCursorFree = false;
 };

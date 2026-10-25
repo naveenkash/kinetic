@@ -1185,8 +1185,12 @@ void UKineticSpoolWorld::Impacts()
 		if (Outcome == Kinetic::EOutcome::Stall)
 		{
 			Kinetic::EStallCause Cause = Kinetic::EStallCause::WorldImpact;
+			const FVector At = Character->GetActorLocation() / 100.0;
 			for (const Kinetic::FContact& C : Contacts)
 			{
+				UE_LOG(LogKineticSpool, Log, TEXT("%s hit at (%.1f, %.1f, %.1f) m: kind %d, %.1f m/s, normal (%.2f, %.2f, %.2f)"),
+				       *Character->GetName(), At.X, -At.Y, At.Z, static_cast<int>(C.Kind), C.RelativeSpeed, C.Normal.X, C.Normal.Y,
+				       C.Normal.Z);
 				Cause = C.Kind == Kinetic::EContactKind::Object      ? Kinetic::EStallCause::ObjectImpact
 				        : C.Kind == Kinetic::EContactKind::Player    ? Kinetic::EStallCause::PlayerImpact
 				        : C.Kind == Kinetic::EContactKind::Kinematic ? Kinetic::EStallCause::KinematicImpact

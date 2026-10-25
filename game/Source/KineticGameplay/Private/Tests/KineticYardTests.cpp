@@ -19,6 +19,7 @@
 #include "KineticGameMode.h"
 #include "KineticHazardWorld.h"
 #include "KineticKinematic.h"
+#include "KineticLadder.h"
 #include "KineticProp.h"
 #include "KineticYardDirector.h"
 #include "KineticRulesSubsystem.h"
@@ -145,7 +146,44 @@ public:
 				const double Height = Rules->Tables()->Harness(KineticHarness::ToCore(Character->Harness)).JumpHeight;
 				Test->TestEqual(TEXT("jump rise is the class's jump height"), (Peak - JumpFrom) / 100.0, Height, Height * 0.05);
 			}
-			return true;
+			// The West Mesa's nearest ladder from the top: stand at its top, facing away from the wall.
+			for (TActorIterator<AKineticLadder> It(World); It; ++It)
+			{
+				if (FMath::Abs(It->TopZ() - 800.0f) < 50.0f &&
+				    (!Ladder || FVector::Dist2D(It->StepOff(), At) < FVector::Dist2D(Ladder->StepOff(), At)))
+				{
+					Ladder = *It;
+				}
+			}
+			if (!Ladder)
+			{
+				return Fail(TEXT("no ladder up the West Mesa"));
+			}
+			Character->TeleportTo(Ladder->StepOff() + FVector(0.0, 0.0, Character->GetSimpleCollisionHalfHeight() + 5.0),
+			                      FRotator(0.0, (-Ladder->IntoWall).Rotation().Yaw, 0.0));
+			Stage = 3;
+			StageAt = Now;
+			return false;
+		case 3:  // Walk forward off the top, the wrong way round: caught on the rungs, not dropped.
+			if (Now - StageAt < 0.5)
+			{
+				return false;  // Settle on the mesa top
+			}
+			if (APlayerController* Player = Cast<APlayerController>(Character->GetController()))
+			{
+				Player->SetControlRotation(FRotator(0.0, (-Ladder->IntoWall).Rotation().Yaw, 0.0));
+			}
+			if (!Character->IsClimbing())
+			{
+				Character->Move(FVector2D(0.0, 1.0));
+			}
+			if (Character->IsClimbing() || Now - StageAt > 3.0)
+			{
+				Test->TestTrue(TEXT("walking off a ladder's top catches the rungs"), Character->IsClimbing());
+				Test->TestTrue(TEXT("caught near the top"), At.Z > 800.0 - 250.0);
+				return true;
+			}
+			return false;
 		default:
 			return true;
 		}
@@ -164,6 +202,7 @@ private:
 	double TopSpeed = 0.0;
 	double JumpFrom = -1.0;
 	double Peak = -1.0e9;
+	AKineticLadder* Ladder = nullptr;
 };
 // The Spool on West Mesa, next to Spawn A (bible/05 sections 3.2, 3.4), in this order: a Haul
 // brings a folding chair to the player until the Dogs meet; a Hang into the mesa top holds the

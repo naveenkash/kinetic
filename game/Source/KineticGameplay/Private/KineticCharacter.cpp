@@ -458,6 +458,42 @@ void AKineticCharacter::UpdateLadder(float DeltaSeconds)
 		}
 		const FVector Facing = FRotationMatrix(FRotator(0.0, GetActorRotation().Yaw, 0.0)).GetUnitAxis(EAxis::X);
 		const float Feet = static_cast<float>(GetActorLocation().Z) - CapsuleHalfHeightCm;
+		const double Now = GetWorld()->GetTimeSeconds();
+		if (Movement->IsMovingOnGround())
+		{
+			GroundedAt = Now;
+		}
+		else if (Movement->IsFalling() && !bStunned && Now - GroundedAt < 0.35 && Movement->Velocity.Z <= 0.0)
+		{
+			// Stepped off beside the top of a ladder, whichever way it faced: onto the rungs, facing
+			// the wall, rather than down the drop (a jump is still rising this soon, and is let go).
+			for (TActorIterator<AKineticLadder> It(GetWorld()); It; ++It)
+			{
+				AKineticLadder* Candidate = *It;
+				const FVector Hold = Candidate->ClimbAt(FMath::Min(GetActorLocation().Z, Candidate->TopZ() - 120.0 + CapsuleHalfHeightCm));
+				if (Feet > Candidate->TopZ() - 150.0f && Feet < Candidate->TopZ() + 10.0f &&
+				    FVector::Dist2D(GetActorLocation(), Hold) < 100.0)
+				{
+					FCollisionQueryParams Params(SCENE_QUERY_STAT(KineticLadderCatch), false, this);
+					if (GetWorld()->OverlapBlockingTestByChannel(Hold, FQuat::Identity, ECC_Pawn,
+					                                             FCollisionShape::MakeCapsule(CapsuleRadiusCm - 5.0f, CapsuleHalfHeightCm - 5.0f), Params))
+					{
+						continue;
+					}
+					SetActorLocation(Hold, false, nullptr, ETeleportType::TeleportPhysics);
+					const FRotator ToWall(0.0, Candidate->IntoWall.Rotation().Yaw, 0.0);
+					SetActorRotation(ToWall);
+					if (Controller)
+					{
+						Controller->SetControlRotation(ToWall);
+					}
+					Ladder = Candidate;
+					Movement->Velocity = FVector::ZeroVector;
+					Movement->SetMovementMode(MOVE_Flying);
+					return;
+				}
+			}
+		}
 		if (ForwardInput < -0.1f && Movement->IsMovingOnGround())
 		{
 			// Backing over the top of a ladder, facing the wall: onto the rungs, going down.
@@ -573,6 +609,7 @@ void AKineticCharacter::BuildInput()
 	ModeActions[2] = Action(TEXT("IA_ModeHang"), EInputActionValueType::Boolean);
 	ReleaseAction = Action(TEXT("IA_Release"), EInputActionValueType::Boolean);
 	DrawAction = Action(TEXT("IA_Draw"), EInputActionValueType::Boolean);
+	CursorAction = Action(TEXT("IA_Cursor"), EInputActionValueType::Boolean);
 	InputContext = NewObject<UInputMappingContext>(this, TEXT("IMC_Kinetic"));
 
 	// W A S D onto one 2D axis: W and S drive Y (swizzled), A and D drive X; S and A negated.
@@ -607,6 +644,8 @@ void AKineticCharacter::BuildInput()
 	InputContext->MapKey(ModeActions[2], EKeys::Three);
 	InputContext->MapKey(ReleaseAction, EKeys::R);
 	InputContext->MapKey(DrawAction, EKeys::RightMouseButton);
+	// Escape lets go of the mouse (and takes it back).
+	InputContext->MapKey(CursorAction, EKeys::Escape);
 }
 
 void AKineticCharacter::NotifyControllerChanged()
@@ -650,6 +689,7 @@ void AKineticCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	Input->BindAction(ReleaseAction, ETriggerEvent::Started, this, &AKineticCharacter::OnRelease);
 	Input->BindAction(DrawAction, ETriggerEvent::Started, this, &AKineticCharacter::OnDraw);
 	Input->BindAction(DrawAction, ETriggerEvent::Completed, this, &AKineticCharacter::OnDraw);
+	Input->BindAction(CursorAction, ETriggerEvent::Started, this, &AKineticCharacter::OnCursor);
 	// Any of them is input for the idle rules.
 	for (UInputAction* Any : {MoveAction.Get(), LookAction.Get(), JumpAction.Get(), SprintAction.Get(), CrouchAction.Get(),
 	                          FireAction.Get(), SelfDogAction.Get(), ModeActions[0].Get(), ModeActions[1].Get(),
@@ -663,7 +703,7 @@ void AKineticCharacter::NoteInput() { ++Inputs; }
 
 void AKineticCharacter::OnFire()
 {
-	if (bStunned)
+	if (bStunned || bCursorFree)
 	{
 		return;
 	}
@@ -717,8 +757,34 @@ void AKineticCharacter::OnDraw(const FInputActionValue& Value)
 
 void AKineticCharacter::OnMove(const FInputActionValue& Value) { Move(Value.Get<FVector2D>()); }
 
+void AKineticCharacter::OnCursor()
+{
+	APlayerController* Player = Cast<APlayerController>(Controller);
+	if (!Player)
+	{
+		return;
+	}
+	bCursorFree = !bCursorFree;
+	Player->SetShowMouseCursor(bCursorFree);
+	if (bCursorFree)
+	{
+		FInputModeGameAndUI Mode;
+		Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		Mode.SetHideCursorDuringCapture(false);
+		Player->SetInputMode(Mode);
+	}
+	else
+	{
+		Player->SetInputMode(FInputModeGameOnly());
+	}
+}
+
 void AKineticCharacter::OnLook(const FInputActionValue& Value)
 {
+	if (bCursorFree)
+	{
+		return;  // The mouse is the cursor's until Escape again
+	}
 	const FVector2D Axis = Value.Get<FVector2D>();
 	AddControllerYawInput(static_cast<float>(Axis.X));
 	AddControllerPitchInput(static_cast<float>(Axis.Y));
