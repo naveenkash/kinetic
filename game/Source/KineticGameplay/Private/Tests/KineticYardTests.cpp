@@ -1260,6 +1260,15 @@ public:
 					const FVector P = It->GetActorLocation() / 100.0;
 					Test->AddInfo(FString::Printf(TEXT("rigger %s crew %d at (%.1f, %.1f, %.1f) hidden %d mesh %d"), *It->GetName(), It->Crew,
 					                              P.X, -P.Y, P.Z, It->IsHidden() ? 1 : 0, It->GetMesh()->IsVisible() ? 1 : 0));
+					TArray<USkeletalMeshComponent*> Parts;
+					It->GetComponents<USkeletalMeshComponent>(Parts);
+					for (const USkeletalMeshComponent* Part : Parts)
+					{
+						const FVector Head = Part->GetBoneIndex(TEXT("head")) != INDEX_NONE ? Part->GetBoneLocation(TEXT("head")) / 100.0 : FVector::ZeroVector;
+						Test->AddInfo(FString::Printf(TEXT("  part %s mesh %s visible %d registered %d bounds %s head (%.1f, %.1f, %.1f)"), *Part->GetName(),
+						                              Part->GetSkeletalMeshAsset() ? *Part->GetSkeletalMeshAsset()->GetName() : TEXT("none"),
+						                              Part->IsVisible() ? 1 : 0, Part->IsRegistered() ? 1 : 0, *Part->Bounds.ToString(), Head.X, -Head.Y, Head.Z));
+					}
 				}
 			}
 			++Next;

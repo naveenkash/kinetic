@@ -199,6 +199,11 @@ def main() -> None:
     out: dict = {}
     # The Rigger first when there is no skeleton yet: its import makes the one the rest share. Once
     # there is, the Rigger last: imported first onto the skeleton it made, it brings no takes.
+    if os.environ.get("KINETIC_FRESH_SKELETON") == "1" and eal.does_asset_exist(SKELETON):
+        for cls_folder in (f"{ROOT}/{c}" for c in ("Rigger", "Breaker", "Climber", "Doubler", "Scrapper")):
+            if eal.does_directory_exist(cls_folder):
+                eal.delete_directory(cls_folder)
+        eal.delete_asset(SKELETON)  # Remade from the Rigger's import below
     skeleton = unreal.load_asset(SKELETON) if eal.does_asset_exist(SKELETON) else None
     reports.sort(key=lambda p: (0 if os.sep + "Rigger" + os.sep in p else 1) * (1 if skeleton is None else -1))
     for report_path in reports:
@@ -295,4 +300,5 @@ def run() -> None:
         os._exit(status)
 
 
-run()
+if __name__ == "__main__":
+    run()

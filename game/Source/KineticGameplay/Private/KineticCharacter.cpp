@@ -6,6 +6,7 @@
 #include "Engine/Engine.h"
 #include "EngineUtils.h"
 #include "EnhancedInputComponent.h"
+#include "HAL/IConsoleManager.h"
 #include "EnhancedInputSubsystems.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
@@ -114,8 +115,18 @@ void AKineticCharacter::BeginPlay()
 	ApplyHarness();
 }
 
+namespace
+{
+TAutoConsoleVariable<int32> CVarMetaHumans(TEXT("kinetic.MetaHumans"), 0,
+                                           TEXT("1: play each class as its MetaHuman when it is built, retargeted and fitted"));
+}
+
 bool AKineticCharacter::LoadMetaHuman(const FString& Class)
 {
+	if (CVarMetaHumans.GetValueOnGameThread() == 0)
+	{
+		return false;  // Off until the retarget is verified (game/README.md)
+	}
 	// Built by build_metahumans.py, its takes by retarget_metahumans.py, its gear by
 	// art/characters (fitted to the body, on its skeleton). All of it, or the harness figure.
 	const auto Load = [](const FString& Path) {
@@ -148,6 +159,13 @@ bool AKineticCharacter::LoadMetaHuman(const FString& Class)
 	}
 	GetMesh()->SetSkeletalMesh(BodyMesh);
 	GetMesh()->SetRelativeRotation(FRotator(0.0, -90.0, 0.0));  // A MetaHuman faces +Y; the character faces +X
+	// The body is all under the coverall, gloves and boots: not drawn, but still posed every
+	// frame, since the face and the gear follow its bones.
+	GetMesh()->SetVisibility(true);
+	GetMesh()->SetRenderInMainPass(false);
+	GetMesh()->SetRenderInDepthPass(false);
+	GetMesh()->SetCastShadow(false);
+	GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
 	const auto Follower = [this](TObjectPtr<USkeletalMeshComponent>& Part, const TCHAR* Name, USkeletalMesh* Mesh) {
 		if (!Part)
 		{
@@ -194,6 +212,10 @@ void AKineticCharacter::LoadFigure()
 	}
 	GetMesh()->SetSkeletalMesh(bFigure ? Figure : nullptr);
 	GetMesh()->SetRelativeRotation(FRotator::ZeroRotator);  // The harness figure faces +X itself
+	GetMesh()->SetVisibility(true);
+	GetMesh()->SetRenderInMainPass(true);
+	GetMesh()->SetRenderInDepthPass(true);
+	GetMesh()->SetCastShadow(true);
 	for (USkeletalMeshComponent* Part : {Face.Get(), Gear.Get()})
 	{
 		if (Part)

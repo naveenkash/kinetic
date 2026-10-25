@@ -23,6 +23,7 @@
 #   make metahumans    creates and shapes the five class MetaHumans (building them needs a sign-in)
 #   make export-metahumans  exports the built MetaHumans' bodies and faces for art/characters to fit
 #   make retarget-metahumans  retargets the classes' takes onto their MetaHumans
+#   make import-metahuman-gear  imports the gear art/characters fitted to each MetaHuman
 #   make shots         renders views of the Yard (crews, mesas, the Gantry) to Saved/Kinetic/Shots
 #
 #   build/diff-recordings A B [tolerance_m]   compares two determinism recordings
@@ -51,7 +52,7 @@ DEPS := $(HEADERS) $(STAMP) Makefile
 
 UNREAL_TESTS ?= Kinetic
 
-.PHONY: test test-asan bench check report all-checks clean editor unreal-test import-props yard-greybox import-audio import-characters shots metahumans export-metahumans retarget-metahumans import-kit import-port
+.PHONY: test test-asan bench check report all-checks clean editor unreal-test import-props yard-greybox import-audio import-characters shots metahumans export-metahumans retarget-metahumans import-metahuman-gear import-kit import-port
 
 $(BUILD)/kinetic-core-tests: $(LIB_SRC) $(TEST_SRC) $(DEPS) | $(BUILD)
 	$(CXX) $(CXXFLAGS) -I$(TESTS) $(LIB_SRC) $(TEST_SRC) -o $@
@@ -147,6 +148,9 @@ import-port: editor | $(BUILD)
 
 metahumans: editor | $(BUILD)
 	$(call run_editor_script,Tools/unreal/build_metahumans.py,metahumans)
+
+import-metahuman-gear: editor | $(BUILD)
+	$(call run_editor_script,Tools/unreal/import_metahuman_gear.py,import-metahuman-gear)
 
 retarget-metahumans: editor | $(BUILD)
 	$(call run_editor_script,Tools/unreal/retarget_metahumans.py,retarget-metahumans)
