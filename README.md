@@ -19,6 +19,7 @@ A complete pre-production design package: about 380,000 words across 165 documen
 | [game/](game/) | The game project. Today: the engine-free core of `KineticCore` (line solver, mass and impact rules, Cutter, data tables, the bible-table CI check, panic-window bench) and the match layer (event schema, credit, the Scrap match flow, the match report, the determinism recorder), C++20, tested on a Mac without Unreal and in CI. | [game/README.md](game/README.md) |
 | [art/](art/) | Generated assets: every model, material and texture is built by a Python script from its spec (Blender, headless), baked, and exported for Unreal. The first is the 20 ft shipping container. | [art/README.md](art/README.md) |
 | [backend/](backend/) | Phase 1 backend code on Supabase: schema, Edge Functions, matchmaker worker, fake game server, tests. Runs on a Mac with Docker. | [backend/README.md](backend/README.md) |
+| [docs/proposals/](docs/proposals/) | Concepts that would change canon, all **PROPOSED**. Today: Claim with Tag-Out, a capture-the-beacon mode where you eliminate riggers by reading and calling the lockout code on their shoulders and back. | [claim-tag-out.md](docs/proposals/claim-tag-out.md) |
 | [docs/production/](docs/production/) | Roadmap, team, art pipeline, risks, playtest plan, master asset list. | [roadmap-and-milestones.md](docs/production/roadmap-and-milestones.md) |
 
 ## The three sentences that hold it together
