@@ -5,7 +5,10 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/Engine.h"
 #include "EngineUtils.h"
+#include "AssetRegistry/AssetRegistryModule.h"
 #include "EnhancedInputComponent.h"
+#include "GroomAsset.h"
+#include "GroomComponent.h"
 #include "HAL/IConsoleManager.h"
 #include "EnhancedInputSubsystems.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -184,7 +187,57 @@ bool AKineticCharacter::LoadMetaHuman(const FString& Class)
 	};
 	Follower(Face, TEXT("Face"), FaceMesh);
 	Follower(Gear, TEXT("Gear"), GearMesh);
+	LoadGrooms(Built);
 	return true;
+}
+
+void AKineticCharacter::LoadGrooms(const FString& Built)
+{
+	for (UGroomComponent* Old : Grooms)
+	{
+		if (Old)
+		{
+			Old->DestroyComponent();
+		}
+	}
+	Grooms.Reset();
+	// Every groom the MetaHuman's build made (its Grooms folder), on the face's head bone. Rigid,
+	// not bound to the face's skin: bound, it was drawn metres away (the face follows the body,
+	// turned to face +X), and the grooms are tied back, so they need not flex.
+	const IAssetRegistry& Registry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry")).Get();
+	TArray<FAssetData> Found;
+	Registry.GetAssetsByPath(FName(*(Built + TEXT("/Grooms"))), Found, false);
+	// The grooms are authored in the MetaHuman's frame: undo the head's rest transform there.
+	const FReferenceSkeleton& RefSkeleton = Face->GetSkeletalMeshAsset()->GetRefSkeleton();
+	FTransform HeadRest = FTransform::Identity;
+	for (int32 Bone = RefSkeleton.FindBoneIndex(TEXT("head")); Bone != INDEX_NONE; Bone = RefSkeleton.GetParentIndex(Bone))
+	{
+		HeadRest = HeadRest * RefSkeleton.GetRefBonePose()[Bone];
+	}
+	for (const FAssetData& Data : Found)
+	{
+		if (Data.AssetClassPath != UGroomAsset::StaticClass()->GetClassPathName())
+		{
+			continue;
+		}
+		UGroomAsset* Asset = Cast<UGroomAsset>(Data.GetAsset());
+		if (!Asset)
+		{
+			continue;
+		}
+		UGroomComponent* Groom = NewObject<UGroomComponent>(this, Data.AssetName);
+		Groom->SetupAttachment(Face, TEXT("head"));
+		Groom->SetRelativeTransform(HeadRest.Inverse());
+		Groom->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Groom->SetOwnerNoSee(true);
+		Groom->SetGroomAsset(Asset, nullptr);
+		Groom->RegisterComponent();
+		// Neither its strands (LODs 0, 1) nor its cards (2 to 4) draw on this Mac's Metal renderer:
+		// play its best mesh LOD.
+		Groom->SetForcedLOD(FMath::Min(5, Groom->GetNumLODs() - 1));
+		Grooms.Add(Groom);
+	}
+	UE_LOG(LogKineticCharacter, Log, TEXT("%s: %d grooms from %s/Grooms (%d assets there)"), *GetName(), Grooms.Num(), *Built, Found.Num());
 }
 
 void AKineticCharacter::LoadFigure()
@@ -227,6 +280,14 @@ void AKineticCharacter::LoadFigure()
 			Part->SetSkeletalMesh(nullptr);
 		}
 	}
+	for (UGroomComponent* Old : Grooms)
+	{
+		if (Old)
+		{
+			Old->DestroyComponent();
+		}
+	}
+	Grooms.Reset();
 	GetMesh()->SetAnimationMode(EAnimationMode::AnimationSingleNode);
 	Body->SetVisibility(!bFigure);
 	Visor->SetVisibility(!bFigure);

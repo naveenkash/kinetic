@@ -4,6 +4,9 @@
 // yard-greybox) and the props imported (make import-props). The one-character tests play the
 // walk-the-arena mode (kinetic.Mode Walk).
 #include "Camera/CameraActor.h"
+#include "GroomAsset.h"
+#include "GroomBindingAsset.h"
+#include "GroomComponent.h"
 #include "Camera/CameraComponent.h"
 #include "UnrealClient.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -1263,6 +1266,16 @@ public:
 						                              Part->GetSkeletalMeshAsset() ? *Part->GetSkeletalMeshAsset()->GetName() : TEXT("none"),
 						                              Part->IsVisible() ? 1 : 0, Part->IsRegistered() ? 1 : 0, *Part->Bounds.ToString(), Head.X, -Head.Y, Head.Z));
 					}
+					TArray<UGroomComponent*> Hair;
+					It->GetComponents<UGroomComponent>(Hair);
+					for (const UGroomComponent* Groom : Hair)
+					{
+						Test->AddInfo(FString::Printf(TEXT("  groom %s asset %s binding %s lods %d visible %d registered %d attach %s bounds %s"), *Groom->GetName(),
+						                              Groom->GroomAsset ? *Groom->GroomAsset->GetName() : TEXT("none"),
+						                              Groom->BindingAsset ? *Groom->BindingAsset->GetName() : TEXT("none"), Groom->GetNumLODs(),
+						                              Groom->IsVisible() ? 1 : 0, Groom->IsRegistered() ? 1 : 0,
+						                              Groom->GetAttachParent() ? *Groom->GetAttachParent()->GetName() : TEXT("none"), *Groom->Bounds.ToString()));
+					}
 				}
 			}
 			++Next;
@@ -1336,6 +1349,24 @@ private:
 			Player->ConsoleCommand(FString::Printf(TEXT("HighResShot 2400x1350 filename=\"%s\""), *File));
 			Test->AddInfo(FString::Printf(TEXT("shot %s"), *File));
 			LineupStage = 5;
+			LastAt = Now;
+			return false;
+		}
+		if (LineupStage == 5)
+		{
+			// And its head: the face, the hair and the collar.
+			Camera->SetActorLocationAndRotation(At(FVector(-75.6, -36.4, 9.75)), (At(FVector(-76.0, -35.0, 9.62)) - At(FVector(-75.6, -36.4, 9.75))).Rotation());
+			Camera->GetCameraComponent()->SetFieldOfView(35.0f);
+			LineupStage = 6;
+			LastAt = Now - 1.0;
+			return false;
+		}
+		if (LineupStage == 6)
+		{
+			const FString File = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Kinetic/Shots/Lineup_Head.png"));
+			Player->ConsoleCommand(FString::Printf(TEXT("HighResShot 2400x1350 filename=\"%s\""), *File));
+			Test->AddInfo(FString::Printf(TEXT("shot %s"), *File));
+			LineupStage = 7;
 			LastAt = Now;
 			return false;
 		}

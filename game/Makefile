@@ -52,7 +52,7 @@ DEPS := $(HEADERS) $(STAMP) Makefile
 
 UNREAL_TESTS ?= Kinetic
 
-.PHONY: test test-asan bench check report all-checks clean editor unreal-test import-props yard-greybox import-audio import-characters shots metahumans export-metahumans retarget-metahumans import-metahuman-gear import-kit import-port
+.PHONY: test test-asan bench check report all-checks clean editor unreal-test import-props yard-greybox import-audio import-characters shots metahumans export-metahumans retarget-metahumans assemble-metahumans import-metahuman-gear import-kit import-port
 
 $(BUILD)/kinetic-core-tests: $(LIB_SRC) $(TEST_SRC) $(DEPS) | $(BUILD)
 	$(CXX) $(CXXFLAGS) -I$(TESTS) $(LIB_SRC) $(TEST_SRC) -o $@
@@ -148,6 +148,13 @@ import-port: editor | $(BUILD)
 
 metahumans: editor | $(BUILD)
 	$(call run_editor_script,Tools/unreal/build_metahumans.py,metahumans)
+
+# Re-assembles the MetaHumans (their hair, after a change to build_metahumans.py) from the rig and
+# textures they already have; KINETIC_MH_CLASSES=Rigger,... for some of them.
+assemble-metahumans: editor | $(BUILD)
+	@rm -f $(BUILD)/assemble-metahumans.log
+	@KINETIC_MH_BUILD=assemble $(UE_RENDER) -ExecutePythonScript="$(abspath Tools/unreal/build_metahumans.py)" -abslog="$(abspath $(BUILD))/assemble-metahumans.log" > /dev/null 2>&1; \
+	  status=$$?; grep -E "LogPython: (Display: )?Kinetic:|LogPython: Error|Failed to build" $(BUILD)/assemble-metahumans.log; exit $$status
 
 import-metahuman-gear: editor | $(BUILD)
 	$(call run_editor_script,Tools/unreal/import_metahuman_gear.py,import-metahuman-gear)

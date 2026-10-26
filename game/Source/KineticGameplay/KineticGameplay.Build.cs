@@ -13,7 +13,7 @@ public class KineticGameplay : ModuleRules
 		bUseUnity = false;
 		// KineticCore reports a bad table by throwing; the subsystem catches it.
 		bEnableExceptions = true;
-		PublicDependencyModuleNames.AddRange(new[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "AIModule", "NavigationSystem", "KineticCore" });
+		PublicDependencyModuleNames.AddRange(new[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "AIModule", "NavigationSystem", "KineticCore", "HairStrandsCore" });
 		if (Target.bBuildEditor)
 		{
 			// The automation tests that play a level in the editor.

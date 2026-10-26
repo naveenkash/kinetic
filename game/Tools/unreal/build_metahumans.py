@@ -28,6 +28,17 @@ BODIES = {
     "Breaker": dict(height=186.0, across_shoulder=54.0, chest=124.0, waist=104.0, muscularity=0.85, fat=0.45),
 }
 
+# Each class's hair, from its she/her face doc (docs/characters/faces; the bodies are the female
+# template): the nearest of MetaHuman's grooms, with eyebrows and eyelashes.
+GROOMS = "/MetaHumanCharacter/Optional/Grooms/Bindings"
+HAIR = {
+    "Rigger": ("Hair_M_TwistedBraids", "Eyebrows_M_Thin"),  # Teodora Quispe: a long white braid
+    "Breaker": ("Hair_S_Updo", "Eyebrows_M_Full"),  # Mei-Lin Haldane: a tight low black bun
+    "Climber": ("Hair_S_UpdoBraids", "Eyebrows_M_Natural"),  # Paloma Reyes-Okafor: locs tied up and back
+    "Doubler": ("Hair_S_LowPonytail", "Eyebrows_M_Shaded"),  # Odile Lacroix: dark brown greying, a low knot
+    "Scrapper": ("Hair_M_SideSweptFringe", "Eyebrows_M_Unruly"),  # Dela Santos: half shaved, long on the right
+}
+
 tools = unreal.AssetToolsHelpers.get_asset_tools()
 eal = unreal.EditorAssetLibrary
 
@@ -54,7 +65,26 @@ def shape(cls: str, mh, sub) -> None:
     sub.commit_body_state(mh)
 
 
+def groom(cls: str, mh) -> None:
+    """Puts the class's hair, eyebrows and eyelashes on the character (its wardrobe), selected."""
+    collection = mh.get_editor_property("internal_collection")
+    instance = collection.get_editor_property("default_instance")
+    hair, brows = HAIR[cls]
+    for slot, item in (("Hair", f"{GROOMS}/Hair/WI_{hair}"), ("Eyebrows", f"{GROOMS}/Eyebrows/WI_{brows}"),
+                       ("Eyelashes", f"{GROOMS}/Eyelashes/WI_Eyelashes_M_Natural")):
+        wardrobe = unreal.load_asset(item)
+        if wardrobe is None:
+            unreal.log_warning(f"Kinetic: {cls}: no {item} (MetaHuman Creator Core Data installed?)")
+            continue
+        keys = collection.get_item_keys_for_wardrobe_item(wardrobe)
+        key = keys[0] if keys else collection.try_add_item_from_wardrobe_item(slot, wardrobe)
+        if key is not None:
+            instance.set_single_slot_selection(slot, key)
+
+
 def build(cls: str, mh, sub) -> bool:
+    if os.environ.get("KINETIC_MH_BUILD") == "assemble":
+        return assemble(cls, mh, sub)  # Rig and textures already on the character
     rig = unreal.MetaHumanCharacterAutoRiggingRequestParams()
     rig.rig_type = unreal.MetaHumanRigType.JOINTS_AND_BLEND_SHAPES
     rig.blocking = True
@@ -64,9 +94,13 @@ def build(cls: str, mh, sub) -> bool:
     textures.blocking = True
     textures.report_progress = False
     sub.request_texture_sources(mh, textures)
-    # Both are Epic's services: a build needs the rig and the skin textures.
+    return assemble(cls, mh, sub)
+
+
+def assemble(cls: str, mh, sub) -> bool:
+    # A build needs the rig and the skin textures (both Epic's services, fetched above).
     if not sub.can_build_meta_human(mh, True):
-        unreal.log_error(f"Kinetic: {cls}: not buildable after rigging and textures (see the errors above; signed in?)")
+        unreal.log_error(f"Kinetic: {cls}: not buildable (no rig or textures yet: build signed in first)")
         return False
     params = unreal.MetaHumanCharacterEditorBuildParameters()
     params.pipeline_type = unreal.MetaHumanDefaultPipelineType.OPTIMIZED
@@ -86,7 +120,10 @@ def build(cls: str, mh, sub) -> bool:
 def run_all(with_build: bool) -> int:
     sub = unreal.get_editor_subsystem(unreal.MetaHumanCharacterEditorSubsystem)
     failed = 0
+    only = [c for c in os.environ.get("KINETIC_MH_CLASSES", "").split(",") if c]
     for cls in BODIES:
+        if only and cls not in only:
+            continue
         mh = character(cls)
         # An asset open in MetaHuman Creator's tab cannot be edited from here: close it first.
         unreal.get_editor_subsystem(unreal.AssetEditorSubsystem).close_all_editors_for_asset(mh)
@@ -96,6 +133,7 @@ def run_all(with_build: bool) -> int:
             continue
         try:
             shape(cls, mh, sub)
+            groom(cls, mh)
             if with_build and not build(cls, mh, sub):
                 failed += 1
         finally:
@@ -114,7 +152,9 @@ def run() -> None:
     unattended = "-unattended" in unreal.SystemLibrary.get_command_line().lower()
     status = 0
     try:
-        status = 1 if run_all(os.environ.get("KINETIC_MH_BUILD") == "1") else 0
+        status = 1 if run_all(os.environ.get("KINETIC_MH_BUILD") in ("1", "assemble")) else 0
+        if os.environ.get("KINETIC_MH_BUILD"):
+            eal.save_directory(BUILD, only_if_is_dirty=True, recursive=True)
     except Exception:
         import traceback
         for line in traceback.format_exc().splitlines():

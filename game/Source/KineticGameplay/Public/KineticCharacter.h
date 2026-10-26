@@ -183,6 +183,10 @@ private:
 	TObjectPtr<USkeletalMeshComponent> Face;
 	UPROPERTY()
 	TObjectPtr<USkeletalMeshComponent> Gear;
+	// Its hair, eyebrows and eyelashes (MetaHuman grooms, bound to the face).
+	UPROPERTY()
+	TArray<TObjectPtr<class UGroomComponent>> Grooms;
+	void LoadGrooms(const FString& Built);
 	uint32 Inputs = 0;
 	std::vector<Kinetic::FContact> Contacts;
 	bool bDrawn = false;
