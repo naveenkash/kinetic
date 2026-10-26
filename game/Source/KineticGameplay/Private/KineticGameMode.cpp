@@ -17,6 +17,8 @@ TAutoConsoleVariable<FString> CVarMode(TEXT("kinetic.Mode"), TEXT("Scrap"),
                                        TEXT("The game mode a level plays when its URL names none: Scrap (a match), TagOut or Walk"));
 TAutoConsoleVariable<int32> CVarAllBots(TEXT("kinetic.AllBots"), 0,
                                         TEXT("1: in a Scrap match, a bot plays slot 0 too and the player watches it"));
+TAutoConsoleVariable<FString> CVarTagGadget(TEXT("kinetic.TagGadget"), TEXT("Grease"),
+                                            TEXT("Tag-Out: the player's gadget when the URL names none (?Gadget=): Grease or Dust"));
 TAutoConsoleVariable<int32> CVarSeed(TEXT("kinetic.Seed"), 0, TEXT("The bots' match seed; 0 picks one"));
 }  // namespace
 
@@ -46,6 +48,12 @@ void AKineticGameMode::InitGame(const FString& MapName, const FString& Options, 
 	       : ModeName.Equals(TEXT("TagOut"), ESearchCase::IgnoreCase) ||
 	               ModeName.Equals(TEXT("Claim"), ESearchCase::IgnoreCase) ? EKineticMode::TagOut
 	                                                                       : EKineticMode::Scrap;
+	FString Gadget = UGameplayStatics::ParseOption(Options, TEXT("Gadget"));
+	if (Gadget.IsEmpty())
+	{
+		Gadget = CVarTagGadget.GetValueOnGameThread();
+	}
+	HumanGadget = Gadget.Equals(TEXT("Dust"), ESearchCase::IgnoreCase) ? Kinetic::ETagGadget::Dust : Kinetic::ETagGadget::Grease;
 	bAllBots = UGameplayStatics::ParseOption(Options, TEXT("Bots")).Equals(TEXT("all"), ESearchCase::IgnoreCase) ||
 	           CVarAllBots.GetValueOnGameThread() != 0;
 	UE_LOG(LogKineticGameMode, Log, TEXT("%s mode%s"),
@@ -73,6 +81,7 @@ FKineticTagOut& AKineticGameMode::EnsureTagOut()
 	{
 		FKineticTagOut::FSettings Settings;
 		Settings.HumanClass = DefaultHarness;
+		Settings.HumanGadget = HumanGadget;
 		Settings.bHumanPlays = !bAllBots;
 		const int32 Seed = CVarSeed.GetValueOnGameThread();
 		Settings.Seed = Seed != 0 ? static_cast<uint64>(Seed) : FPlatformTime::Cycles64();

@@ -214,6 +214,10 @@ void AKineticHUD::DrawTagOut()
 	{
 		Hold = FString::Printf(TEXT("GRABBING %3.0f%%"), 100.0 * R.UseHeld / Rules.GrabSeconds);
 	}
+	else if (R.SmearingUntil >= 0.0)
+	{
+		Hold = FString::Printf(TEXT("GREASING %3.0f%%"), 100.0 * (1.0 - (R.SmearingUntil - Now) / Rules.GreaseApplySeconds));
+	}
 	else if (Tag->ThrowWindup(Me) >= 0.0)
 	{
 		Hold = FString::Printf(TEXT("THROWING in %.1f s"), Tag->ThrowWindup(Me));
@@ -235,6 +239,20 @@ void AKineticHUD::DrawTagOut()
 	if (M.LevelReady(Me))
 	{
 		Own += TEXT("   LEVEL");
+	}
+	Own += FString::Printf(TEXT("   Q: %s x%d"), R.Gadget == ETagGadget::Dust ? TEXT("dust bag") : TEXT("grease rag"), R.GadgetsLeft);
+	FString Smears;
+	const TCHAR* PlateNames[PlateCount] = {TEXT("left"), TEXT("back"), TEXT("right")};
+	for (int32 I = 0; I < PlateCount; ++I)
+	{
+		if (M.Smeared(Me, static_cast<ETagPlate>(I)))
+		{
+			Smears += FString::Printf(TEXT(" %s %.0fs"), PlateNames[I], R.SmearedUntil[I] - Now);
+		}
+	}
+	if (!Smears.IsEmpty())
+	{
+		Own += TEXT("   smeared:") + Smears;
 	}
 	DrawText(Own, Text, 24.0f, Bottom - 104.0f, GEngine->GetMediumFont());
 	if (!R.bStanding)

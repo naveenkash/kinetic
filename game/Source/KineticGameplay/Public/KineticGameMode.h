@@ -4,7 +4,8 @@
 //   the clock, best of 5. ?Bots=all (or kinetic.AllBots 1) puts a bot in slot 0 too and the
 //   player watches it.
 // - TagOut: Claim with Tag-Out (FKineticTagOut, docs/proposals/claim-tag-out.md; PROPOSED):
-//   4v4, no Spool lines, codes on the plates, the Call, a beacon each. ?Bots=all as for Scrap.
+//   4v4, no Spool lines, codes on the plates, the Call, a beacon each. ?Bots=all as for Scrap;
+//   ?Gadget=Dust (or kinetic.TagGadget) for dust bags in place of grease rags.
 // - Walk: the walk-the-arena mode: one harness character at Spawn A, back there 3 s after a
 //   Stall. The tests that drive one character use it.
 // Either way the player's class is the one the URL names (?Class=Breaker; the Rigger by default).
@@ -63,4 +64,5 @@ private:
 
 	TUniquePtr<FKineticScrap> Match;
 	TUniquePtr<FKineticTagOut> Claim;
+	Kinetic::ETagGadget HumanGadget = Kinetic::ETagGadget::Grease;
 };

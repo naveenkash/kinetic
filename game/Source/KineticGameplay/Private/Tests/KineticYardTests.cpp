@@ -14,6 +14,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerStart.h"
+#include "InputKeyEventArgs.h"
 #include "Kismet/GameplayStatics.h"
 #include "EngineUtils.h"
 #include "HAL/IConsoleManager.h"
@@ -1511,9 +1512,12 @@ public:
 			{
 				return M.Time() > 3.0 + 120.0 + 30.0 + 10.0 ? Fail(TEXT("the match did not end with the clock")) : false;
 			}
-			Test->AddInfo(FString::Printf(TEXT("over at %.0f s, winner %d: %d reveals, %d calls, %d tag-outs, %d bad calls, %d grabs, %d re-stamps, %d swings"),
+			Test->AddInfo(FString::Printf(TEXT("over at %.0f s, winner %d: %d reveals, %d calls, %d tag-outs, %d bad calls, %d grabs, %d re-stamps, %d swings, %d smears, %d dust clouds, %d sounds"),
 			                              M.Time(), M.Winner(), Tag->Reveals(), Tag->CallsSent(), Tag->TagOuts(), Tag->BadCalls(), Tag->Grabs(),
-			                              Tag->Restamps(), Tag->Swings()));
+			                              Tag->Restamps(), Tag->Swings(), Tag->Smears(), Tag->DustClouds(), Tag->SoundsPlayed()));
+			Test->TestEqual(TEXT("a tarp at each of the twelve grates"), Tag->TarpCount(), 12);
+			Test->TestTrue(TEXT("the bots used their gadgets"), Tag->Smears() + Tag->DustClouds() > 0);
+			Test->TestTrue(TEXT("the tells' sounds played (make import-audio)"), Tag->SoundsPlayed() > 0);
 			for (const FString& Line : Tag->Feed())
 			{
 				Test->AddInfo(Line);
@@ -1559,7 +1563,8 @@ bool FKineticYardTagOutTest::RunTest(const FString& Parameters)
 }
 
 // Pictures of Tag-Out (make shots): crew A on its pad at the drop, with the stand, the beacon and
-// the locker; then slot 0's own view, HUD and all, once the match has run a while.
+// the locker; slot 0's own view, HUD and all, once the match has run a while; and a tarp dropped
+// across the south trench.
 class FShotsOfTagOut : public IAutomationLatentCommand
 {
 public:
@@ -1632,7 +1637,31 @@ public:
 			StageAt = Now;
 			Stage = 3;
 			return false;
-		case 3:
+		case 3:  // Down the south trench: a dropped tarp across it, the press's haze beyond.
+		{
+			if (Now - StageAt < 2.0)
+			{
+				return false;
+			}
+			Tag->DropTarp(1);
+			const FVector Lashing = Tag->TarpLashingCm(1);
+			const FVector From = Lashing + FVector(-1800.0, 0.0, -150.0);
+			Camera->SetActorLocationAndRotation(From, (Lashing + FVector(0.0, 0.0, -300.0) - From).Rotation());
+			Player->SetViewTarget(Camera);
+			StageAt = Now;
+			Stage = 4;
+			return false;
+		}
+		case 4:
+			if (Now - StageAt < 2.0)
+			{
+				return false;
+			}
+			Shot(TEXT("TagOut_Tarp"), false);
+			StageAt = Now;
+			Stage = 5;
+			return false;
+		case 5:
 			return Now - StageAt > 2.0;
 		default:
 			return true;
@@ -1665,6 +1694,242 @@ bool FKineticTagOutShotsTest::RunTest(const FString& Parameters)
 	}
 	ADD_LATENT_AUTOMATION_COMMAND(FWaitForPlay(this));
 	ADD_LATENT_AUTOMATION_COMMAND(FShotsOfTagOut(this));
+	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
+	return true;
+}
+
+// The player's own keys in Tag-Out, pressed through the player controller as a keyboard would (the
+// bots stand still): read an enemy's three plates by watching them turn, type the code (F, then
+// the pips, then F at the crosshair) and tag them out; hold E to lift the enemy beacon and G to
+// throw it; hold the right mouse button for the sighting level; Q for a grease rag; and the
+// left mouse button at a grate's lashing to drop its tarp.
+class FTagOutKeys : public IAutomationLatentCommand
+{
+public:
+	explicit FTagOutKeys(FAutomationTestBase* InTest) : Test(InTest) {}
+
+	virtual bool Update() override
+	{
+		UWorld* World = GEditor ? GEditor->PlayWorld.Get() : nullptr;
+		APlayerController* Player = World ? World->GetFirstPlayerController() : nullptr;
+		const AKineticGameMode* Mode = World ? World->GetAuthGameMode<AKineticGameMode>() : nullptr;
+		FKineticTagOut* Tag = Mode ? Mode->TagOut() : nullptr;
+		UKineticSpoolWorld* Spool = World ? World->GetSubsystem<UKineticSpoolWorld>() : nullptr;
+		if (!Player || !Tag || !Spool)
+		{
+			return Fail(TEXT("no Tag-Out match with a player"));
+		}
+		const double Now = World->GetTimeSeconds();
+		// One key a frame: down, then up the next.
+		if (Keys.Num() > 0)
+		{
+			Player->InputKey(FInputKeyEventArgs::CreateSimulated(Keys[0], bKeyDown ? IE_Released : IE_Pressed, bKeyDown ? 0.0f : 1.0f));
+			if (bKeyDown)
+			{
+				Keys.RemoveAt(0);
+			}
+			bKeyDown = !bKeyDown;
+			return false;
+		}
+		const Kinetic::FTagOutMatch& M = Tag->Match();
+		AKineticCharacter* Me = Tag->Rigger(0);
+		AKineticCharacter* Them = Tag->Rigger(Enemy);
+		const auto Face = [&](const FVector& At) { Player->SetControlRotation((At - Me->Camera->GetComponentLocation()).Rotation()); };
+		const auto Hold = [&](const FKey& Key, bool bDown) {
+			Player->InputKey(FInputKeyEventArgs::CreateSimulated(Key, bDown ? IE_Pressed : IE_Released, bDown ? 1.0f : 0.0f));
+		};
+		const auto Wait = [&](double Seconds) { return Now - StageAt < Seconds; };
+		const auto Turn = [&](double Yaw) {  // Their controller's yaw: it turns the pawn every tick
+			Them->SetActorRotation(FRotator(0.0, Yaw, 0.0));
+			if (AController* C = Them->GetController())
+			{
+				C->SetControlRotation(FRotator(0.0, Yaw, 0.0));
+			}
+		};
+		const auto Next = [&]() {
+			++Stage;
+			StageAt = Now;
+		};
+		switch (Stage)
+		{
+		case 0:
+		{
+			Test->TestEqual(TEXT("the player plays slot 0"), Tag->HumanSlot(), 0);
+			Test->TestTrue(TEXT("the player possesses slot 0"), Player->GetPawn() == Tag->Rigger(0));
+			Tag->SetBotsActive(false);
+			Kinetic::FTagOutRules Rules;
+			Rules.DropSeconds = 1.0;
+			Tag->SetRules(Rules);
+			Tag->StartMatch();
+			Next();
+			return false;
+		}
+		case 1:  // Live: the enemy 7 m in front on West Mesa, back to the player.
+			if (M.Phase() != Kinetic::ETagPhase::Live)
+			{
+				return false;
+			}
+			Pad = Tag->PadCm(0);
+			Spool->PlaceStanding(Them, Pad + FVector(400.0, 0.0, 100.0), FRotator(0.0, 0.0, 0.0));
+			Spool->PlaceStanding(Me, Pad + FVector(-300.0, 0.0, 100.0), FRotator(0.0, 0.0, 0.0));
+			Next();
+			return false;
+		case 2:  // The back; then they turn their right shoulder to the player.
+			Face(Tag->ChestCm(Enemy));
+			if (Wait(0.6))
+			{
+				return false;
+			}
+			Test->TestTrue(TEXT("the crew board has the enemy's back pip"), M.Read(0, Enemy).Pips[1] == M.Rigger(Enemy).Code.Pips[1]);
+			Test->TestTrue(TEXT("the back plate's digit is drawn for the player"), (Tag->Sight(Enemy).Plates & 2) != 0);
+			Turn(90.0);
+			Next();
+			return false;
+		case 3:
+			Face(Tag->ChestCm(Enemy));
+			if (Wait(0.6))
+			{
+				return false;
+			}
+			Test->TestTrue(TEXT("the right shoulder read"), M.Read(0, Enemy).Pips[2] == M.Rigger(Enemy).Code.Pips[2]);
+			Turn(-90.0);
+			Next();
+			return false;
+		case 4:  // The left; then type what the board has.
+			Face(Tag->ChestCm(Enemy));
+			if (Wait(0.6))
+			{
+				return false;
+			}
+			{
+				const Kinetic::FTagRead& Read = M.Read(0, Enemy);
+				Test->TestEqual(TEXT("all three pips read"), Read.Known(), 3);
+				if (Read.Known() != 3)
+				{
+					return Fail(TEXT("the player never read the whole code"));
+				}
+				const FKey Digits[4] = {EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four};
+				Keys = {EKeys::F, Digits[*Read.Pips[0] - 1], Digits[*Read.Pips[1] - 1], Digits[*Read.Pips[2] - 1]};
+			}
+			Turn(0.0);
+			Next();
+			return false;
+		case 5:  // The strip has it: F at the crosshair, and hold the lock.
+			Test->TestTrue(TEXT("the strip is open"), Tag->StripOpen(0));
+			Test->TestEqual(TEXT("three pips entered"), static_cast<int32>(M.Rigger(0).Entered.size()), 3);
+			Face(Tag->ChestCm(Enemy));
+			Keys = {EKeys::F};
+			Next();
+			return false;
+		case 6:
+			Face(Tag->ChestCm(Enemy));
+			if (Wait(0.9))
+			{
+				return false;
+			}
+			Test->TestEqual(TEXT("the call went out"), Tag->CallsSent(), 1);
+			Test->TestEqual(TEXT("the player tagged them out"), Tag->TagOuts(), 1);
+			Test->TestFalse(TEXT("the enemy is locked out"), M.Rigger(Enemy).bStanding);
+			// To the enemy's stand, and hold E.
+			Spool->PlaceStanding(Me, Tag->PadCm(1) + FVector(60.0, 0.0, 100.0), FRotator(0.0, 180.0, 0.0));
+			Hold(EKeys::E, true);
+			Next();
+			return false;
+		case 7:
+			if (Wait(0.8))
+			{
+				return false;
+			}
+			Hold(EKeys::E, false);
+			Test->TestEqual(TEXT("E lifted their beacon"), M.Carrying(0), 1);
+			Keys = {EKeys::G};
+			Next();
+			return false;
+		case 8:  // The throw's 1 s wind-up.
+			if (Wait(1.4))
+			{
+				return false;
+			}
+			Test->TestTrue(TEXT("G threw it"), M.Beacon(1).State != Kinetic::EBeaconState::Carried);
+			Hold(EKeys::RightMouseButton, true);
+			Next();
+			return false;
+		case 9:  // The level: up in 0.4 s, 3x.
+			if (Wait(0.6))
+			{
+				return false;
+			}
+			Test->TestTrue(TEXT("the right mouse button raised the level"), M.LevelReady(0));
+			Test->TestTrue(*FString::Printf(TEXT("the view zoomed (FOV %.0f)"), Me->Camera->FieldOfView), Me->Camera->FieldOfView < 50.0f);
+			Hold(EKeys::RightMouseButton, false);
+			Keys = {EKeys::Q};
+			Next();
+			return false;
+		case 10:  // The rag: 1 s, then the back is smeared.
+			if (Wait(1.3))
+			{
+				return false;
+			}
+			Test->TestTrue(TEXT("Q greased the back plate"), M.Smeared(0, Kinetic::ETagPlate::Back));
+			Test->TestTrue(TEXT("the level came down"), Me->Camera->FieldOfView > 60.0f);
+			{
+				const FVector Lashing = Tag->TarpLashingCm(0);
+				Spool->PlaceStanding(Me, FVector(Lashing.X - 90.0, Lashing.Y, Lashing.Z + 120.0), FRotator(0.0, 0.0, 0.0));
+			}
+			Next();
+			return false;
+		case 11:  // On the grate: the Cutter at the tarp's lashing.
+			Face(Tag->TarpLashingCm(0));
+			if (Wait(0.5))
+			{
+				return false;
+			}
+			Keys = {EKeys::LeftMouseButton};
+			Next();
+			return false;
+		case 12:
+			if (Wait(0.3))
+			{
+				return false;
+			}
+			Test->TestTrue(TEXT("the left mouse button dropped the tarp"), Tag->TarpDown(0));
+			Test->AddInfo(FString::Printf(TEXT("%d sounds played"), Tag->SoundsPlayed()));
+			return true;
+		default:
+			return true;
+		}
+	}
+
+private:
+	bool Fail(const TCHAR* Why)
+	{
+		Test->AddError(Why);
+		return true;
+	}
+
+	FAutomationTestBase* Test;
+	static constexpr int32 Enemy = 4;
+	int Stage = 0;
+	double StageAt = 0.0;
+	FVector Pad = FVector::ZeroVector;
+	TArray<FKey> Keys;
+	bool bKeyDown = false;
+};
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FKineticYardTagOutKeysTest, "Kinetic.Yard.TagOutKeys",
+                                 EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FKineticYardTagOutKeysTest::RunTest(const FString& Parameters)
+{
+	PlayMode(TEXT("TagOut"), false);
+	IConsoleManager::Get().FindConsoleVariable(TEXT("kinetic.Seed"))->Set(7, ECVF_SetByCode);
+	if (!AutomationOpenMap(YardMap))
+	{
+		AddError(TEXT("the Yard grey-box did not open (make yard-greybox)"));
+		return false;
+	}
+	ADD_LATENT_AUTOMATION_COMMAND(FWaitForPlay(this));
+	ADD_LATENT_AUTOMATION_COMMAND(FTagOutKeys(this));
 	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
 	return true;
 }

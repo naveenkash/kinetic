@@ -19,6 +19,19 @@
 //   them 70 degrees, the way that turns their back toward the swinger's left. A rigger just spun
 //   cannot be spun again for 1.5 s, so two Cutters cannot hold someone in a stagger.
 // - A thrown beacon flies about 12 m after a 1.0 s wind-up, and a dropped one falls to the ground.
+// - Hiding your code (6): Q is the gadget (a grease rag, or a dust bag cut open in the Cutter's
+//   swing time; ?Gadget=Dust or kinetic.TagGadget for the player). The sun is the level's
+//   directional light, for glare and the sun in a caller's eyes. Heat haze stands over the press
+//   frame and each running Hauler's exhaust. A tarp is rolled at the side of each of the twelve
+//   grate footbridges: a Cutter swing at its lashing drops it into the trench across the
+//   sightline, another cuts it down, and a Hauler tears through it. (The Canyon gaps of 10 m or
+//   less the proposal also puts tarps on are diagonal, mesa corner to mesa corner, in the
+//   grey-box: none has a straight span to hang one across.)
+// - Tells (8): the being-called tick from the target's harness, the bad call's buzz at the
+//   caller, the locker stamp (heard to 30 m), the beacon klaxon for everyone, the plant and
+//   return tones, the Cutter's plate clang, the dust bag and the rag; a lens glint at a raised
+//   sighting level, a plate's sun flare, a reflector that flashes only in the sun.
+// - Closest approach (5.6) is the navmesh route to the pad's edge, measured twice a second.
 // - The bots: the Climber runs for the enemy beacon, the Breaker anchors the pad and walks a
 //   dropped beacon home, and the rest hunt: they get round an enemy to read them, call when the
 //   board has the whole code (and sometimes gamble on two of three), turn to face a caller to
@@ -36,7 +49,9 @@ class AKineticBotController;
 class AKineticCharacter;
 class APlayerController;
 class AStaticMeshActor;
+class UAudioComponent;
 class UMaterialInstanceDynamic;
+class UStaticMeshComponent;
 class UTextRenderComponent;
 class UKineticSpoolWorld;
 
@@ -45,6 +60,8 @@ struct FKineticTagSight
 {
 	bool bVisible = false;  // In front of them and in sight
 	uint8 Plates = 0;       // The plates they could read (bit i is Kinetic::ETagPlate i)
+	uint8 Facing = 0;       // The plates turned their way, before smears, dust, haze and glare
+	uint8 Flaring = 0;      // The plates throwing the sun at them
 };
 
 class KINETICGAMEPLAY_API FKineticTagOut
@@ -55,6 +72,7 @@ public:
 		EKineticHarness HumanClass = EKineticHarness::Rigger;
 		bool bHumanPlays = true;
 		Kinetic::FTagOutRules Rules;
+		Kinetic::ETagGadget HumanGadget = Kinetic::ETagGadget::Grease;
 		uint64 Seed = 1;
 	};
 
@@ -67,6 +85,8 @@ public:
 	// A new match from the drop (after one is over, or a test's shorter rules).
 	void StartMatch();
 	void SetRules(const Kinetic::FTagOutRules& Rules) { Settings.Rules = Rules; }
+	// Off, the bots stand still and press nothing (a test drives the riggers itself).
+	void SetBotsActive(bool bActive) { bBotsActive = bActive; }
 
 	const Kinetic::FTagOutMatch& Match() const { return *TheMatch; }
 	const TArray<FString>& Feed() const { return FeedLines; }
@@ -97,6 +117,14 @@ public:
 	int32 Grabs() const { return Grabbed; }
 	int32 Restamps() const { return Restamped; }
 	int32 Swings() const { return Swung; }
+	int32 Smears() const { return Smeared; }
+	int32 DustClouds() const { return Dusted; }
+	int32 TarpsDropped() const { return Dropped; }
+	int32 TarpCount() const { return Tarps.Num(); }
+	bool TarpDown(int32 I) const { return Tarps[I].bDown && !Tarps[I].bCut; }
+	FVector TarpLashingCm(int32 I) const { return Tarps[I].Lashing; }
+	void DropTarp(int32 I) { Tarps[I].bDown = true; }  // For pictures
+	int32 SoundsPlayed() const { return Sounds; }
 
 	static constexpr int32 CrewSize = 4;
 	static constexpr double RestartSeconds = 8.0;
@@ -120,7 +148,13 @@ private:
 		bool bLevel = false;
 		bool bCarrying = false;
 		double ThrowAt = -1.0;
+		double DustAt = -1.0;  // A dust bag being cut open
 		double NextSwingAt = 0.0;
+		TWeakObjectPtr<UStaticMeshComponent> Glint;
+		TWeakObjectPtr<UStaticMeshComponent> Flares[Kinetic::PlateCount];
+		TWeakObjectPtr<UAudioComponent> TickSound;
+		TWeakObjectPtr<UAudioComponent> HoldSound;
+		int32 HoldSoundFor = -1;
 		double SpunUntil = 0.0;
 		// The bot.
 		double BotSwingAt = 0.0;
@@ -143,6 +177,19 @@ private:
 		FVector At = FVector::ZeroVector;  // cm
 		FVector Velocity = FVector::ZeroVector;
 		bool bFlying = false;
+		double RouteAt = 0.0;
+	};
+
+	// A tarp curtain at the side of a grate footbridge (6).
+	struct FTarp
+	{
+		FVector Lashing = FVector::ZeroVector;  // cm: cut it and the tarp drops
+		FBox Curtain;                           // Where it hangs once down
+		int32 Trench = 0;
+		TWeakObjectPtr<AStaticMeshActor> Rolled;
+		TWeakObjectPtr<AStaticMeshActor> Hung;
+		bool bDown = false;
+		bool bCut = false;
 	};
 
 	void FindSite();
@@ -154,7 +201,16 @@ private:
 	UKineticSpoolWorld* Spool() const;
 	const Kinetic::FKineticTables* Tables() const;
 	AStaticMeshActor* Shape(const TCHAR* Mesh, const FVector& At, const FVector& Scale, const FLinearColor& Colour,
-	                        UMaterialInstanceDynamic** OutMaterial = nullptr);
+	                        UMaterialInstanceDynamic** OutMaterial = nullptr, const TCHAR* Material = nullptr);
+	UStaticMeshComponent* Part(AActor* Owner, USceneComponent* Parent, const TCHAR* Mesh, const TCHAR* Material, const FVector& At,
+	                           const FVector& Scale);
+	void BuildHiding();
+	void ResetTarps();
+	void Hiding();
+	bool SwingAtTarp(const FVector& Eye, const FVector& Look, double ReachCm);
+	void Cue(const TCHAR* Name, const FVector* At, double InnerCm = 400.0, float FalloffCm = 6000.0f);
+	UAudioComponent* CueOn(const TCHAR* Name, USceneComponent* On, double InnerCm = 300.0, float FalloffCm = 2500.0f);
+	void Holds();
 	FVector Ground(const FVector& Above, double Fallback) const;
 
 	void Poses();
@@ -183,6 +239,12 @@ private:
 	TArray<TWeakObjectPtr<UMaterialInstanceDynamic>> LockerLights;
 	TArray<double> LockerRedUntil;
 	FBeaconProp BeaconProps[2];
+	TArray<FTarp> Tarps;
+	TArray<TWeakObjectPtr<AStaticMeshActor>> CloudProps;
+	TWeakObjectPtr<AStaticMeshActor> PressHaze;
+	TWeakObjectPtr<AStaticMeshActor> ExhaustHaze[3];
+	FVector ToSun = FVector(0.0, 0.0, 1.0);
+	bool bBotsActive = true;
 	double MatchOverAt = -1.0;
 	double NextRevealAt = 0.0;
 	double SirenAt = -1.0;
@@ -197,5 +259,9 @@ private:
 	int32 Grabbed = 0;
 	int32 Restamped = 0;
 	int32 Swung = 0;
+	int32 Smeared = 0;
+	int32 Dusted = 0;
+	int32 Dropped = 0;
+	int32 Sounds = 0;
 	uint64 MatchSeed = 1;
 };

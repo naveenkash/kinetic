@@ -147,6 +147,7 @@ public:
 		bool bClear = false;  // R: clear the strip
 		bool bSwing = false;  // Left mouse: swing the Cutter
 		bool bThrow = false;  // G: throw the beacon
+		bool bGadget = false; // Q: the gadget (a grease rag on, or a dust bag cut open)
 		bool bUse = false;    // E, held
 		bool bLevel = false;  // Right mouse, held: the sighting level
 	};
@@ -195,6 +196,7 @@ private:
 	void OnCall();
 	void OnUseReleased();
 	void OnThrow();
+	void OnGadget();
 	bool bSprinting = false;
 	float ForwardInput = 0.0f;
 	bool bUnderLine = false;
@@ -258,5 +260,7 @@ private:
 	TObjectPtr<UInputAction> Pip4Action;
 	UPROPERTY()
 	TObjectPtr<UInputAction> ThrowAction;
+	UPROPERTY()
+	TObjectPtr<UInputAction> GadgetAction;
 	bool bCursorFree = false;
 };

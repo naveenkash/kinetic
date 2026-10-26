@@ -1,6 +1,15 @@
 #include "KineticTagOut.h"
 
 #include "Camera/CameraComponent.h"
+#include "Components/AudioComponent.h"
+#include "Engine/DirectionalLight.h"
+#include "Kismet/GameplayStatics.h"
+#include "KineticKinematic.h"
+#include "KineticYardDirector.h"
+#include "NavigationPath.h"
+#include "NavigationSystem.h"
+#include "Sound/SoundAttenuation.h"
+#include "Sound/SoundBase.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Engine/StaticMesh.h"
@@ -36,6 +45,54 @@ const FLinearColor Grey(0.32f, 0.32f, 0.30f);
 const TCHAR* const Cylinder = TEXT("/Engine/BasicShapes/Cylinder.Cylinder");
 const TCHAR* const Cube = TEXT("/Engine/BasicShapes/Cube.Cube");
 const TCHAR* const Sphere = TEXT("/Engine/BasicShapes/Sphere.Sphere");
+// make import-tagout's materials; without them the shapes fall back to the basic shape material.
+const TCHAR* const GlintMaterial = TEXT("/Game/TagOut/M_TagGlint.M_TagGlint");
+const TCHAR* const DustMaterial = TEXT("/Game/TagOut/M_TagDust.M_TagDust");
+const TCHAR* const HazeMaterial = TEXT("/Game/TagOut/M_TagHaze.M_TagHaze");
+const FLinearColor TarpBlue(0.06f, 0.16f, 0.26f);
+const FVector PressHazeCm(4150.0, 0.0, 600.0);  // The press frame over the pit's west half (layout zone 6)
+constexpr double PressHazeRadiusM = 7.0;
+constexpr double ExhaustHazeRadiusM = 2.5;
+
+// The grate footbridges (layout.md, Grey-box findings): each trench's layout Y and its four X.
+struct FGrates
+{
+	double YM;
+	double X[4];
+};
+const FGrates GrateRows[3] = {{-30.0, {-50.0, -2.0, 40.0, 76.0}}, {0.0, {-50.0, -6.0, 34.0, 70.0}}, {30.0, {-50.0, -14.0, 28.0, 54.0}}};
+
+USoundBase* LoadCue(const TCHAR* Name)
+{
+	const FString Path = FString::Printf(TEXT("/Game/Audio/SW_%s.SW_%s"), Name, Name);
+	return LoadObject<USoundBase>(nullptr, *Path, nullptr, LOAD_NoWarn | LOAD_Quiet);
+}
+
+// Heard full within InnerCm, gone by InnerCm + FalloffCm, from where it is.
+USoundAttenuation* Falloff(double InnerCm, float FalloffCm)
+{
+	static TMap<int64, USoundAttenuation*> Made;
+	const int64 Key = static_cast<int64>(InnerCm) * 1000000 + static_cast<int64>(FalloffCm);
+	if (USoundAttenuation** Found = Made.Find(Key))
+	{
+		return *Found;
+	}
+	USoundAttenuation* A = NewObject<USoundAttenuation>(GetTransientPackage());
+	A->AddToRoot();
+	A->Attenuation.bAttenuate = true;
+	A->Attenuation.bSpatialize = true;
+	A->Attenuation.DistanceAlgorithm = EAttenuationDistanceModel::NaturalSound;
+	A->Attenuation.AttenuationShape = EAttenuationShape::Sphere;
+	A->Attenuation.AttenuationShapeExtents = FVector(InnerCm, 0.0, 0.0);
+	A->Attenuation.FalloffDistance = FalloffCm;
+	Made.Add(Key, A);
+	return A;
+}
+
+double DegreesBetween(const FVector& A, const FVector& B)
+{
+	return FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(A.GetSafeNormal(), B.GetSafeNormal()), -1.0, 1.0)));
+}
 
 Kinetic::EPlate CorePlate(int32 Plate)
 {
@@ -75,6 +132,7 @@ FKineticTagOut::FKineticTagOut(UWorld& InWorld, const FSettings& InSettings) : W
 	}
 	FindSite();
 	BuildSite();
+	BuildHiding();
 	SpawnRiggers();
 	StartMatch();
 }
@@ -227,7 +285,7 @@ void FKineticTagOut::FindSite()
 }
 
 AStaticMeshActor* FKineticTagOut::Shape(const TCHAR* MeshPath, const FVector& At, const FVector& Scale, const FLinearColor& Colour,
-                                        UMaterialInstanceDynamic** OutMaterial)
+                                        UMaterialInstanceDynamic** OutMaterial, const TCHAR* Material)
 {
 	FActorSpawnParameters Params;
 	Params.ObjectFlags |= RF_Transient;
@@ -243,6 +301,13 @@ AStaticMeshActor* FKineticTagOut::Shape(const TCHAR* MeshPath, const FVector& At
 	C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	C->SetCanEverAffectNavigation(false);
 	A->SetActorScale3D(Scale);
+	Site.Add(A);
+	if (UMaterialInterface* Own = Material ? LoadObject<UMaterialInterface>(nullptr, Material, nullptr, LOAD_NoWarn | LOAD_Quiet) : nullptr)
+	{
+		C->SetMaterial(0, Own);
+		C->SetCastShadow(false);
+		return A;
+	}
 	if (UMaterialInterface* Base = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial")))
 	{
 		UMaterialInstanceDynamic* M = UMaterialInstanceDynamic::Create(Base, A);
@@ -253,8 +318,239 @@ AStaticMeshActor* FKineticTagOut::Shape(const TCHAR* MeshPath, const FVector& At
 			*OutMaterial = M;
 		}
 	}
-	Site.Add(A);
 	return A;
+}
+
+UStaticMeshComponent* FKineticTagOut::Part(AActor* Owner, USceneComponent* Parent, const TCHAR* Mesh, const TCHAR* Material,
+                                           const FVector& At, const FVector& Scale)
+{
+	UStaticMeshComponent* C = NewObject<UStaticMeshComponent>(Owner);
+	C->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, Mesh));
+	C->SetupAttachment(Parent);
+	C->SetRelativeLocation(At);
+	C->SetRelativeScale3D(Scale);
+	C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	C->SetCastShadow(false);
+	C->SetCanEverAffectNavigation(false);
+	if (UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, Material, nullptr, LOAD_NoWarn | LOAD_Quiet))
+	{
+		C->SetMaterial(0, M);
+	}
+	C->SetVisibility(false);
+	C->RegisterComponent();
+	return C;
+}
+
+void FKineticTagOut::BuildHiding()
+{
+	// The sun: the level's directional light shines along its forward vector.
+	if (TActorIterator<ADirectionalLight> It(&World); It)
+	{
+		ToSun = -It->GetActorForwardVector();
+	}
+	// A rolled tarp at the side of each grate, lashed under its deck.
+	for (int32 T = 0; T < 3; ++T)
+	{
+		for (const double XM : GrateRows[T].X)
+		{
+			const FVector Over(XM * 100.0, -GrateRows[T].YM * 100.0, 600.0);
+			const FVector Deck = Ground(Over, 350.0);
+			const double DeckZ = Deck.Z > 200.0 && Deck.Z < 500.0 ? Deck.Z : 350.0;
+			FTarp Tarp;
+			Tarp.Trench = T;
+			Tarp.Lashing = FVector(Over.X + 90.0, Over.Y, DeckZ - 20.0);
+			Tarp.Curtain = FBox(FVector(Over.X + 88.0, Over.Y - 300.0, -400.0), FVector(Over.X + 92.0, Over.Y + 300.0, DeckZ - 30.0));
+			if (AStaticMeshActor* Rolled = Shape(Cylinder, Tarp.Lashing, FVector(0.3, 0.3, 5.8), TarpBlue))
+			{
+				Rolled->SetActorRotation(FRotator(0.0, 0.0, 90.0));  // Along the grate, across the trench
+				Tarp.Rolled = Rolled;
+			}
+			if (AStaticMeshActor* Hung = Shape(Cube, Tarp.Curtain.GetCenter(), Tarp.Curtain.GetSize() / 100.0, TarpBlue))
+			{
+				// It stops sightlines (and so reads and calls), not riggers.
+				UStaticMeshComponent* C = Hung->GetStaticMeshComponent();
+				C->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+				C->SetCollisionResponseToAllChannels(ECR_Ignore);
+				C->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+				Tarp.Hung = Hung;
+			}
+			Tarps.Add(Tarp);
+		}
+	}
+	// Heat haze over the press frame, and over each Hauler's exhaust while it runs.
+	PressHaze = Shape(Sphere, PressHazeCm, FVector(PressHazeRadiusM * 2.0), FLinearColor::Black, nullptr, HazeMaterial);
+	for (TWeakObjectPtr<AStaticMeshActor>& Haze : ExhaustHaze)
+	{
+		Haze = Shape(Sphere, FVector::ZeroVector, FVector(ExhaustHazeRadiusM * 2.0), FLinearColor::Black, nullptr, HazeMaterial);
+		if (Haze.IsValid())
+		{
+			Haze->SetActorHiddenInGame(true);
+		}
+	}
+	ResetTarps();
+	UE_LOG(LogKineticTagOut, Log, TEXT("Tag-Out hiding: %d tarps, the sun toward %s"), Tarps.Num(), *ToSun.ToCompactString());
+}
+
+void FKineticTagOut::ResetTarps()
+{
+	for (FTarp& Tarp : Tarps)
+	{
+		Tarp.bDown = Tarp.bCut = false;
+	}
+}
+
+bool FKineticTagOut::SwingAtTarp(const FVector& Eye, const FVector& Look, double ReachCm)
+{
+	const double Cone = (Tables() ? Tables()->Cutter(Kinetic::ECutterVariant::Standard).ConeDeg * 0.5 : 35.0) + 15.0;
+	for (FTarp& Tarp : Tarps)
+	{
+		if (Tarp.bCut)
+		{
+			continue;
+		}
+		if (!Tarp.bDown)
+		{
+			if (FVector::Dist(Tarp.Lashing, Eye) <= ReachCm + 80.0 && DegreesBetween(Look, Tarp.Lashing - Eye) <= Cone)
+			{
+				Tarp.bDown = true;  // The lashing cut: it drops across the trench
+				++Dropped;
+				Cue(TEXT("Snap"), &Tarp.Lashing);
+				Say(TEXT("A tarp drops across the trench."));
+				return true;
+			}
+			continue;
+		}
+		const FVector Near = Tarp.Curtain.GetClosestPointTo(Eye);
+		if (FVector::Dist(Near, Eye) <= ReachCm + 50.0)
+		{
+			Tarp.bCut = true;  // Cut through
+			Cue(TEXT("Snap"), &Near);
+			return true;
+		}
+	}
+	return false;
+}
+
+void FKineticTagOut::Hiding()
+{
+	// The sun and the hot steel, for glare, the sun in a caller's eyes and the haze.
+	TheMatch->SetSun(ToCoreDirection(ToSun));
+	std::vector<Kinetic::FTagHaze> Zones{{ToCore(PressHazeCm), PressHazeRadiusM}};
+	TActorIterator<AKineticYardDirector> Found(&World);
+	AKineticYardDirector* Director = Found ? *Found : nullptr;
+	for (int32 T = 0; T < 3; ++T)
+	{
+		const AKineticKinematic* Hauler = Director ? Director->Hauler(T) : nullptr;
+		const bool bRunning = Hauler && Director->IsHaulerRunning(T);
+		if (AStaticMeshActor* Haze = ExhaustHaze[T].Get())
+		{
+			Haze->SetActorHiddenInGame(!bRunning);
+			if (bRunning)
+			{
+				const FVector Exhaust = Hauler->GetActorLocation() + FVector(0.0, 0.0, 350.0);
+				Haze->SetActorLocation(Exhaust);
+				Zones.push_back({ToCore(Exhaust), ExhaustHazeRadiusM});
+			}
+		}
+		// A Hauler tears through a tarp hanging in its trench.
+		for (FTarp& Tarp : Tarps)
+		{
+			if (bRunning && Tarp.Trench == T && Tarp.bDown && !Tarp.bCut && FMath::Abs(Hauler->GetActorLocation().X - Tarp.Lashing.X) < 800.0)
+			{
+				Tarp.bCut = true;
+			}
+		}
+	}
+	TheMatch->SetHaze(MoveTemp(Zones));
+	for (FTarp& Tarp : Tarps)
+	{
+		if (AStaticMeshActor* Rolled = Tarp.Rolled.Get())
+		{
+			Rolled->SetActorHiddenInGame(Tarp.bDown);
+		}
+		if (AStaticMeshActor* Hung = Tarp.Hung.Get())
+		{
+			const bool bHanging = Tarp.bDown && !Tarp.bCut;
+			Hung->SetActorHiddenInGame(!bHanging);
+			Hung->SetActorEnableCollision(bHanging);
+		}
+	}
+	// The dust clouds.
+	const std::vector<Kinetic::FTagCloud>& Clouds = TheMatch->Clouds();
+	while (CloudProps.Num() < static_cast<int32>(Clouds.size()))
+	{
+		CloudProps.Add(Shape(Sphere, FVector::ZeroVector, FVector(TheMatch->Rules().DustRadiusM * 2.0), FLinearColor(0.4f, 0.35f, 0.28f),
+		                     nullptr, DustMaterial));
+	}
+	for (int32 I = 0; I < CloudProps.Num(); ++I)
+	{
+		if (AStaticMeshActor* Cloud = CloudProps[I].Get())
+		{
+			const bool bOn = I < static_cast<int32>(Clouds.size());
+			Cloud->SetActorHiddenInGame(!bOn);
+			if (bOn)
+			{
+				Cloud->SetActorLocation(ToCm(Clouds[I].At));
+			}
+		}
+	}
+}
+
+void FKineticTagOut::Cue(const TCHAR* Name, const FVector* At, double InnerCm, float FalloffCm)
+{
+	USoundBase* Sound = LoadCue(Name);
+	if (!Sound)
+	{
+		return;  // Not imported (make import-audio): silent
+	}
+	++Sounds;
+	if (At)
+	{
+		UGameplayStatics::PlaySoundAtLocation(&World, Sound, *At, FRotator::ZeroRotator, 1.0f, 1.0f, 0.0f, Falloff(InnerCm, FalloffCm));
+	}
+	else
+	{
+		UGameplayStatics::PlaySound2D(&World, Sound);
+	}
+}
+
+UAudioComponent* FKineticTagOut::CueOn(const TCHAR* Name, USceneComponent* On, double InnerCm, float FalloffCm)
+{
+	USoundBase* Sound = LoadCue(Name);
+	if (!Sound || !On)
+	{
+		return nullptr;
+	}
+	++Sounds;
+	return UGameplayStatics::SpawnSoundAttached(Sound, On, NAME_None, FVector::ZeroVector, EAttachLocation::KeepRelativeOffset, true, 1.0f, 1.0f,
+	                                            0.0f, Falloff(InnerCm, FalloffCm));
+}
+
+void FKineticTagOut::Holds()
+{
+	// The plant's clip tone across the pad, the return's tone at the beacon, while they are held.
+	for (int32 Slot = 0; Slot < Seats.Num(); ++Slot)
+	{
+		FSeat& Seat = Seats[Slot];
+		const Kinetic::FTagRigger& R = TheMatch->Rigger(Slot);
+		const int32 Want = R.UseOn == Kinetic::FTagOutMatch::UsePlant                ? 0
+		                   : R.UseOn == Kinetic::FTagOutMatch::UseBeacon + R.Team ? 1
+		                                                                            : -1;
+		if (Want == Seat.HoldSoundFor)
+		{
+			continue;
+		}
+		if (UAudioComponent* Old = Seat.HoldSound.Get())
+		{
+			Old->Stop();
+		}
+		Seat.HoldSound = nullptr;
+		Seat.HoldSoundFor = Want;
+		if (Want >= 0 && Rigger(Slot))
+		{
+			Seat.HoldSound = CueOn(Want == 0 ? TEXT("PlantTone") : TEXT("ReturnTone"), Rigger(Slot)->GetRootComponent(), 600.0, 3000.0f);
+		}
+	}
 }
 
 void FKineticTagOut::BuildSite()
@@ -266,7 +562,8 @@ void FKineticTagOut::BuildSite()
 		Shape(Cylinder, Pads[Team] + FVector(0.0, 0.0, 40.0), FVector(0.25, 0.25, 0.8), Grey);        // The stand
 		FBeaconProp& B = BeaconProps[Team];
 		B.Body = Shape(Cube, Pads[Team] + FVector(0.0, 0.0, BeaconAboveGroundCm), FVector(0.4, 0.4, 0.55), Tint);
-		B.Reflector = Shape(Sphere, Pads[Team] + FVector(0.0, 0.0, BeaconAboveGroundCm + 40.0), FVector(0.16), FLinearColor(4.0f, 4.0f, 3.6f));
+		B.Reflector = Shape(Sphere, Pads[Team] + FVector(0.0, 0.0, BeaconAboveGroundCm + 40.0), FVector(0.16), FLinearColor(4.0f, 4.0f, 3.6f),
+		                    nullptr, GlintMaterial);
 		if (AStaticMeshActor* Body = B.Body.Get())
 		{
 			// The flag panel: the carrier's back pip, twice the size (5.3).
@@ -336,6 +633,14 @@ void FKineticTagOut::SpawnRiggers()
 			Text->SetCastShadow(false);
 			Text->RegisterComponent();
 			Seat.Plates[I] = Text;
+			// The sun's flare off this plate, to the player's eyes.
+			Seat.Flares[I] = Part(R, R->GetRootComponent(), Sphere, GlintMaterial, PlateTextAt[I] * 1.08, FVector(0.08));
+		}
+		// The sighting level's lens glint, at the eyes (2.2), for everyone else to see.
+		Seat.Glint = Part(R, R->Camera, Sphere, GlintMaterial, FVector(18.0, 0.0, 0.0), FVector(0.05));
+		if (UStaticMeshComponent* Glint = Seat.Glint.Get())
+		{
+			Glint->SetOwnerNoSee(true);
 		}
 		Seats.Add(MoveTemp(Seat));
 	}
@@ -389,6 +694,17 @@ void FKineticTagOut::StartMatch()
 	                                 ToCore(Pads[1] + FVector(0.0, 0.0, BeaconAboveGroundCm))};
 	TheMatch = MakeUnique<Kinetic::FTagOutMatch>(std::vector<Kinetic::FMatchPlayer>(Roster.GetData(), Roster.GetData() + Roster.Num()),
 	                                             PadsM, Lockers, MatchSeed, Settings.Rules);
+	for (int32 Slot = 0; Slot < Roster.Num(); ++Slot)
+	{
+		// The player's choice; the bots by job: the runner greases, the anchor and the second
+		// hunter carry dust.
+		const int32 Place = Slot % CrewSize;
+		const Kinetic::ETagGadget Gadget = Slot == HumanSlot() ? Settings.HumanGadget
+		                                   : Place == 3 || Place == 2 ? Kinetic::ETagGadget::Dust
+		                                                              : Kinetic::ETagGadget::Grease;
+		TheMatch->SetLoadout(Slot, Gadget);
+	}
+	ResetTarps();
 	++Started;
 	MatchOverAt = SirenAt = MidMatchAt = OvertimeAt = -1.0;
 	NextRevealAt = 0.0;
@@ -400,6 +716,7 @@ void FKineticTagOut::StartMatch()
 		// The clock starts again from the drop.
 		Seat.NextSwingAt = Seat.SpunUntil = Seat.BotSwingAt = Seat.WatchUntil = Seat.MoveUntil = Seat.GambleAt = 0.0;
 		Seat.ReactTo = INDEX_NONE;
+		Seat.DustAt = -1.0;
 	}
 	for (int32 Team = 0; Team < 2; ++Team)
 	{
@@ -443,6 +760,7 @@ void FKineticTagOut::Tick()
 		}
 	}
 	Poses();
+	Hiding();
 	if (TheMatch->Time() >= NextRevealAt - 1e-6)
 	{
 		Reveal();
@@ -459,6 +777,7 @@ void FKineticTagOut::Tick()
 	Events();
 	Beacons();
 	Show();
+	Holds();
 }
 
 void FKineticTagOut::Poses()
@@ -473,6 +792,7 @@ void FKineticTagOut::Poses()
 		const FRotator Yaw(0.0, R->GetActorRotation().Yaw, 0.0);
 		Kinetic::FTagPose Pose;
 		Pose.Chest = ToCore(ChestCm(Slot));
+		Pose.Eye = ToCore(R->Camera->GetComponentLocation());
 		Pose.Forward = ToCoreDirection(Yaw.Vector());
 		Pose.Right = ToCoreDirection(FRotationMatrix(Yaw).GetUnitAxis(EAxis::Y));
 		TheMatch->SetPose(Slot, Pose, R->GetVelocity().Size2D() / 100.0, Seats[Slot].bLevel);
@@ -554,7 +874,15 @@ void FKineticTagOut::Reveal()
 					TheMatch->Show(V, T, Strict & Seen);
 				}
 				Sight.bVisible = Clear(Eye, Chest, Viewer, Target);
-				Sight.Plates = Margin & Seen;
+				Sight.Facing = Margin & Seen;
+				Sight.Plates = TheMatch->Legible(V, T, Sight.Facing);
+				for (int32 I = 0; I < Kinetic::PlateCount; ++I)
+				{
+					if ((Sight.Facing & (1u << I)) && TheMatch->Glares(V, T, static_cast<Kinetic::ETagPlate>(I)))
+					{
+						Sight.Flaring |= static_cast<uint8>(1u << I);
+					}
+				}
 			}
 			if (bLocal)
 			{
@@ -630,6 +958,7 @@ void FKineticTagOut::Inputs()
 			Seat.bStripOpen = false;
 			Seat.bLevel = false;
 			Seat.ThrowAt = -1.0;
+			Seat.DustAt = -1.0;
 			continue;
 		}
 		Seat.bLevel = In.bLevel;
@@ -681,6 +1010,25 @@ void FKineticTagOut::Inputs()
 		{
 			Swing(Slot);
 		}
+		if (In.bGadget)
+		{
+			// A rag goes on now; a bag is cut open with a Cutter swing.
+			const Kinetic::FTagRigger& Me = TheMatch->Rigger(Slot);
+			if (Me.Gadget == Kinetic::ETagGadget::Grease)
+			{
+				TheMatch->UseGadget(Slot);
+			}
+			else if (Seat.DustAt < 0.0 && Me.GadgetsLeft > 0 && !bCarrying)
+			{
+				const Kinetic::FKineticTables* T = Tables();
+				Seat.DustAt = Now + (T ? T->Cutter(Kinetic::ECutterVariant::Standard).Swing : 0.25);
+			}
+		}
+		if (Seat.DustAt >= 0.0 && Now >= Seat.DustAt)
+		{
+			Seat.DustAt = -1.0;
+			TheMatch->UseGadget(Slot, ToCore(R->GetActorLocation() + FVector(0.0, 0.0, 60.0)));
+		}
 		const bool bNowCarrying = TheMatch->Carrying(Slot) != Kinetic::NoPlayer;
 		Seat.bCarrying = bNowCarrying;
 		R->SetTagSlowdown(bNowCarrying ? static_cast<float>(Rules.CarrierSprintScale) : 1.0f,
@@ -724,7 +1072,14 @@ void FKineticTagOut::Swing(int32 Slot)
 		}
 	}
 	AKineticCharacter* Them = Rigger(Hit);
-	if (!Them || Now < Seats[Hit].SpunUntil)
+	if (!Them)
+	{
+		SwingAtTarp(Eye, Look, Cutter.Reach * 100.0);  // A lashing, or a tarp to cut through
+		return;
+	}
+	const FVector Clang = ChestCm(Hit);
+	Cue(TEXT("PlateClang"), &Clang);
+	if (Now < Seats[Hit].SpunUntil)
 	{
 		return;  // Still turning from the last one: no stun-lock (PROPOSED)
 	}
@@ -778,7 +1133,7 @@ void FKineticTagOut::Think(int32 Slot)
 	In.bLevel = false;
 	Me->Move(FVector2D::ZeroVector);
 	const Kinetic::FTagOutMatch& M = *TheMatch;
-	if (!M.CanMove(Slot) || Me->IsStunned())
+	if (!bBotsActive || !M.CanMove(Slot) || Me->IsStunned())
 	{
 		return;
 	}
@@ -806,10 +1161,16 @@ void FKineticTagOut::Think(int32 Slot)
 			Brain->Face(*Me, ChestCm(Caller));
 			return;
 		}
+		if (!Seat.bWillReact && R.Gadget == Kinetic::ETagGadget::Dust && R.GadgetsLeft > 0 && Seat.DustAt < 0.0 && Now >= Seat.ReactAt)
+		{
+			In.bGadget = true;  // No time to turn: cut the bag and stand in it
+			return;
+		}
 	}
 	else
 	{
 		Seat.ReactTo = INDEX_NONE;
+		Seat.DustAt = -1.0;
 	}
 	if (R.Call == Kinetic::ECallState::Locking)
 	{
@@ -847,6 +1208,25 @@ void FKineticTagOut::Think(int32 Slot)
 	{
 		HoldAt(Enemy.State == Kinetic::EBeaconState::OnStand ? Pads[Theirs] : ToCm(Enemy.At) - FVector(0.0, 0.0, BeaconAboveGroundCm * 0.5));
 		return;
+	}
+	// An enemy close behind: a rag on the back, or a dust bag cut to stand in.
+	const bool bGreaseReady = R.Gadget == Kinetic::ETagGadget::Grease && R.SmearingUntil < 0.0 && !M.Smeared(Slot, Kinetic::ETagPlate::Back);
+	const bool bDustReady = R.Gadget == Kinetic::ETagGadget::Dust && Seat.DustAt < 0.0 && !M.ThroughDust(R.Pose.Eye, R.Pose.Chest + Kinetic::FVec3{0.0, 0.0, 0.1});
+	if ((bGreaseReady || bDustReady) && R.GadgetsLeft > 0 && M.Carrying(Slot) == Kinetic::NoPlayer)
+	{
+		for (int32 O = 0; O < Seats.Num(); ++O)
+		{
+			if (TeamOf(O) != Mine && M.Rigger(O).bStanding && Rigger(O) && FVector::Dist(At, Rigger(O)->GetActorLocation()) < 2500.0 &&
+			    DegreesBetween(Me->GetActorForwardVector(), Rigger(O)->GetActorLocation() - At) > 110.0)
+			{
+				In.bGadget = true;
+				return;
+			}
+		}
+	}
+	if (R.SmearingUntil >= 0.0)
+	{
+		return;  // Both hands on the rag
 	}
 	// Re-stamp once the other crew has two of these pips.
 	if (M.LockersOpen() && M.Read(Theirs, Slot).Known() >= 2 && M.Carrying(Slot) == Kinetic::NoPlayer)
@@ -983,8 +1363,46 @@ void FKineticTagOut::Events()
 		case Kinetic::ETagEvent::Revealed:
 			++Revealed;
 			break;
+		case Kinetic::ETagEvent::CallSent:
+			// The target's own harness ticks fast through the lock (8).
+			if (AKineticCharacter* Target = Rigger(E.Other))
+			{
+				if (UAudioComponent* Old = Seats[E.Other].TickSound.Get())
+				{
+					Old->Stop();
+				}
+				Seats[E.Other].TickSound = CueOn(TEXT("CallTick"), Target->GetRootComponent(), 150.0, 1500.0f);
+			}
+			break;
+		case Kinetic::ETagEvent::LostLock:
+			if (UAudioComponent* Tick = Seats.IsValidIndex(E.Other) ? Seats[E.Other].TickSound.Get() : nullptr)
+			{
+				Tick->Stop();
+			}
+			break;
+		case Kinetic::ETagEvent::Smearing:
+			if (R)
+			{
+				CueOn(TEXT("GreaseScrub"), R->GetRootComponent(), 150.0, 1200.0f);
+			}
+			break;
+		case Kinetic::ETagEvent::Smeared:
+			++Smeared;
+			break;
+		case Kinetic::ETagEvent::DustCloud:
+		{
+			++Dusted;
+			const FVector At = ToCm(TheMatch->Clouds().back().At);
+			Cue(TEXT("DustBurst"), &At);
+			Say(FString::Printf(TEXT("%s cut a dust bag."), *Who(E.Slot)));
+			break;
+		}
 		case Kinetic::ETagEvent::TaggedOut:
 			++Tagged;
+			if (UAudioComponent* Tick = Seats[E.Other].TickSound.Get())
+			{
+				Tick->Stop();
+			}
 			Say(FString::Printf(TEXT("%s tagged out %s: %s."), *Who(E.Slot), *Who(E.Other), *Code(TheMatch->Rigger(E.Other).Code)));
 			if (S && Rigger(E.Other))
 			{
@@ -993,6 +1411,15 @@ void FKineticTagOut::Events()
 			break;
 		case Kinetic::ETagEvent::BadCall:
 			++Bad;
+			if (UAudioComponent* Tick = Seats[E.Other].TickSound.Get())
+			{
+				Tick->Stop();
+			}
+			if (R)
+			{
+				const FVector At = R->GetActorLocation();
+				Cue(TEXT("BadCallBuzz"), &At, 500.0, 5000.0f);
+			}
 			Say(FString::Printf(TEXT("%s's call on %s was bad: a pip is out."), *Who(E.Slot), *Who(E.Other)));
 			break;
 		case Kinetic::ETagEvent::Restamped:
@@ -1000,6 +1427,8 @@ void FKineticTagOut::Events()
 			if (LockerRedUntil.IsValidIndex(E.Other))
 			{
 				LockerRedUntil[E.Other] = E.Time + 3.0;
+				const FVector At = LockerCm[E.Other] + FVector(0.0, 0.0, LockerAboveGroundCm);
+				Cue(TEXT("StampSlam"), &At, 1000.0, 2000.0f);  // Heard to 30 m (2.5)
 			}
 			Say(FString::Printf(TEXT("%s re-stamped."), *Who(E.Slot)));
 			break;
@@ -1014,6 +1443,7 @@ void FKineticTagOut::Events()
 			break;
 		case Kinetic::ETagEvent::BeaconGrabbed:
 			++Grabbed;
+			Cue(TEXT("BeaconKlaxon"), nullptr);  // Both crews hear it
 			Say(FString::Printf(TEXT("%s has %s beacon."), *Who(E.Slot),
 			                    Settings.bHumanPlays ? *Whose(E.Team).ToLower() : *Whose(E.Team)));
 			break;
@@ -1068,6 +1498,16 @@ void FKineticTagOut::Beacons()
 			Yaw = Carrier->GetActorRotation().Yaw + 180.0;
 			P.At = Carrier->GetActorLocation() - FRotator(0.0, Carrier->GetActorRotation().Yaw, 0.0).Vector() * 45.0 + FVector(0.0, 0.0, 55.0);
 			P.bFlying = false;
+			// The closest approach along the walkable route (5.6), twice a second.
+			if (TheMatch->Time() >= P.RouteAt)
+			{
+				P.RouteAt = TheMatch->Time() + 0.5;
+				const UNavigationPath* Path = UNavigationSystemV1::FindPathToLocationSynchronously(&World, Carrier->GetActorLocation(), Pads[TeamOf(B.Carrier)]);
+				if (Path && Path->IsValid())
+				{
+					TheMatch->ReportRoute(Team, Path->GetPathLength() / 100.0 - TheMatch->Rules().PadRadiusM);
+				}
+			}
 		}
 		else if (B.State == Kinetic::EBeaconState::Dropped)
 		{
@@ -1104,8 +1544,16 @@ void FKineticTagOut::Beacons()
 		if (AStaticMeshActor* Reflector = P.Reflector.Get())
 		{
 			// The reflector flashes every 3 s while it is carried.
-			const bool bFlash = B.State == Kinetic::EBeaconState::Carried &&
-			                    FMath::Fmod(TheMatch->Time() - B.DroppedAt, TheMatch->Rules().FlashSeconds) < 0.25;
+			// It flashes every 3 s while carried, and only in the sun: not under the Gantry (6).
+			bool bFlash = B.State == Kinetic::EBeaconState::Carried && FMath::Fmod(TheMatch->Time(), TheMatch->Rules().FlashSeconds) < 0.25;
+			if (bFlash)
+			{
+				FHitResult Shade;
+				FCollisionQueryParams Params(SCENE_QUERY_STAT(KineticReflector), false, Reflector);
+				Params.AddIgnoredActor(P.Body.Get());
+				Params.AddIgnoredActor(Rigger(B.Carrier));
+				bFlash = !World.LineTraceSingleByChannel(Shade, P.At + FVector(0.0, 0.0, 60.0), P.At + ToSun * 40000.0, ECC_Visibility, Params);
+			}
 			Reflector->SetActorLocation(P.At + FVector(0.0, 0.0, 40.0));
 			Reflector->SetActorHiddenInGame(B.State == Kinetic::EBeaconState::Carried && !bFlash);
 		}
@@ -1129,9 +1577,23 @@ void FKineticTagOut::Show()
 		{
 			if (UTextRenderComponent* Text = Seat.Plates[I].Get())
 			{
-				const bool bShow = Slot != ViewSlot() && (Seat.Sight.Plates & (1u << I));
-				Text->SetText(bShow ? FText::AsNumber(R.Code.Pips[I]) : FText::GetEmpty());
+				// The digit while the player can read it; a greasy smudge if it is turned their way
+				// but smeared.
+				const bool bOther = Slot != ViewSlot();
+				const bool bSmudge = bOther && (Seat.Sight.Facing & (1u << I)) && TheMatch->Smeared(Slot, static_cast<Kinetic::ETagPlate>(I));
+				Text->SetText(bOther && (Seat.Sight.Plates & (1u << I)) ? FText::AsNumber(R.Code.Pips[I])
+				              : bSmudge                                 ? FText::FromString(TEXT("~"))
+				                                                        : FText::GetEmpty());
+				Text->SetTextRenderColor(bSmudge ? FColor(70, 55, 35) : FColor(255, 232, 90));
 			}
+			if (UStaticMeshComponent* Flare = Seat.Flares[I].Get())
+			{
+				Flare->SetVisibility(Slot != ViewSlot() && (Seat.Sight.Flaring & (1u << I)));
+			}
+		}
+		if (UStaticMeshComponent* Glint = Seat.Glint.Get())
+		{
+			Glint->SetVisibility(R.bStanding && TheMatch->LevelReady(Slot));
 		}
 		if (AKineticCharacter* Character = Seat.Character.Get())
 		{

@@ -454,7 +454,7 @@ AKineticCharacter::FTagInput AKineticCharacter::TakeTagInput()
 {
 	FTagInput Taken = Tag;
 	Tag.Pips.Reset();
-	Tag.bCall = Tag.bClear = Tag.bSwing = Tag.bThrow = false;
+	Tag.bCall = Tag.bClear = Tag.bSwing = Tag.bThrow = Tag.bGadget = false;
 	return Taken;
 }
 
@@ -475,6 +475,14 @@ void AKineticCharacter::OnCall()
 }
 
 void AKineticCharacter::OnUseReleased() { Tag.bUse = false; }
+
+void AKineticCharacter::OnGadget()
+{
+	if (bTagOut && !bCursorFree)
+	{
+		Tag.bGadget = true;
+	}
+}
 
 void AKineticCharacter::OnThrow()
 {
@@ -835,6 +843,7 @@ void AKineticCharacter::BuildInput()
 	CallAction = Action(TEXT("IA_Call"), EInputActionValueType::Boolean);
 	Pip4Action = Action(TEXT("IA_Pip4"), EInputActionValueType::Boolean);
 	ThrowAction = Action(TEXT("IA_Throw"), EInputActionValueType::Boolean);
+	GadgetAction = Action(TEXT("IA_Gadget"), EInputActionValueType::Boolean);
 	InputContext = NewObject<UInputMappingContext>(this, TEXT("IMC_Kinetic"));
 
 	// W A S D onto one 2D axis: W and S drive Y (swizzled), A and D drive X; S and A negated.
@@ -873,6 +882,7 @@ void AKineticCharacter::BuildInput()
 	InputContext->MapKey(CallAction, EKeys::F);
 	InputContext->MapKey(Pip4Action, EKeys::Four);
 	InputContext->MapKey(ThrowAction, EKeys::G);
+	InputContext->MapKey(GadgetAction, EKeys::Q);
 	// Escape lets go of the mouse (and takes it back).
 	InputContext->MapKey(CursorAction, EKeys::Escape);
 }
@@ -916,6 +926,7 @@ void AKineticCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	Input->BindAction(CallAction, ETriggerEvent::Started, this, &AKineticCharacter::OnCall);
 	Input->BindAction(Pip4Action, ETriggerEvent::Started, this, &AKineticCharacter::OnPip, 4);
 	Input->BindAction(ThrowAction, ETriggerEvent::Started, this, &AKineticCharacter::OnThrow);
+	Input->BindAction(GadgetAction, ETriggerEvent::Started, this, &AKineticCharacter::OnGadget);
 	Input->BindAction(ModeActions[0], ETriggerEvent::Started, this, &AKineticCharacter::OnMode, ELineModeInput::Haul);
 	Input->BindAction(ModeActions[1], ETriggerEvent::Started, this, &AKineticCharacter::OnMode, ELineModeInput::Jack);
 	Input->BindAction(ModeActions[2], ETriggerEvent::Started, this, &AKineticCharacter::OnMode, ELineModeInput::Hang);
@@ -927,7 +938,7 @@ void AKineticCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	for (UInputAction* Any : {MoveAction.Get(), LookAction.Get(), JumpAction.Get(), SprintAction.Get(), CrouchAction.Get(),
 	                          FireAction.Get(), SelfDogAction.Get(), ModeActions[0].Get(), ModeActions[1].Get(),
 	                          ModeActions[2].Get(), ReleaseAction.Get(), DrawAction.Get(), CallAction.Get(), Pip4Action.Get(),
-	                          ThrowAction.Get()})
+	                          ThrowAction.Get(), GadgetAction.Get()})
 	{
 		Input->BindAction(Any, ETriggerEvent::Triggered, this, &AKineticCharacter::NoteInput);
 	}

@@ -5,7 +5,8 @@ bible/05 section 11) as 16-bit mono WAV files, from code, with the Python standa
 
 Each cue is a short synthesis recipe: a buzzing diaphragm through its bell's resonances for the
 horns, tones for the siren, filtered noise for hisses and blasts, inharmonic partials and a knock for
-the clang; then the Yard's acoustics (its steel walls' slap and a reverb tail) at the cue's level. Unreal imports them as
+the clang, and Tag-Out's tells (the being-called tick, the bad call's buzz, the locker stamp, the
+plant and return tones, the plate clang, the beacon klaxon, the dust bag and the grease rag); then the Yard's acoustics (its steel walls' slap and a reverb tail) at the cue's level. Unreal imports them as
 /Game/Audio/SW_<Name> (game/Tools/unreal/import_audio.py, make import-audio).
 """
 from __future__ import annotations
@@ -202,6 +203,75 @@ def clang(length: float = 1.5):
                                       3.0 * knock.next() * math.exp(-30 * t)) * envelope(t, length, 0.001, 0.2))
 
 
+def ticks(length: float = 0.6, start_hz: float = 14.0, end_hz: float = 30.0):
+    """Tag-Out's being-called tell: the harness's own fast tick, quickening over the 0.6 s lock.
+    Each tick is a short bright click (a decaying 3.2 kHz ping on a noise transient)."""
+    click = Noise(21, 9000.0)
+    times, t = [], 0.0
+    while t < length:
+        times.append(t)
+        t += 1.0 / (start_hz + (end_hz - start_hz) * t / length)
+
+    def sample(t: float) -> float:
+        since = min((t - c for c in times if c <= t), default=1.0)
+        return (math.sin(2 * math.pi * 3200 * since) + 0.7 * click.next()) * math.exp(-260 * since)
+    return render(length, sample)
+
+
+def buzz(length: float = 0.5):
+    """The bad call: a harsh electric buzz, a clipped 110 Hz square with its rasp."""
+    rasp = Noise(22, 5000.0)
+    return render(length, lambda t: math.tanh(4.0 * (math.copysign(1.0, math.sin(2 * math.pi * 110 * t)) * 0.6 +
+                                                     0.4 * math.sin(2 * math.pi * 220 * t) + 0.3 * rasp.next())) *
+                  envelope(t, length, 0.005, 0.08))
+
+
+def stamp(length: float = 1.2):
+    """A tag locker's stamp: a heavy die slamming into its anvil, a low thump and a short steel ring."""
+    body = Noise(23, 500.0)
+    partials = [(180.0, 1.0, 9.0), (433.0, 0.6, 14.0), (911.0, 0.35, 22.0), (1730.0, 0.2, 30.0)]
+    return render(length, lambda t: (2.0 * math.sin(2 * math.pi * 70 * t) * math.exp(-9 * t) + 2.5 * body.next() * math.exp(-35 * t) +
+                                      sum(a * math.sin(2 * math.pi * f * t) * math.exp(-d * t) for f, a, d in partials)) *
+                  envelope(t, length, 0.001, 0.2))
+
+
+def rising(length: float, low: float, high: float, clicks_hz: float = 0.0):
+    """A rising channel tone (the plant's clip tone, the return's), with ratchet clicks if asked."""
+    phase = [0.0]
+    ratchet = Noise(24, 7000.0)
+
+    def sample(t: float) -> float:
+        f = low * (high / low) ** (t / length)
+        phase[0] += 2 * math.pi * f / RATE
+        tone = math.sin(phase[0]) + 0.3 * math.sin(2 * phase[0])
+        if clicks_hz:
+            tone += 1.2 * ratchet.next() * math.exp(-300 * ((t * clicks_hz) % 1.0) / clicks_hz)
+        return tone * envelope(t, length, 0.03, 0.05)
+    return render(length, sample)
+
+
+def plate_clang(length: float = 0.7):
+    """A Cutter on a Catch Plate: a bright, light clang, quicker than the press ram's."""
+    partials = [(520.0, 1.0, 7.0), (1290.0, 0.6, 10.0), (2210.0, 0.4, 15.0), (3480.0, 0.25, 22.0)]
+    knock = Noise(25, 4000.0)
+    return render(length, lambda t: (sum(a * (math.sin(2 * math.pi * f * t) + 0.5 * math.sin(2 * math.pi * f * 1.006 * t)) *
+                                          math.exp(-d * t) for f, a, d in partials) + 2.0 * knock.next() * math.exp(-60 * t)) *
+                  envelope(t, length, 0.001, 0.15))
+
+
+def dust_burst(length: float = 1.2):
+    """A dust bag cut open: a soft thump and the powder hissing out."""
+    puff, thump = Noise(26, 2500.0), Noise(27, 250.0)
+    return render(length, lambda t: (1.4 * thump.next() * math.exp(-12 * t) + puff.next() * (1.0 - math.exp(-30 * t)) * math.exp(-2.2 * t)) *
+                  envelope(t, length, 0.002, 0.4))
+
+
+def scrub(length: float = 1.0):
+    """A grease rag worked over a plate: cloth scrubbing in strokes, about four a second."""
+    cloth = Noise(28, 1800.0)
+    return render(length, lambda t: cloth.next() * (0.35 + 0.65 * abs(math.sin(2 * math.pi * 2.0 * t))) * envelope(t, length, 0.05, 0.15))
+
+
 CUES = {
     "KlaxonLow": lambda: klaxon([180.0]),
     "KlaxonHigh": lambda: klaxon([420.0]),
@@ -217,6 +287,16 @@ CUES = {
     "MagnetRelease": lambda: thud(0.6, 160.0, 8),
     "PlateLand": lambda: thud(1.5, 60.0, 9),
     "RamClang": clang,
+    # Tag-Out's tells (docs/proposals/claim-tag-out.md section 8).
+    "CallTick": ticks,
+    "BadCallBuzz": buzz,
+    "StampSlam": stamp,
+    "PlantTone": lambda: rising(1.0, 420.0, 980.0, 12.0),
+    "ReturnTone": lambda: rising(2.0, 300.0, 720.0),
+    "PlateClang": plate_clang,
+    "BeaconKlaxon": lambda: klaxon([520.0, 390.0, 520.0, 390.0], 1.8),
+    "DustBurst": dust_burst,
+    "GreaseScrub": scrub,
 }
 
 # Each cue in the Yard: (how much of the yard you hear with it, the tail's length in s, its level).
@@ -225,6 +305,9 @@ SPACE = {
     "KlaxonLow": (0.8, 2.2, 0.45), "KlaxonHigh": (0.8, 2.2, 0.4), "KlaxonTwoTone": (0.8, 2.2, 0.42),
     "Siren": (0.7, 2.5, 0.45), "DropTone": (0.6, 1.8, 0.4), "Blast": (0.9, 2.8, 0.8), "RamClang": (0.7, 2.0, 0.45),
     "Snap": (0.4, 0.8, 0.45), "Hiss": (0.3, 0.8, 0.4), "GasJet": (0.4, 1.2, 0.5),
+    "CallTick": (0.05, 0.3, 0.4), "BadCallBuzz": (0.3, 0.8, 0.45), "StampSlam": (0.6, 1.6, 0.55),
+    "PlantTone": (0.2, 0.6, 0.4), "ReturnTone": (0.2, 0.6, 0.35), "PlateClang": (0.4, 1.0, 0.45),
+    "BeaconKlaxon": (0.8, 2.2, 0.45), "DustBurst": (0.3, 0.8, 0.4), "GreaseScrub": (0.05, 0.3, 0.3),
 }
 
 
