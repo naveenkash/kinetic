@@ -58,6 +58,11 @@ public:
 	static constexpr double AimErrorCm = 30.0;
 	static constexpr double ApproachShare = 0.7;
 
+	// Tag-Out drives its bots itself (FKineticTagOut), with the same legs: along the navmesh
+	// toward Goal (ladders included), or turned to look at Point.
+	void GoTo(AKineticCharacter& Me, const FVector& Goal) { FollowRoute(Me, Goal); }
+	void Face(const AKineticCharacter& Me, const FVector& Point) { FaceToward(Me, Point); }
+
 	// For tests: how many Dogs it has fired, and what it is doing.
 	int32 DogsFired() const { return Fired; }
 

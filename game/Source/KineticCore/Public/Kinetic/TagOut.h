@@ -134,7 +134,7 @@ struct FTagEventRecord
 };
 
 // What a crew knows of one enemy's code.
-struct FTagRead
+struct KINETICCORE_API FTagRead
 {
 	std::array<std::optional<uint8_t>, PlateCount> Pips{};
 	std::array<double, PlateCount> Seen{};  // When each pip was last shown (s)

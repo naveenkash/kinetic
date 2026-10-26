@@ -99,8 +99,9 @@ bool AKineticCharacter::ApplyHarness()
 	SprintSpeedM = static_cast<float>(Row.SprintSpeed);
 	MantleHeightM = static_cast<float>(Row.MantleHeight);
 	LadderSpeedM = static_cast<float>(Row.LadderSpeed);
+	CrouchSpeedM = static_cast<float>(Row.CrouchSpeed);
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
-	Movement->MaxWalkSpeed = Cm(bSprinting ? Row.SprintSpeed : Row.RunSpeed);
+	Movement->MaxWalkSpeed = GroundSpeedCm();
 	Movement->MaxWalkSpeedCrouched = Cm(Row.CrouchSpeed);
 	Movement->AirControl = static_cast<float>(Row.AirControl);
 	Movement->Mass = static_cast<float>(Row.MassKg);
@@ -392,7 +393,7 @@ void AKineticCharacter::SetSprinting(bool bSprint)
 	bSprinting = bSprint;
 	if (!bUnderLine)
 	{
-		GetCharacterMovement()->MaxWalkSpeed = Cm(bSprinting ? SprintSpeedM : RunSpeedM);
+		GetCharacterMovement()->MaxWalkSpeed = GroundSpeedCm();
 	}
 }
 
@@ -416,11 +417,72 @@ void AKineticCharacter::SetUnderLine(bool bLine, bool bBraced)
 	{
 		Movement->GroundFriction = NormalFriction;
 		Movement->BrakingDecelerationWalking = NormalBraking;
-		Movement->MaxWalkSpeed = Cm(bSprinting ? SprintSpeedM : RunSpeedM);
+		Movement->MaxWalkSpeed = GroundSpeedCm();
 	}
 }
 
 void AKineticCharacter::FirePressed() { OnFire(); }
+
+float AKineticCharacter::GroundSpeedCm() const
+{
+	if (bLevelSlow)
+	{
+		return Cm(CrouchSpeedM);
+	}
+	return Cm(bSprinting ? SprintSpeedM * SprintScale : RunSpeedM);
+}
+
+void AKineticCharacter::SetTagSlowdown(float InSprintScale, float InLadderScale, bool bLevel)
+{
+	SprintScale = InSprintScale;
+	LadderScale = InLadderScale;
+	bLevelSlow = bLevel;
+	if (!bUnderLine)
+	{
+		GetCharacterMovement()->MaxWalkSpeed = GroundSpeedCm();
+	}
+	if (DefaultFov < 0.0f)
+	{
+		DefaultFov = Camera->FieldOfView;
+	}
+	// 3x magnification: the tangent of the half-angle a third as wide.
+	const float Zoomed = 2.0f * FMath::RadiansToDegrees(FMath::Atan(FMath::Tan(FMath::DegreesToRadians(DefaultFov * 0.5f)) / 3.0f));
+	Camera->SetFieldOfView(bLevel ? Zoomed : DefaultFov);
+}
+
+AKineticCharacter::FTagInput AKineticCharacter::TakeTagInput()
+{
+	FTagInput Taken = Tag;
+	Tag.Pips.Reset();
+	Tag.bCall = Tag.bClear = Tag.bSwing = Tag.bThrow = false;
+	return Taken;
+}
+
+void AKineticCharacter::OnPip(int32 Pip)
+{
+	if (bTagOut && !bCursorFree)
+	{
+		Tag.Pips.Add(Pip);
+	}
+}
+
+void AKineticCharacter::OnCall()
+{
+	if (bTagOut && !bCursorFree)
+	{
+		Tag.bCall = true;
+	}
+}
+
+void AKineticCharacter::OnUseReleased() { Tag.bUse = false; }
+
+void AKineticCharacter::OnThrow()
+{
+	if (bTagOut && !bCursorFree)
+	{
+		Tag.bThrow = true;
+	}
+}
 
 std::vector<Kinetic::FContact> AKineticCharacter::TakeContacts()
 {
@@ -703,7 +765,7 @@ void AKineticCharacter::UpdateLadder(float DeltaSeconds)
 	// line (a bump does not knock the climber off the rungs).
 	const FVector Line = (Ladder->ClimbAt(GetActorLocation().Z) - GetActorLocation()) * 10.0;
 	Movement->Velocity = FVector(FMath::Clamp(Line.X, -150.0, 150.0), FMath::Clamp(Line.Y, -150.0, 150.0),
-	                             Cm(LadderSpeedM) * FMath::Clamp(ForwardInput, -1.0f, 1.0f));
+	                             Cm(LadderSpeedM * LadderScale) * FMath::Clamp(ForwardInput, -1.0f, 1.0f));
 	const float Feet = static_cast<float>(GetActorLocation().Z) - CapsuleHalfHeightCm;
 	if (Feet >= Ladder->TopZ() - 5.0f)
 	{
@@ -770,6 +832,9 @@ void AKineticCharacter::BuildInput()
 	ReleaseAction = Action(TEXT("IA_Release"), EInputActionValueType::Boolean);
 	DrawAction = Action(TEXT("IA_Draw"), EInputActionValueType::Boolean);
 	CursorAction = Action(TEXT("IA_Cursor"), EInputActionValueType::Boolean);
+	CallAction = Action(TEXT("IA_Call"), EInputActionValueType::Boolean);
+	Pip4Action = Action(TEXT("IA_Pip4"), EInputActionValueType::Boolean);
+	ThrowAction = Action(TEXT("IA_Throw"), EInputActionValueType::Boolean);
 	InputContext = NewObject<UInputMappingContext>(this, TEXT("IMC_Kinetic"));
 
 	// W A S D onto one 2D axis: W and S drive Y (swizzled), A and D drive X; S and A negated.
@@ -804,6 +869,10 @@ void AKineticCharacter::BuildInput()
 	InputContext->MapKey(ModeActions[2], EKeys::Three);
 	InputContext->MapKey(ReleaseAction, EKeys::R);
 	InputContext->MapKey(DrawAction, EKeys::RightMouseButton);
+	// Tag-Out: 1 to 3 are the Spool's mode keys in the other modes, the call strip's pips here.
+	InputContext->MapKey(CallAction, EKeys::F);
+	InputContext->MapKey(Pip4Action, EKeys::Four);
+	InputContext->MapKey(ThrowAction, EKeys::G);
 	// Escape lets go of the mouse (and takes it back).
 	InputContext->MapKey(CursorAction, EKeys::Escape);
 }
@@ -843,6 +912,10 @@ void AKineticCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	Input->BindAction(CrouchAction, ETriggerEvent::Completed, this, &AKineticCharacter::OnCrouch);
 	Input->BindAction(FireAction, ETriggerEvent::Started, this, &AKineticCharacter::OnFire);
 	Input->BindAction(SelfDogAction, ETriggerEvent::Started, this, &AKineticCharacter::OnSelfDog);
+	Input->BindAction(SelfDogAction, ETriggerEvent::Completed, this, &AKineticCharacter::OnUseReleased);
+	Input->BindAction(CallAction, ETriggerEvent::Started, this, &AKineticCharacter::OnCall);
+	Input->BindAction(Pip4Action, ETriggerEvent::Started, this, &AKineticCharacter::OnPip, 4);
+	Input->BindAction(ThrowAction, ETriggerEvent::Started, this, &AKineticCharacter::OnThrow);
 	Input->BindAction(ModeActions[0], ETriggerEvent::Started, this, &AKineticCharacter::OnMode, ELineModeInput::Haul);
 	Input->BindAction(ModeActions[1], ETriggerEvent::Started, this, &AKineticCharacter::OnMode, ELineModeInput::Jack);
 	Input->BindAction(ModeActions[2], ETriggerEvent::Started, this, &AKineticCharacter::OnMode, ELineModeInput::Hang);
@@ -853,7 +926,8 @@ void AKineticCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	// Any of them is input for the idle rules.
 	for (UInputAction* Any : {MoveAction.Get(), LookAction.Get(), JumpAction.Get(), SprintAction.Get(), CrouchAction.Get(),
 	                          FireAction.Get(), SelfDogAction.Get(), ModeActions[0].Get(), ModeActions[1].Get(),
-	                          ModeActions[2].Get(), ReleaseAction.Get(), DrawAction.Get()})
+	                          ModeActions[2].Get(), ReleaseAction.Get(), DrawAction.Get(), CallAction.Get(), Pip4Action.Get(),
+	                          ThrowAction.Get()})
 	{
 		Input->BindAction(Any, ETriggerEvent::Triggered, this, &AKineticCharacter::NoteInput);
 	}
@@ -865,6 +939,11 @@ void AKineticCharacter::OnFire()
 {
 	if (bStunned || bCursorFree)
 	{
+		return;
+	}
+	if (bTagOut)
+	{
+		Tag.bSwing = true;  // The Cutter is always in hand
 		return;
 	}
 	if (UKineticSpoolWorld* Spool = GetWorld()->GetSubsystem<UKineticSpoolWorld>())
@@ -882,6 +961,11 @@ void AKineticCharacter::OnFire()
 
 void AKineticCharacter::OnSelfDog()
 {
+	if (bTagOut)
+	{
+		Tag.bUse = !bCursorFree;
+		return;
+	}
 	if (UKineticSpoolWorld* Spool = GetWorld()->GetSubsystem<UKineticSpoolWorld>())
 	{
 		Spool->SelfDogNext(this);
@@ -890,6 +974,11 @@ void AKineticCharacter::OnSelfDog()
 
 void AKineticCharacter::OnMode(ELineModeInput Mode)
 {
+	if (bTagOut)
+	{
+		OnPip(Mode == ELineModeInput::Haul ? 1 : Mode == ELineModeInput::Jack ? 2 : 3);
+		return;
+	}
 	if (UKineticSpoolWorld* Spool = GetWorld()->GetSubsystem<UKineticSpoolWorld>())
 	{
 		Spool->SelectMode(this, Mode == ELineModeInput::Haul   ? Kinetic::ELineMode::Haul
@@ -900,6 +989,11 @@ void AKineticCharacter::OnMode(ELineModeInput Mode)
 
 void AKineticCharacter::OnRelease()
 {
+	if (bTagOut)
+	{
+		Tag.bClear = true;
+		return;
+	}
 	if (UKineticSpoolWorld* Spool = GetWorld()->GetSubsystem<UKineticSpoolWorld>())
 	{
 		Spool->Release(this);
@@ -908,6 +1002,11 @@ void AKineticCharacter::OnRelease()
 
 void AKineticCharacter::OnDraw(const FInputActionValue& Value)
 {
+	if (bTagOut)
+	{
+		Tag.bLevel = Value.Get<bool>() && !bCursorFree;
+		return;
+	}
 	bDrawn = Value.Get<bool>();
 	if (UKineticSpoolWorld* Spool = GetWorld()->GetSubsystem<UKineticSpoolWorld>())
 	{

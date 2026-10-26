@@ -137,6 +137,28 @@ public:
 	bool HasMetaHuman() const { return bMetaHuman; }
 	EFigureTake FigureTake() const { return Take; }
 
+	// Tag-Out (docs/proposals/claim-tag-out.md): the Spool's buttons become the call strip, the
+	// Use hold, the sighting level and the Cutter. FKineticTagOut takes what was pressed each
+	// step; a bot's brain presses the same through TagInput().
+	struct FTagInput
+	{
+		TArray<int32> Pips;   // 1 to 4, in the order pressed
+		bool bCall = false;   // F: open the strip, or send the call at the crosshair
+		bool bClear = false;  // R: clear the strip
+		bool bSwing = false;  // Left mouse: swing the Cutter
+		bool bThrow = false;  // G: throw the beacon
+		bool bUse = false;    // E, held
+		bool bLevel = false;  // Right mouse, held: the sighting level
+	};
+	void SetTagOut(bool bOn) { bTagOut = bOn; }
+	bool IsTagOut() const { return bTagOut; }
+	FTagInput& TagInput() { return Tag; }
+	// What was pressed since the last take (the held buttons stay held).
+	FTagInput TakeTagInput();
+	// A beacon carrier sprints and climbs slower (5.3); with the sighting level up the rigger
+	// walks at crouch speed and sees 3x closer (2.2).
+	void SetTagSlowdown(float SprintScale, float LadderScale, bool bLevel);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
@@ -162,7 +184,17 @@ private:
 	void NoteInput();
 	void BuildInput();
 
-	float RunSpeedM = 6.2f, SprintSpeedM = 7.5f, MantleHeightM = 2.2f, LadderSpeedM = 2.0f;
+	float RunSpeedM = 6.2f, SprintSpeedM = 7.5f, MantleHeightM = 2.2f, LadderSpeedM = 2.0f, CrouchSpeedM = 3.0f;
+	float SprintScale = 1.0f, LadderScale = 1.0f;
+	bool bLevelSlow = false;
+	float DefaultFov = -1.0f;
+	float GroundSpeedCm() const;
+	bool bTagOut = false;
+	FTagInput Tag;
+	void OnPip(int32 Pip);
+	void OnCall();
+	void OnUseReleased();
+	void OnThrow();
 	bool bSprinting = false;
 	float ForwardInput = 0.0f;
 	bool bUnderLine = false;
@@ -220,5 +252,11 @@ private:
 	TObjectPtr<UInputAction> DrawAction;
 	UPROPERTY()
 	TObjectPtr<UInputAction> CursorAction;
+	UPROPERTY()
+	TObjectPtr<UInputAction> CallAction;
+	UPROPERTY()
+	TObjectPtr<UInputAction> Pip4Action;
+	UPROPERTY()
+	TObjectPtr<UInputAction> ThrowAction;
 	bool bCursorFree = false;
 };

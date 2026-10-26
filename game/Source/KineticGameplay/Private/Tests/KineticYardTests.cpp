@@ -27,6 +27,7 @@
 #include "KineticYardDirector.h"
 #include "KineticRulesSubsystem.h"
 #include "KineticSpoolWorld.h"
+#include "KineticTagOut.h"
 #include "Misc/AutomationTest.h"
 #include "NavigationSystem.h"
 #include "Tests/AutomationCommon.h"
@@ -1450,6 +1451,213 @@ bool FKineticYardPlayTest::RunTest(const FString& Parameters)
 	}
 	ADD_LATENT_AUTOMATION_COMMAND(FWaitForPlay(this));
 	ADD_LATENT_AUTOMATION_COMMAND(FPlayTheYard(this));
+	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
+	return true;
+}
+
+// A Claim with Tag-Out match of eight bots on short rules (2:00 of regulation, 0:30 of
+// overtime): the crews drop in at their pads, read each other, call, and the match ends.
+class FTagOutInTheYard : public IAutomationLatentCommand
+{
+public:
+	explicit FTagOutInTheYard(FAutomationTestBase* InTest) : Test(InTest) {}
+
+	virtual bool Update() override
+	{
+		UWorld* World = GEditor ? GEditor->PlayWorld.Get() : nullptr;
+		const AKineticGameMode* Mode = World ? World->GetAuthGameMode<AKineticGameMode>() : nullptr;
+		FKineticTagOut* Tag = Mode ? Mode->TagOut() : nullptr;
+		const UKineticSpoolWorld* Spool = World ? World->GetSubsystem<UKineticSpoolWorld>() : nullptr;
+		if (!Tag || !Spool)
+		{
+			return Fail(TEXT("no Tag-Out match in the play world (?Mode=TagOut)"));
+		}
+		const Kinetic::FTagOutMatch& M = Tag->Match();
+		switch (Stage)
+		{
+		case 0:
+		{
+			Kinetic::FTagOutRules Rules;
+			Rules.DropSeconds = 3.0;
+			Rules.RegulationSeconds = 120.0;
+			Rules.MidEventRemaining = 60.0;
+			Rules.OvertimeSeconds = 30.0;
+			Rules.AutoReturnSeconds = 20.0;
+			Tag->SetRules(Rules);
+			Tag->StartMatch();  // A new match: M was the old one
+			Test->TestEqual(TEXT("eight riggers"), Tag->SlotCount(), 8);
+			Test->TestEqual(TEXT("four lockers"), static_cast<int32>(Tag->Match().Lockers().size()), 4);
+			Stage = 1;
+			return false;
+		}
+		case 1:  // Live: everyone at their own pad, no lines.
+			if (M.Phase() != Kinetic::ETagPhase::Live)
+			{
+				return false;
+			}
+			for (int32 Slot = 0; Slot < Tag->SlotCount(); ++Slot)
+			{
+				const AKineticCharacter* R = Tag->Rigger(Slot);
+				const FVector Pad = Tag->PadCm(Tag->TeamOf(Slot));
+				Test->TestTrue(*FString::Printf(TEXT("slot %d starts at its pad (%s, pad %s)"), Slot,
+				                                R ? *R->GetActorLocation().ToCompactString() : TEXT("-"), *Pad.ToCompactString()),
+				               R && FVector::Dist2D(R->GetActorLocation(), Pad) < 800.0 && FMath::Abs(R->GetActorLocation().Z - Pad.Z) < 300.0);
+			}
+			Test->TestFalse(TEXT("no Spool lines in Tag-Out"), Spool->LinesAllowed());
+			Stage = 2;
+			return false;
+		case 2:  // The match plays out.
+			if (M.Phase() != Kinetic::ETagPhase::Over)
+			{
+				return M.Time() > 3.0 + 120.0 + 30.0 + 10.0 ? Fail(TEXT("the match did not end with the clock")) : false;
+			}
+			Test->AddInfo(FString::Printf(TEXT("over at %.0f s, winner %d: %d reveals, %d calls, %d tag-outs, %d bad calls, %d grabs, %d re-stamps, %d swings"),
+			                              M.Time(), M.Winner(), Tag->Reveals(), Tag->CallsSent(), Tag->TagOuts(), Tag->BadCalls(), Tag->Grabs(),
+			                              Tag->Restamps(), Tag->Swings()));
+			for (const FString& Line : Tag->Feed())
+			{
+				Test->AddInfo(Line);
+			}
+			Test->TestTrue(TEXT("the crews read each other's plates"), Tag->Reveals() > 0);
+			Test->TestTrue(TEXT("the bots made calls"), Tag->CallsSent() > 0);
+			Test->TestTrue(TEXT("calls resolved"), Tag->TagOuts() + Tag->BadCalls() > 0);
+			Test->TestTrue(TEXT("a runner lifted a beacon"), Tag->Grabs() > 0);
+			Test->TestEqual(TEXT("one match finished"), Tag->MatchesFinished(), 1);
+			return true;
+		default:
+			return true;
+		}
+	}
+
+private:
+	bool Fail(const TCHAR* Why)
+	{
+		Test->AddError(Why);
+		return true;
+	}
+
+	FAutomationTestBase* Test;
+	int Stage = 0;
+};
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FKineticYardTagOutTest, "Kinetic.Yard.TagOut",
+                                 EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FKineticYardTagOutTest::RunTest(const FString& Parameters)
+{
+	PlayMode(TEXT("TagOut"), true);
+	IConsoleManager::Get().FindConsoleVariable(TEXT("kinetic.Seed"))->Set(7, ECVF_SetByCode);
+	if (!AutomationOpenMap(YardMap))
+	{
+		AddError(TEXT("the Yard grey-box did not open (make yard-greybox)"));
+		return false;
+	}
+	ADD_LATENT_AUTOMATION_COMMAND(FWaitForPlay(this));
+	ADD_LATENT_AUTOMATION_COMMAND(FTagOutInTheYard(this));
+	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
+	return true;
+}
+
+// Pictures of Tag-Out (make shots): crew A on its pad at the drop, with the stand, the beacon and
+// the locker; then slot 0's own view, HUD and all, once the match has run a while.
+class FShotsOfTagOut : public IAutomationLatentCommand
+{
+public:
+	explicit FShotsOfTagOut(FAutomationTestBase* InTest) : Test(InTest) {}
+
+	virtual bool Update() override
+	{
+		UWorld* World = GEditor ? GEditor->PlayWorld.Get() : nullptr;
+		APlayerController* Player = World ? World->GetFirstPlayerController() : nullptr;
+		const AKineticGameMode* Mode = World ? World->GetAuthGameMode<AKineticGameMode>() : nullptr;
+		FKineticTagOut* Tag = Mode ? Mode->TagOut() : nullptr;
+		if (!Player || !Tag)
+		{
+			return true;
+		}
+		const double Now = World->GetTimeSeconds();
+		const Kinetic::FTagOutMatch& M = Tag->Match();
+		const auto Shot = [&](const TCHAR* Name, bool bUI) {
+			const FString File = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Kinetic/Shots") / Name) + TEXT(".png");
+			FScreenshotRequest::RequestScreenshot(File, bUI, false);
+			Test->AddInfo(FString::Printf(TEXT("shot %s"), *File));
+		};
+		switch (Stage)
+		{
+		case 0:  // Held in the drop for the first picture.
+		{
+			Kinetic::FTagOutRules Rules;
+			Rules.DropSeconds = 12.0;
+			Tag->SetRules(Rules);
+			Tag->StartMatch();
+			const FVector Pad = Tag->PadCm(0);
+			const FVector F = (FVector(0.0, 0.0, Pad.Z) - Pad).GetSafeNormal2D();
+			Camera = World->SpawnActor<ACameraActor>();
+			Camera->SetActorLocationAndRotation(Pad + F * 1100.0 + FVector(0.0, 0.0, 380.0),
+			                                    (Pad + FVector(0.0, 0.0, 90.0) - (Pad + F * 1100.0 + FVector(0.0, 0.0, 380.0))).Rotation());
+			Camera->GetCameraComponent()->SetFieldOfView(60.0f);
+			Camera->GetCameraComponent()->SetConstraintAspectRatio(false);
+			Player->SetViewTarget(Camera);
+			StageAt = Now;
+			Stage = 1;
+			return false;
+		}
+		case 1:
+			if (Now - StageAt < 4.0)
+			{
+				return false;
+			}
+			Shot(TEXT("TagOut_Pad"), false);
+			StageAt = Now;
+			Stage = 2;
+			return false;
+		case 2:  // Through slot 0's eyes, a while into the match.
+			if (Now - StageAt < 2.0)
+			{
+				return false;
+			}
+			Player->SetViewTarget(Tag->Rigger(0));
+			if (M.Phase() == Kinetic::ETagPhase::Drop || M.Time() < 40.0)
+			{
+				return false;
+			}
+			Shot(TEXT("TagOut_View"), true);
+			StageAt = Now;
+			Stage = 3;
+			return false;
+		case 3:
+			return Now - StageAt > 2.0;
+		default:
+			return true;
+		}
+	}
+
+private:
+	FAutomationTestBase* Test;
+	ACameraActor* Camera = nullptr;
+	int Stage = 0;
+	double StageAt = 0.0;
+};
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FKineticTagOutShotsTest, "Kinetic.Shots.TagOut",
+                                 EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FKineticTagOutShotsTest::RunTest(const FString& Parameters)
+{
+	if (!FApp::CanEverRender())
+	{
+		AddInfo(TEXT("no rendering (-nullrhi): no shots"));
+		return true;
+	}
+	PlayMode(TEXT("TagOut"), true);
+	IConsoleManager::Get().FindConsoleVariable(TEXT("kinetic.Seed"))->Set(7, ECVF_SetByCode);
+	if (!AutomationOpenMap(YardMap))
+	{
+		AddError(TEXT("the Yard grey-box did not open (make yard-greybox)"));
+		return false;
+	}
+	ADD_LATENT_AUTOMATION_COMMAND(FWaitForPlay(this));
+	ADD_LATENT_AUTOMATION_COMMAND(FShotsOfTagOut(this));
 	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
 	return true;
 }

@@ -182,8 +182,9 @@ public:
 	// not one with a Dog in it). Returns how many.
 	int32 SeverLines(const AKineticKinematic& Kinematic);
 	// A hit from outside the Impact Monitor's contacts (a blast, a fire patch, a crush): a
-	// stagger or flip stuns, a Stall takes the player out.
-	void Hit(AKineticCharacter* Player, Kinetic::EOutcome Outcome, Kinetic::EStallCause Cause);
+	// stagger or flip stuns (a stagger for StaggerFor seconds when given), a Stall takes the
+	// player out.
+	void Hit(AKineticCharacter* Player, Kinetic::EOutcome Outcome, Kinetic::EStallCause Cause, double StaggerFor = -1.0);
 
 	// A player's Catch Plate, in the world (cm).
 	static FVector PlatePosition(const AKineticCharacter* Player, Kinetic::EPlate Plate);

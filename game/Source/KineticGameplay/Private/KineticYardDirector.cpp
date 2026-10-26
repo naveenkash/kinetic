@@ -222,9 +222,9 @@ void AKineticYardDirector::ReadClock()
 {
 	PrevE = E;
 	const AKineticGameMode* Mode = GetWorld()->GetAuthGameMode<AKineticGameMode>();
-	if (const FKineticScrap* Scrap = Mode ? Mode->Scrap() : nullptr)
+	FKineticRoundTimes T;
+	if (Mode && Mode->RoundTimes(T))
 	{
-		const FKineticRoundTimes T = Scrap->RoundTimes();
 		const auto Rel = [&T](double At) { return At >= 0.0 ? At - T.LiveAt : -1.0; };
 		E = T.Now - T.LiveAt;
 		ESiren = Rel(T.SirenAt);

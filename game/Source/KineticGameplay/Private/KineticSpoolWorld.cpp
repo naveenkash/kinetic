@@ -268,7 +268,7 @@ int32 UKineticSpoolWorld::SeverLines(const AKineticKinematic& Kinematic)
 	return Severed;
 }
 
-void UKineticSpoolWorld::Hit(AKineticCharacter* Player, Kinetic::EOutcome Outcome, Kinetic::EStallCause Cause)
+void UKineticSpoolWorld::Hit(AKineticCharacter* Player, Kinetic::EOutcome Outcome, Kinetic::EStallCause Cause, double StaggerFor)
 {
 	if (!Player || !IsStanding(Player) || Outcome == Kinetic::EOutcome::None)
 	{
@@ -280,7 +280,8 @@ void UKineticSpoolWorld::Hit(AKineticCharacter* Player, Kinetic::EOutcome Outcom
 		return;
 	}
 	FKineticSpoolPlayer& P = StateOf(Player);
-	P.StunnedUntil = FMath::Max(P.StunnedUntil, Clock + (Outcome == Kinetic::EOutcome::Flip ? FlipSeconds : StaggerSeconds));
+	const double Stun = Outcome == Kinetic::EOutcome::Flip ? FlipSeconds : StaggerFor > 0.0 ? StaggerFor : StaggerSeconds;
+	P.StunnedUntil = FMath::Max(P.StunnedUntil, Clock + Stun);
 	P.bBraced = false;
 	P.LastOutcome = Outcome;
 	P.LastOutcomeAt = Clock;
