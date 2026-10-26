@@ -1227,7 +1227,7 @@ public:
 		}
 		if (Next >= static_cast<int32>(UE_ARRAY_COUNT(Views)))
 		{
-			return Now - LastAt > 1.5;
+			return Lineup(World, Player, Now, At);
 		}
 		if (Now - LastAt < 2.0)
 		{
@@ -1249,12 +1249,6 @@ public:
 			Test->AddInfo(FString::Printf(TEXT("shot %s"), *File));
 			if (Next == 0)
 			{
-				for (const TCHAR* Var : {TEXT("r.VolumetricCloud"), TEXT("r.VolumetricCloud.Support"), TEXT("r.SupportSkyAtmosphere"),
-				                         TEXT("r.VolumetricRenderTarget")})
-				{
-					const IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(Var);
-					Test->AddInfo(FString::Printf(TEXT("cvar %s = %s"), Var, CVar ? *CVar->GetString() : TEXT("(none)")));
-				}
 				for (TActorIterator<AKineticCharacter> It(World); It; ++It)
 				{
 					const FVector P = It->GetActorLocation() / 100.0;
@@ -1283,8 +1277,56 @@ public:
 	}
 
 private:
+	// The five classes side by side on West Mesa, clear of Crew A, facing the camera, crews
+	// alternating, in one landscape picture (Lineup.png).
+	template <typename FAt>
+	bool Lineup(UWorld* World, APlayerController* Player, double Now, const FAt& At)
+	{
+		static const EKineticHarness Classes[] = {EKineticHarness::Rigger, EKineticHarness::Breaker, EKineticHarness::Climber,
+		                                          EKineticHarness::Doubler, EKineticHarness::Scrapper};
+		if (LineupStage == 0)
+		{
+			for (int32 I = 0; I < 5; ++I)
+			{
+				const FTransform Where(FRotator(0.0, 90.0, 0.0), At(FVector(-78.0 + 2.0 * I, -35.0, 9.0)));  // Facing layout south
+				AKineticCharacter* Who = World->SpawnActorDeferred<AKineticCharacter>(AKineticCharacter::StaticClass(), Where, nullptr, nullptr,
+				                                                                      ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
+				Who->Harness = Classes[I];
+				Who->FinishSpawning(Where);
+				Who->SetCrew(I % 2);
+			}
+			LineupStage = 1;
+			LastAt = Now;
+			return false;
+		}
+		if (Now - LastAt < 3.0)
+		{
+			return false;  // Land, settle into Idle
+		}
+		if (LineupStage == 1)
+		{
+			Camera->SetActorLocationAndRotation(At(FVector(-74.0, -44.5, 9.4)), (At(FVector(-74.0, -35.0, 9.0)) - At(FVector(-74.0, -44.5, 9.4))).Rotation());
+			Camera->GetCameraComponent()->SetFieldOfView(55.0f);
+			Player->SetViewTarget(Camera);
+			LineupStage = 2;
+			LastAt = Now - 1.0;
+			return false;
+		}
+		if (LineupStage == 2)
+		{
+			const FString File = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Kinetic/Shots/Lineup.png"));
+			Player->ConsoleCommand(FString::Printf(TEXT("HighResShot 2400x1350 filename=\"%s\""), *File));  // The game's view, not the editor's
+			Test->AddInfo(FString::Printf(TEXT("shot %s"), *File));
+			LineupStage = 3;
+			LastAt = Now;
+			return false;
+		}
+		return Now - LastAt > 3.0;
+	}
+
 	FAutomationTestBase* Test;
 	int32 Next = 0;
+	int32 LineupStage = 0;
 	double LastAt = 0.0;
 	bool bHeld = false, bAimed = false;
 	ACameraActor* Camera = nullptr;
