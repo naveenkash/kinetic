@@ -1321,6 +1321,24 @@ private:
 			LastAt = Now;
 			return false;
 		}
+		if (LineupStage == 3)
+		{
+			// A close look at the Breaker's hands (the takes carry no fingers: the retarget curls them).
+			Camera->SetActorLocationAndRotation(At(FVector(-76.0, -37.6, 9.05)), (At(FVector(-76.0, -35.0, 8.85)) - At(FVector(-76.0, -37.6, 9.05))).Rotation());
+			Camera->GetCameraComponent()->SetFieldOfView(40.0f);
+			LineupStage = 4;
+			LastAt = Now - 1.0;
+			return false;
+		}
+		if (LineupStage == 4)
+		{
+			const FString File = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Kinetic/Shots/Lineup_Hands.png"));
+			Player->ConsoleCommand(FString::Printf(TEXT("HighResShot 2400x1350 filename=\"%s\""), *File));
+			Test->AddInfo(FString::Printf(TEXT("shot %s"), *File));
+			LineupStage = 5;
+			LastAt = Now;
+			return false;
+		}
 		return Now - LastAt > 3.0;
 	}
 

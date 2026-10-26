@@ -166,6 +166,9 @@ bool AKineticCharacter::LoadMetaHuman(const FString& Class)
 	GetMesh()->SetRenderInDepthPass(false);
 	GetMesh()->SetCastShadow(false);
 	GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+	// Always the full skeleton: the body's lower LODs drop the twist and finger bones, which the
+	// gear (one LOD, all bones) would then take in their A-pose, bending the arms and splaying the hands.
+	GetMesh()->SetForcedLOD(1);
 	const auto Follower = [this](TObjectPtr<USkeletalMeshComponent>& Part, const TCHAR* Name, USkeletalMesh* Mesh) {
 		if (!Part)
 		{
@@ -213,6 +216,7 @@ void AKineticCharacter::LoadFigure()
 	GetMesh()->SetSkeletalMesh(bFigure ? Figure : nullptr);
 	GetMesh()->SetRelativeRotation(FRotator::ZeroRotator);  // The harness figure faces +X itself
 	GetMesh()->SetVisibility(true);
+	GetMesh()->SetForcedLOD(0);
 	GetMesh()->SetRenderInMainPass(true);
 	GetMesh()->SetRenderInDepthPass(true);
 	GetMesh()->SetCastShadow(true);

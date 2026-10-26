@@ -31,6 +31,17 @@ def fresh(name: str, folder: str, cls, factory):
     return unreal.load_asset(path) if eal.does_asset_exist(path) else assets.create_asset(name, folder, cls, factory)
 
 
+FINGER_CURL = (30.0, 45.0, 28.0)  # Degrees at the knuckle, middle and tip joints: a relaxed hand
+
+
+def curl(degrees: float) -> unreal.Quat:
+    """A finger joint's bend in its bone's local frame (the MetaHuman's fingers bend about Z)."""
+    return unreal.Rotator(roll=0.0, pitch=0.0, yaw=FINGER_YAW_SIGN * degrees).quaternion()
+
+
+FINGER_YAW_SIGN = 1.0
+
+
 def ik_rig(name: str, folder: str, mesh) -> unreal.IKRigDefinition:
     rig = fresh(name, folder, unreal.IKRigDefinition, unreal.IKRigDefinitionFactory())
     c = unreal.IKRigController.get_controller(rig)
@@ -55,6 +66,14 @@ def retargeter(name: str, folder: str, source_rig, target_rig, source_mesh, targ
     c.auto_map_chains(unreal.AutoMapChainType.FUZZY, True)
     # The MetaHuman stands in an A-pose; bring its retarget pose to ours, chain by chain.
     c.auto_align_all_bones(unreal.RetargetSourceOrTarget.TARGET, unreal.RetargetAutoAlignMethod.CHAIN_TO_CHAIN)
+    # The takes have no fingers: the MetaHuman's stay in its retarget pose, so curl them there,
+    # relaxed (knuckle, middle and tip joints), the thumb a little across the palm.
+    for side in ("l", "r"):
+        for finger in ("index", "middle", "ring", "pinky"):
+            for joint, degrees in (("01", FINGER_CURL[0]), ("02", FINGER_CURL[1]), ("03", FINGER_CURL[2])):
+                c.set_rotation_offset_for_retarget_pose_bone(f"{finger}_{joint}_{side}", curl(degrees), unreal.RetargetSourceOrTarget.TARGET)
+        for joint, degrees in (("01", 8.0), ("02", 12.0), ("03", 10.0)):
+            c.set_rotation_offset_for_retarget_pose_bone(f"thumb_{joint}_{side}", curl(degrees), unreal.RetargetSourceOrTarget.TARGET)
     eal.save_loaded_asset(rtg)
     return rtg
 
