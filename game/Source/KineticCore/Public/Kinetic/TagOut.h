@@ -9,14 +9,21 @@
 //   lost and bad outcomes with their cooldowns (3);
 // - the tag lockers' 3 s re-stamp (2.5);
 // - the Claim: beacons on their stands, the grab, the carrier, drops, returns, the plant, the
-//   regulation clock, the reserve timers and overtime with its closest-approach decision (5).
+//   regulation clock, the reserve timers and overtime with its closest-approach decision (5);
+// - hiding your code (6): the grease rag and the dust bag, sun glare off a plate and the sun in a
+//   caller's eyes, and heat haze.
 // The game feeds it positions, what each rigger can see (its own line traces), Stalls from the
 // arena and the riggers' inputs, and reads the state and the events back.
 //
 // Choices the proposal leaves open (PROPOSED, here):
 // - A clean call Stalls the target (open question 1 takes the Stall, not the 2 s freeze).
 // - Your own beacon need not be home to plant (open question 2).
-// - Closest approach is measured straight to the pad's edge, not along a walkable route.
+// - Closest approach is the walkable route to the pad's edge when the game reports one
+//   (ReportRoute, from its navmesh), else straight to it.
+// - A grease rag smears the next clean plate in the order back, left, right: the back is the
+//   plate a chaser reads.
+// - Glare: the plates tilt up 20 degrees (shoulders and back), and a plate flares for a viewer
+//   within 10 degrees of the sun's reflection off it. The dust and the haze are spheres.
 // - A bad call leaks the lowest-numbered plate the target crew does not have yet, not a random
 //   one: the match stays deterministic without a random source per call.
 #pragma once
@@ -66,6 +73,16 @@ struct FTagOutRules
 	double CarrierLadderScale = 0.75;
 	double FlashSeconds = 3.0;
 	double KillZ = -6.0;              // A beacon below this (the Press pit) goes home
+	// Hiding your code (6).
+	int GadgetsPerDrop = 2;
+	double GreaseApplySeconds = 1.0;
+	double GreaseSeconds = 12.0;
+	double DustRadiusM = 3.0;         // A 6 m cloud
+	double DustSeconds = 8.0;
+	double PlateTiltDegrees = 20.0;
+	double GlareDegrees = 10.0;
+	double SunLockDegrees = 12.0;     // No lock on a target this close to the sun in the caller's view
+	double HazeRangeM = 12.0;         // Through heat haze, nothing beyond this reads
 	// Reserve: 6 s for the first 3:00 elapsed, 9 s until 6:00, 12 s to the end of regulation,
 	// 15 s in overtime.
 	std::array<double, 4> ReserveSeconds{6.0, 9.0, 12.0, 15.0};
@@ -83,10 +100,11 @@ struct FTagCode
 	bool operator==(const FTagCode& O) const { return Pips == O.Pips; }
 };
 
-// A rigger's pose for reading: where the plates are and which way the body faces.
+// A rigger's pose for reading: where the plates are, which way the body faces, and the eyes.
 struct FTagPose
 {
 	FVec3 Chest;                    // m
+	FVec3 Eye;                      // m: where they read and call from
 	FVec3 Forward{1.0, 0.0, 0.0};   // Horizontal unit vectors
 	FVec3 Right{0.0, 1.0, 0.0};      // Unreal's axes: X forward, Y right, Z up
 };
@@ -101,7 +119,29 @@ KINETICCORE_API uint8_t ReadablePlates(const FVec3& ViewerEye, bool bLevelRaised
                                        const std::array<bool, PlateCount>& LineOfSight, const FTagOutRules& Rules,
                                        bool bCarrier = false);
 
+// The direction a plate faces, tilted up as the plates are (for glare).
+KINETICCORE_API FVec3 TiltedPlateNormal(const FTagPose& Pose, ETagPlate Plate, const FTagOutRules& Rules);
+// Whether the segment from A to B passes within Radius of Centre.
+KINETICCORE_API bool SegmentNearPoint(const FVec3& A, const FVec3& B, const FVec3& Centre, double Radius);
+
 enum class ETagPhase : uint8_t { Drop, Live, Overtime, Over };
+
+// The one gadget slot (6): grease rags or dust bags.
+enum class ETagGadget : uint8_t { Grease, Dust };
+
+struct FTagCloud
+{
+	FVec3 At;
+	double Until = 0.0;
+	int Slot = -1;  // Who cut the bag
+};
+
+// Hot steel the game reports each step: the press frame, a Hauler's exhaust.
+struct FTagHaze
+{
+	FVec3 At;
+	double RadiusM = 3.0;
+};
 
 enum class ETagEvent : uint8_t
 {
@@ -121,6 +161,9 @@ enum class ETagEvent : uint8_t
 	BeaconReturned, // Team's beacon went home (Slot returned it, or NoPlayer: on its own)
 	Planted,        // Slot planted Team's beacon: Slot's crew wins
 	MatchOver,      // Team won, or NoPlayer: a draw
+	Smearing,       // Slot started greasing Plate
+	Smeared,        // Slot's Plate is smeared for GreaseSeconds
+	DustCloud,      // Slot cut a dust bag
 };
 
 struct FTagEventRecord
@@ -153,6 +196,7 @@ struct FTagBeacon
 	int Carrier = NoPlayer;
 	double DroppedAt = 0.0;
 	double ClosestToEnemyPadM = 1e9;  // The capturing crew's best approach (5.6)
+	bool bRouted = false;             // The game reports the walkable route: no straight-line guess
 };
 
 enum class ECallState : uint8_t { Idle, Locking };
@@ -176,6 +220,12 @@ struct FTagRigger
 	double LockElapsed = 0.0;
 	double CallCooldownUntil = 0.0;
 	double ExposedUntil = 0.0;          // A bad call shows the caller to the target's crew
+	// The gadget.
+	ETagGadget Gadget = ETagGadget::Grease;
+	int GadgetsLeft = 0;
+	std::array<double, PlateCount> SmearedUntil{};
+	double SmearingUntil = -1.0;        // A grease rag going on
+	ETagPlate SmearPlate = ETagPlate::Back;
 	// A hold on Use: what it is working on and for how long.
 	double UseHeld = 0.0;
 	int UseOn = -1;                     // UseBeacon + team, UseLocker + index, or UsePlant
@@ -211,6 +261,16 @@ public:
 	bool Exposed(int Slot) const { return Seats[Slot].ExposedUntil > Clock; }
 	// The team whose beacon Slot carries, or NoPlayer.
 	int Carrying(int Slot) const;
+	bool Smeared(int Slot, ETagPlate Plate) const { return Seats[Slot].SmearedUntil[static_cast<int>(Plate)] > Clock; }
+	// Of the plates the viewer's eyes reach (cone, range, line of sight), the ones that read:
+	// not smeared, not through dust, not through haze past 12 m, not flaring.
+	uint8_t Legible(int Viewer, int Target, uint8_t Plates) const;
+	// The sun's reflection off Target's Plate points at Viewer.
+	bool Glares(int Viewer, int Target, ETagPlate Plate) const;
+	// Target is within SunLockDegrees of the sun in Caller's view.
+	bool SunBehind(int Caller, int Target) const;
+	bool ThroughDust(const FVec3& From, const FVec3& To) const;
+	const std::vector<FTagCloud>& Clouds() const { return Dust; }
 	// Who is calling Slot right now (NoPlayer if nobody): Slot's harness ticks toward them.
 	int CalledBy(int Slot) const;
 
@@ -228,6 +288,18 @@ public:
 	// Hold Use this step (released when not called): grab, return, plant, re-stamp, whichever
 	// the rigger is standing at.
 	void HoldUse(int Slot, double Dt);
+
+	// The rigger's gadget (the count refills to GadgetsPerDrop at each drop).
+	void SetLoadout(int Slot, ETagGadget Gadget);
+	// The gadget: a grease rag starts its 1 s on the next clean plate; a dust bag is cut open at
+	// At (the game calls this at the end of the Cutter swing that opens it). False if it cannot.
+	bool UseGadget(int Slot, const FVec3& At = {});
+	// The sun (a unit vector toward it) and the hot steel, each step.
+	void SetSun(const FVec3& ToSun) { Sun = ToSun; }
+	void SetHaze(std::vector<FTagHaze> Zones) { Haze = std::move(Zones); }
+	// The walkable route from Team's carried beacon to its carrier's pad edge (m), from the
+	// game's navmesh: the closest approach counts this, not the straight line.
+	void ReportRoute(int Team, double Metres);
 
 	// The arena downed a rigger (a fall, a Hauler, the press).
 	void Stall(int Slot);
@@ -275,5 +347,8 @@ private:
 	bool bMidEventFired = false;
 	int WinningTeam = NoPlayer;
 	std::vector<FTagEventRecord> Events;
+	FVec3 Sun{0.0, 0.0, 1.0};
+	std::vector<FTagHaze> Haze;
+	std::vector<FTagCloud> Dust;
 };
 } // namespace Kinetic

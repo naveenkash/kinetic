@@ -1249,7 +1249,7 @@ public:
 		if (bAimed)
 		{
 			const FString File = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Kinetic/Shots") / V.Name) + TEXT(".png");
-			FScreenshotRequest::RequestScreenshot(File, false, false);
+			Player->ConsoleCommand(FString::Printf(TEXT("HighResShot 2400x1350 filename=\"%s\""), *File));  // A fixed size: the offscreen window's is not
 			Test->AddInfo(FString::Printf(TEXT("shot %s"), *File));
 			if (Next == 0)
 			{
@@ -1579,7 +1579,14 @@ public:
 		const Kinetic::FTagOutMatch& M = Tag->Match();
 		const auto Shot = [&](const TCHAR* Name, bool bUI) {
 			const FString File = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Kinetic/Shots") / Name) + TEXT(".png");
-			FScreenshotRequest::RequestScreenshot(File, bUI, false);
+			if (bUI)
+			{
+				FScreenshotRequest::RequestScreenshot(File, true, false);  // The HUD comes only with the window's own size
+			}
+			else
+			{
+				Player->ConsoleCommand(FString::Printf(TEXT("HighResShot 2400x1350 filename=\"%s\""), *File));
+			}
 			Test->AddInfo(FString::Printf(TEXT("shot %s"), *File));
 		};
 		switch (Stage)

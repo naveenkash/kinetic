@@ -1,8 +1,10 @@
 // Claim with Tag-Out (docs/proposals/claim-tag-out.md): codes, reading plates, the crew board,
-// the Call and its outcomes, the tag lockers, the beacons, the reserve and the clock.
+// the Call and its outcomes, the tag lockers, the beacons, the reserve and the clock, and the
+// ways to hide a code (grease, dust, glare, the sun, haze).
 #include "Kinetic/TagOut.h"
 #include "TestHarness.h"
 
+#include <cmath>
 #include <set>
 
 using namespace Kinetic;
@@ -33,6 +35,7 @@ FTagPose At(const FVec3& Chest, const FVec3& Forward = {1.0, 0.0, 0.0})
 	Pose.Chest = Chest;
 	Pose.Forward = Forward;
 	Pose.Right = {-Forward.Y, Forward.X, 0.0};  // Z up, Y right of X
+	Pose.Eye = Chest + FVec3{0.0, 0.0, 0.45};
 	return Pose;
 }
 
@@ -392,4 +395,108 @@ KTEST(TagOutNobodyCarryingIsADraw)
 	Run(Match, 480.0 + 180.0 + 1.0, {});
 	KCHECK(Match.Phase() == ETagPhase::Over);
 	KCHECK(Match.Winner() == NoPlayer);
+}
+
+KTEST(TagOutGreaseSmearsTheBackThenTheShoulders)
+{
+	FTagOutMatch Match = Live();
+	KCHECK(Match.Rigger(2).GadgetsLeft == 2);
+	KCHECK(Match.UseGadget(2));
+	KCHECK(!Match.UseGadget(2));  // Both hands busy for the second
+	Match.HoldUse(2, Tick);
+	KCHECK(Match.Rigger(2).UseHeld == 0.0);
+	Run(Match, 1.0);
+	KCHECK(Match.Smeared(2, ETagPlate::Back));
+	KCHECK(Has(Match.TakeEvents(), ETagEvent::Smeared, 2));
+	Match.Show(0, 2, 7);
+	KCHECK(!Match.Read(0, 2).Pips[1].has_value());  // The smeared back does not read
+	KCHECK(Match.Read(0, 2).Pips[0].has_value());
+	KCHECK(Match.UseGadget(2));
+	Run(Match, 1.0);
+	KCHECK(Match.Smeared(2, ETagPlate::LeftShoulder));
+	KCHECK(!Match.UseGadget(2));  // Two per drop
+	Run(Match, 11.1);  // The back went on at 1 s, so it clears at 13 s
+	KCHECK(!Match.Smeared(2, ETagPlate::Back));
+	Match.Show(0, 2, 2);
+	KCHECK(Match.Read(0, 2).Pips[1].has_value());
+}
+
+KTEST(TagOutDustHidesPlatesAndBreaksLocks)
+{
+	FTagOutMatch Match = Live();
+	Match.SetLoadout(3, ETagGadget::Dust);
+	Enter(Match, 0, Match.Rigger(2).Code);
+	KCHECK(Match.SendCall(0, 2, true));
+	Run(Match, 0.2);
+	KCHECK(Match.UseGadget(3, {5.0, 0.0, 9.0}));  // Between the caller (0 m) and the target (10 m)
+	Run(Match, Tick);
+	KCHECK(Has(Match.TakeEvents(), ETagEvent::LostLock, 0));
+	KCHECK(Match.Rigger(2).bStanding);
+	Match.Show(0, 2, 7);
+	KCHECK(Match.Read(0, 2).Known() == 0);
+	Run(Match, 1.6);
+	KCHECK(!Match.SendCall(0, 2, true));  // Not through the cloud
+	Run(Match, 6.5);
+	KCHECK(Match.Clouds().empty());
+	KCHECK(Match.SendCall(0, 2, true));
+}
+
+KTEST(TagOutHeatHazeStopsReadsPastTwelveMetres)
+{
+	FTagOutMatch Match = Live();
+	Match.SetHaze({FTagHaze{{8.0, 0.0, 9.0}, 2.0}});
+	Match.Show(0, 2, 2);  // 10 m: through haze but close enough
+	KCHECK(Match.Read(0, 2).Known() == 1);
+	Place(Match, 3, {15.0, 0.0, 8.0});
+	Match.Show(0, 3, 2);  // 15 m through it
+	KCHECK(Match.Read(0, 3).Known() == 0);
+	Match.SetHaze({});
+	Match.Show(0, 3, 2);
+	KCHECK(Match.Read(0, 3).Known() == 1);
+}
+
+KTEST(TagOutTheSunFlaresAPlateAndBlindsACaller)
+{
+	FTagOutMatch Match = Live();
+	// The viewer at the target's back with the sun low behind the viewer, 40 degrees up: the
+	// back plate, tilted 20 degrees, throws the sun straight at them.
+	Match.SetPose(0, At({0.0, 0.0, 8.0}), 0.0, false);
+	FTagPose Target = At({10.0, 0.0, 8.0});
+	Target.Eye = Target.Chest;
+	Match.SetPose(2, Target, 0.0, false);
+	FTagPose Viewer = At({0.0, 0.0, 8.0});
+	Viewer.Eye = Viewer.Chest;
+	Match.SetPose(0, Viewer, 0.0, false);
+	const double Up40 = 40.0 * 3.14159265358979 / 180.0;
+	Match.SetSun({-std::cos(Up40), 0.0, std::sin(Up40)});
+	KCHECK(Match.Glares(0, 2, ETagPlate::Back));
+	KCHECK(!Match.Glares(0, 2, ETagPlate::LeftShoulder));
+	KCHECK(Match.Legible(0, 2, 7) == 5);
+	Match.SetSun({0.0, 0.0, 1.0});  // Noon: the reflection goes into the ground
+	KCHECK(!Match.Glares(0, 2, ETagPlate::Back));
+	// A target in front of the sun cannot be locked.
+	Match.SetSun({1.0, 0.0, 0.0});
+	Enter(Match, 0, Match.Rigger(2).Code);
+	KCHECK(Match.SunBehind(0, 2));
+	KCHECK(!Match.SendCall(0, 2, true));
+	Match.SetSun({0.0, 0.0, 1.0});
+	KCHECK(Match.SendCall(0, 2, true));
+}
+
+KTEST(TagOutTheClosestApproachFollowsTheReportedRoute)
+{
+	FTagOutMatch Match = Live();
+	Place(Match, 2, Pads[0]);
+	for (int I = 0; I < 30; ++I)
+	{
+		Match.HoldUse(2, Tick);
+		Match.Step(Tick, {});
+	}
+	KCHECK(Match.Carrying(2) == 0);
+	Place(Match, 2, Pads[1] - FVec3{32.0, 0.0, 0.0});  // 30 m from the pad's edge in a straight line
+	Match.ReportRoute(0, 55.0);                        // But 55 m to walk
+	Run(Match, 1.0, {});
+	KCHECK_NEAR(Match.Beacon(0).ClosestToEnemyPadM, 55.0, 1e-9);
+	Match.ReportRoute(0, 41.0);
+	KCHECK_NEAR(Match.Beacon(0).ClosestToEnemyPadM, 41.0, 1e-9);
 }

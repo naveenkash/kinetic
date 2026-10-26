@@ -59,6 +59,20 @@ uint8_t ReadablePlates(const FVec3& ViewerEye, bool bLevelRaised, const FTagPose
 	return Plates;
 }
 
+FVec3 TiltedPlateNormal(const FTagPose& Pose, ETagPlate Plate, const FTagOutRules& Rules)
+{
+	const double Tilt = Rules.PlateTiltDegrees * Pi / 180.0;
+	return (PlateFacing(Pose, Plate) * std::cos(Tilt) + Up * std::sin(Tilt)).SafeNormal();
+}
+
+bool SegmentNearPoint(const FVec3& A, const FVec3& B, const FVec3& Centre, double Radius)
+{
+	const FVec3 AB = B - A;
+	const double Length2 = AB.Dot(AB);
+	const double T = Length2 > 1e-12 ? std::clamp((Centre - A).Dot(AB) / Length2, 0.0, 1.0) : 0.0;
+	return (A + AB * T - Centre).Length() <= Radius;
+}
+
 int FTagRead::Known() const
 {
 	if (bStale)
@@ -201,6 +215,66 @@ void FTagOutMatch::Reveal(int Team, int Target, ETagPlate Plate)
 	}
 }
 
+bool FTagOutMatch::ThroughDust(const FVec3& From, const FVec3& To) const
+{
+	for (const FTagCloud& Cloud : Dust)
+	{
+		if (Cloud.Until > Clock && SegmentNearPoint(From, To, Cloud.At, Config.DustRadiusM))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool FTagOutMatch::Glares(int Viewer, int Target, ETagPlate Plate) const
+{
+	const FVec3 Normal = TiltedPlateNormal(Seats[Target].Pose, Plate, Config);
+	if (Sun.Dot(Normal) <= 0.0)
+	{
+		return false;  // The sun is behind the plate
+	}
+	const FVec3 Light = -Sun;
+	const FVec3 Reflected = Light - Normal * (2.0 * Light.Dot(Normal));
+	const FVec3 ToViewer = (Seats[Viewer].Pose.Eye - Seats[Target].Pose.Chest).SafeNormal();
+	return Reflected.Dot(ToViewer) >= std::cos(Config.GlareDegrees * Pi / 180.0);
+}
+
+bool FTagOutMatch::SunBehind(int Caller, int Target) const
+{
+	const FVec3 Look = (Seats[Target].Pose.Chest - Seats[Caller].Pose.Eye).SafeNormal();
+	return Look.Dot(Sun) >= std::cos(Config.SunLockDegrees * Pi / 180.0);
+}
+
+uint8_t FTagOutMatch::Legible(int Viewer, int Target, uint8_t Plates) const
+{
+	const FVec3 Eye = Seats[Viewer].Pose.Eye;
+	const FVec3 Chest = Seats[Target].Pose.Chest;
+	if (ThroughDust(Eye, Chest))
+	{
+		return 0;
+	}
+	if ((Chest - Eye).Length() > Config.HazeRangeM)
+	{
+		for (const FTagHaze& Zone : Haze)
+		{
+			if (SegmentNearPoint(Eye, Chest, Zone.At, Zone.RadiusM))
+			{
+				return 0;
+			}
+		}
+	}
+	for (int I = 0; I < PlateCount; ++I)
+	{
+		const ETagPlate Plate = static_cast<ETagPlate>(I);
+		if ((Plates & (1u << I)) && (Smeared(Target, Plate) || Glares(Viewer, Target, Plate)))
+		{
+			Plates = static_cast<uint8_t>(Plates & ~(1u << I));
+		}
+	}
+	return Plates;
+}
+
 void FTagOutMatch::Show(int Viewer, int Target, uint8_t Plates)
 {
 	if (CurrentPhase == ETagPhase::Over || !Seats[Viewer].bStanding || !Seats[Target].bStanding ||
@@ -208,6 +282,7 @@ void FTagOutMatch::Show(int Viewer, int Target, uint8_t Plates)
 	{
 		return;
 	}
+	Plates = Legible(Viewer, Target, Plates);
 	for (int I = 0; I < PlateCount; ++I)
 	{
 		if (Plates & (1u << I))
@@ -242,7 +317,11 @@ void FTagOutMatch::DropIn(int Slot)
 	Recode(Slot);
 	Rigger.bStanding = true;
 	Rigger.Pose.Chest = HomePads[Rigger.Team];
+	Rigger.Pose.Eye = HomePads[Rigger.Team];
 	Rigger.ExposedUntil = 0.0;
+	Rigger.GadgetsLeft = Config.GadgetsPerDrop;
+	Rigger.SmearedUntil.fill(0.0);
+	Rigger.SmearingUntil = -1.0;
 	Emit(ETagEvent::Respawned, Slot, NoPlayer, Rigger.Team);
 }
 
@@ -274,6 +353,7 @@ void FTagOutMatch::Down(int Slot)
 	Rigger.Entered.clear();
 	Rigger.UseHeld = 0.0;
 	Rigger.UseOn = -1;
+	Rigger.SmearingUntil = -1.0;
 	Rigger.bLevelRaised = false;
 	Rigger.LevelUpAt = -1.0;
 	Emit(ETagEvent::Stalled, Slot, NoPlayer, Rigger.Team);
@@ -330,7 +410,8 @@ bool FTagOutMatch::SendCall(int Caller, int Target, bool bInSight)
 	const FTagRigger& Called = Seats[Target];
 	if (!Rigger.bStanding || !Called.bStanding || Called.Team == Rigger.Team || Rigger.Call != ECallState::Idle ||
 	    Clock < Rigger.CallCooldownUntil - TimeEpsilon || Rigger.Entered.size() != PlateCount || !bInSight ||
-	    (Called.Pose.Chest - Rigger.Pose.Chest).Length() > Config.CallRangeM)
+	    (Called.Pose.Chest - Rigger.Pose.Chest).Length() > Config.CallRangeM || Rigger.SmearingUntil >= 0.0 ||
+	    ThroughDust(Rigger.Pose.Eye, Called.Pose.Chest) || SunBehind(Caller, Target))
 	{
 		return false;
 	}
@@ -391,9 +472,9 @@ bool FTagOutMatch::OnPad(int Slot, int PadTeam) const
 void FTagOutMatch::HoldUse(int Slot, double Dt)
 {
 	FTagRigger& Rigger = Seats[Slot];
-	if (!CanCall() || !Rigger.bStanding)
+	if (!CanCall() || !Rigger.bStanding || Rigger.SmearingUntil >= 0.0)
 	{
-		return;
+		return;  // Both hands on the rag
 	}
 	const int Mine = Rigger.Team;
 	const int Theirs = 1 - Mine;
@@ -467,6 +548,46 @@ void FTagOutMatch::HoldUse(int Slot, double Dt)
 	{
 		Recode(Slot);
 		Emit(ETagEvent::Restamped, Slot, On - UseLocker, Mine);
+	}
+}
+
+void FTagOutMatch::SetLoadout(int Slot, ETagGadget Gadget) { Seats[Slot].Gadget = Gadget; }
+
+bool FTagOutMatch::UseGadget(int Slot, const FVec3& At)
+{
+	FTagRigger& Rigger = Seats[Slot];
+	if (!CanCall() || !Rigger.bStanding || Rigger.GadgetsLeft <= 0 || Carrying(Slot) != NoPlayer || Rigger.SmearingUntil >= 0.0 ||
+	    Rigger.Call == ECallState::Locking)
+	{
+		return false;  // No gadgets while carrying (5.3)
+	}
+	if (Rigger.Gadget == ETagGadget::Dust)
+	{
+		--Rigger.GadgetsLeft;
+		Dust.push_back({At, Clock + Config.DustSeconds, Slot});
+		Emit(ETagEvent::DustCloud, Slot, NoPlayer, Rigger.Team);
+		return true;
+	}
+	for (const ETagPlate Plate : {ETagPlate::Back, ETagPlate::LeftShoulder, ETagPlate::RightShoulder})
+	{
+		if (!Smeared(Slot, Plate))
+		{
+			Rigger.SmearPlate = Plate;
+			Rigger.SmearingUntil = Clock + Config.GreaseApplySeconds;
+			Emit(ETagEvent::Smearing, Slot, NoPlayer, Rigger.Team, Plate);
+			return true;
+		}
+	}
+	return false;  // All three already smeared
+}
+
+void FTagOutMatch::ReportRoute(int Team, double Metres)
+{
+	FTagBeacon& Beacon = Beacons[Team];
+	if (Beacon.State == EBeaconState::Carried)
+	{
+		Beacon.bRouted = true;
+		Beacon.ClosestToEnemyPadM = std::min(Beacon.ClosestToEnemyPadM, std::max(0.0, Metres));
 	}
 }
 
@@ -562,6 +683,19 @@ void FTagOutMatch::Step(double Dt, const std::vector<bool>& CallTargetInView)
 		return;
 	}
 
+	// Grease going on, and dust settling.
+	for (FTagRigger& Rigger : Seats)
+	{
+		if (Rigger.SmearingUntil >= 0.0 && Clock >= Rigger.SmearingUntil - TimeEpsilon)
+		{
+			Rigger.SmearingUntil = -1.0;
+			Rigger.SmearedUntil[static_cast<int>(Rigger.SmearPlate)] = Clock + Config.GreaseSeconds;
+			--Rigger.GadgetsLeft;
+			Emit(ETagEvent::Smeared, Rigger.Slot, NoPlayer, Rigger.Team, Rigger.SmearPlate);
+		}
+	}
+	Dust.erase(std::remove_if(Dust.begin(), Dust.end(), [this](const FTagCloud& Cloud) { return Cloud.Until <= Clock; }), Dust.end());
+
 	// Holds that were not held this step let go.
 	for (FTagRigger& Rigger : Seats)
 	{
@@ -583,7 +717,8 @@ void FTagOutMatch::Step(double Dt, const std::vector<bool>& CallTargetInView)
 		const FTagRigger& Called = Seats[Rigger.CallTarget];
 		const bool bInView = Rigger.Slot < static_cast<int>(CallTargetInView.size()) && CallTargetInView[Rigger.Slot];
 		if (!Rigger.bStanding || !Called.bStanding || !bInView ||
-		    (Called.Pose.Chest - Rigger.Pose.Chest).Length() > Config.CallRangeM)
+		    (Called.Pose.Chest - Rigger.Pose.Chest).Length() > Config.CallRangeM || ThroughDust(Rigger.Pose.Eye, Called.Pose.Chest) ||
+		    SunBehind(Rigger.Slot, Rigger.CallTarget))
 		{
 			Emit(ETagEvent::LostLock, Rigger.Slot, Rigger.CallTarget, Rigger.Team);
 			Rigger.Call = ECallState::Idle;
@@ -605,8 +740,11 @@ void FTagOutMatch::Step(double Dt, const std::vector<bool>& CallTargetInView)
 		{
 			const FTagRigger& Carrier = Seats[Beacon.Carrier];
 			Beacon.At = Carrier.Pose.Chest;
-			const FVec3 Off = Beacon.At - HomePads[Carrier.Team];
-			Beacon.ClosestToEnemyPadM = std::min(Beacon.ClosestToEnemyPadM, std::max(0.0, std::hypot(Off.X, Off.Y) - Config.PadRadiusM));
+			if (!Beacon.bRouted)
+			{
+				const FVec3 Off = Beacon.At - HomePads[Carrier.Team];
+				Beacon.ClosestToEnemyPadM = std::min(Beacon.ClosestToEnemyPadM, std::max(0.0, std::hypot(Off.X, Off.Y) - Config.PadRadiusM));
+			}
 			if (CurrentPhase == ETagPhase::Overtime)
 			{
 				for (int I = 0; I < PlateCount; ++I)
